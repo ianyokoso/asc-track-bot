@@ -1471,7 +1471,8 @@
           <span class="inline-flex items-center gap-1"><span class="text-navy">⠿</span> 행을 끌어다 다른 조로 이동</span>
           <span class="mx-2 text-border-strong">·</span>
           <span class="inline-flex items-center gap-1"><span class="text-navy">★</span> 조장 토글</span>
-          <span id="gp-dirty-flag" class="ml-3 text-warn font-semibold hidden">· 저장되지 않은 변경 있음</span>
+          <span class="ml-3 text-ink-soft" title="조 배정 변경은 브라우저 localStorage 에 자동 저장됩니다. 새로고침하거나 다시 들어와도 그대로 유지됩니다.">· 자동 임시저장됨</span>
+          <span id="gp-dirty-flag" class="ml-2 text-warn font-semibold hidden" title="아직 'Notion/Discord 에 commit' 되지 않았습니다. 우측 '조 배정 완료 →' 버튼을 누르면 Notion 트랙 페이지에 조 DB 가 생성되고 Discord 채널/역할이 자동 부여됩니다.">· Notion/Discord 미반영</span>
         </p>
         <div class="flex items-center gap-2">
           <button type="button" id="gp-reset-btn" class="btn-ghost text-[12px] h-8 px-3">초기화</button>
