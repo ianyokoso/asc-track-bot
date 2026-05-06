@@ -2214,6 +2214,9 @@ def _commit_group_preview_to_notion(payload):
     touched_tracks = []
     track_name_to_page_id = {}
 
+    # 라이트 트랙은 조 배정 없이 부모 트랙의 공지 / 과제-인증 채널만 접근 → Notion 조 inline DB 생성 X.
+    LIGHT_TRACK_NAME_KEYWORDS = ('라이트 트랙', '라이트트랙')
+
     for track in tracks:
         groups = [group for group in track.get('groups', []) if group.get('members')]
         if not groups:
@@ -2221,6 +2224,10 @@ def _commit_group_preview_to_notion(payload):
 
         track_name = (track.get('groupDbName') or track.get('tabLabel') or track.get('tabId') or '').strip()
         if not track_name:
+            continue
+
+        # 라이트 트랙 스킵 — 조 inline DB 생성 안 함.
+        if any(kw in track_name for kw in LIGHT_TRACK_NAME_KEYWORDS):
             continue
 
         touched_tracks.append(track_name)
