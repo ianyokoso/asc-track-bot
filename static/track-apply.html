@@ -1939,6 +1939,19 @@
     ['mon', 'tue', 'wed', 'thu'].forEach(day => {
       document.querySelectorAll(`input[type="radio"][name="${day}"]`).forEach(radio => {
         radio.addEventListener('change', () => syncLeaderApply(day));
+        // 이미 선택된 라디오를 다시 클릭하면 해제 (기본 HTML 동작 우회).
+        // mousedown 시점에 직전 상태를 기억 → click 후 같으면 해제.
+        radio.addEventListener('mousedown', () => {
+          radio.dataset.wasChecked = radio.checked ? '1' : '';
+        });
+        radio.addEventListener('click', () => {
+          if (radio.dataset.wasChecked === '1') {
+            radio.checked = false;
+            radio.dataset.wasChecked = '';
+            syncLeaderApply(day);
+            radio.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        });
       });
     });
 
