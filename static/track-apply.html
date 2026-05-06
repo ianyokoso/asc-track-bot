@@ -950,7 +950,7 @@
 
       <!-- OAuth 결과를 보여주는 compact banner — 사용자가 자기 정보가 맞는지 즉시 확인 -->
       <div class="border border-border-hair rounded-md bg-surface px-4 py-3 mb-6 flex items-center gap-3 text-[13px]">
-        <div class="w-7 h-7 rounded-full bg-navy-soft text-navy text-[11px] font-bold flex items-center justify-center flex-shrink-0">시</div>
+        <div id="banner-avatar" class="w-7 h-7 rounded-full bg-navy-soft text-navy text-[11px] font-bold flex items-center justify-center flex-shrink-0 overflow-hidden">시</div>
         <div class="flex-1 min-w-0">
           <div class="text-ink font-medium truncate" id="banner-name">@시연유저</div>
           <div class="text-[11px] text-ink-soft mt-0.5">Discord OAuth</div>
@@ -1787,6 +1787,15 @@
 
     function applyViewerIdentity() {
       setText('banner-name', VIEWER_HANDLE);
+      // Discord 아바타가 있으면 <img> 로 교체, 없으면 initial 텍스트.
+      const avatarEl = document.getElementById('banner-avatar');
+      if (avatarEl) {
+        if (VIEWER_AVATAR_URL) {
+          avatarEl.innerHTML = `<img src="${VIEWER_AVATAR_URL}" alt="" class="w-full h-full object-cover" referrerpolicy="no-referrer">`;
+        } else {
+          avatarEl.textContent = getViewerInitial();
+        }
+      }
     }
 
     function applyWindowLabels() {
