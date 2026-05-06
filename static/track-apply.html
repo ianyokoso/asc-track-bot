@@ -69,12 +69,13 @@
     .btn-ghost:hover { background: #F4F6F8; }
     .btn-discord {
       display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-      background: #5865F2; color: white;
+      background: #1E2A4A; color: white;
       padding: 0 18px; height: 40px;
       border-radius: 8px; font-size: 14px; font-weight: 600;
       border: none; cursor: pointer;
+      transition: background-color 150ms;
     }
-    .btn-discord:hover { background: #4752C4; }
+    .btn-discord:hover { background: #141E3C; }
 
     input[type="text"], textarea {
       width: 100%;
@@ -1395,7 +1396,7 @@
         <p class="text-eyebrow">신청자 목록</p>
         <div class="flex items-center gap-2">
           <input type="text" placeholder="이름·Discord 검색" class="h-9 w-64 px-3 text-[13px]" />
-          <button type="button" class="btn-navy h-9 px-3 text-[13px]" data-open-group-preview>조 배정 ↗</button>
+          <button type="button" class="btn-navy h-9 px-4 text-[13px] whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5" data-open-group-preview>조 배정 <span aria-hidden="true">↗</span></button>
         </div>
       </div>
 
