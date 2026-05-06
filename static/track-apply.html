@@ -3573,34 +3573,62 @@
       ).map(m => ({ member: m, leader: false, creatorSub: null }));
     }
 
-    /** 조장 우선 1명 + 일반 4명을 1조로 하여 size(=5)명씩 분할 */
-    function gpChunk(entries, size = 5) {
-      const leaders = entries.filter(e => e.leader);
-      const others = entries.filter(e => !e.leader);
+    /**
+     * 자동 조 배정 알고리즘.
+     *
+     * 규칙:
+     *   1) 신청 인원 4~5명 → 1개 조에 모두 배치 (split 안 함)
+     *   2) 한 조 최대 7명 (initial split 시 제약)
+     *   3) 4개 조 이상 나눠도 lopsided (예: 6,6,6,4) 안 되도록 균등 분배
+     *      → 각 조 사이즈 차이 최대 1 (예: 22명/4조 = 6,6,5,5)
+     *   4) 조장은 조마다 1명씩 우선 배치 (조장 수가 조 수보다 많으면
+     *      나머지 조장은 일반 멤버 풀로 합류)
+     *
+     * 라이트 트랙 같은 조장 없는 entries 도 동일 흐름 사용 (leaders=[]).
+     *
+     * @param entries  [{ member, leader, creatorSub }, ...]
+     * @param _size    하위호환 용 인자 (현재는 무시 — 알고리즘이 동적 결정)
+     */
+    function gpChunk(entries, _size = 5) {
       const total = entries.length;
-      const numGroups = Math.max(1, Math.ceil(total / size));
+      if (total === 0) return [];
+
+      const leaders = entries.filter(e => e.leader);
+      const others  = entries.filter(e => !e.leader);
+
+      // ── 조 개수 결정 ──────────────────────────────────────────
+      let numGroups;
+      if (total <= 5) {
+        numGroups = 1;                                    // 규칙 1
+      } else {
+        numGroups = Math.max(2, Math.round(total / 5));   // 6명 이상은 최소 2개 조
+        numGroups = Math.max(numGroups, leaders.length);  // 규칙 4: 조장 수 ≥ 조 수 보장
+        while (Math.ceil(total / numGroups) > 7) numGroups++; // 규칙 2: 한 조 최대 7명
+      }
+
+      // ── 균등 분배 목표 사이즈 (regel 3) ─────────────────────────
+      const baseSize = Math.floor(total / numGroups);
+      const extras   = total % numGroups;
+      const targetSizes = Array.from({ length: numGroups }, (_, i) =>
+        baseSize + (i < extras ? 1 : 0)
+      );
+
       const groups = Array.from({ length: numGroups }, () => []);
 
-      // 1단계: 조장 1명씩 각 조에 배치
+      // 1단계: 각 조에 조장 1명씩 (조장 수가 부족하면 일부 조는 비조장으로 시작)
       leaders.slice(0, numGroups).forEach((l, i) => groups[i].push(l));
 
-      // 2단계: 일반 멤버를 size 가 찰 때까지 라운드로빈
+      // 2단계: 조장 잉여 + 일반 멤버 합쳐 fill pool 구성, 라운드로빈으로 채움
+      const fillPool = [...leaders.slice(numGroups), ...others];
       let gi = 0;
-      others.forEach(o => {
+      fillPool.forEach(member => {
         let safety = 0;
-        while (groups[gi].length >= size && safety < numGroups) {
+        while (groups[gi].length >= targetSizes[gi] && safety < numGroups) {
           gi = (gi + 1) % numGroups;
           safety++;
         }
-        groups[gi].push(o);
+        groups[gi].push(member);
         gi = (gi + 1) % numGroups;
-      });
-
-      // 3단계: 남은 조장은 빈자리 우선 채움
-      leaders.slice(numGroups).forEach(l => {
-        const slot = groups.findIndex(g => g.length < size);
-        if (slot >= 0) groups[slot].push(l);
-        else groups[groups.length - 1].push(l);
       });
 
       return groups;
@@ -3627,11 +3655,14 @@
     let _gpDirty = false;
 
     // ── 조 배정 상태 localStorage 영속화 (페이지 재방문 시 복원) ─────
-    const GP_STATE_KEY = 'asc_track_gp_state_v1';
+    // v2: 자동 분할 알고리즘 변경 (4-5인 1조 / max 7 / 균등 분배 / 조장 1인 1조)
+    //     v1 캐시는 무시하고 새 분할 적용 (대량의 stale 데이터 누적 방지 차원에서 명시 제거)
+    const GP_STATE_KEY = 'asc_track_gp_state_v2';
+    try { localStorage.removeItem('asc_track_gp_state_v1'); } catch (e) {}
     function gpSaveState() {
       try {
         localStorage.setItem(GP_STATE_KEY, JSON.stringify({
-          v: 1,
+          v: 2,
           activeTrack: _gpActiveTrack,
           assignments: _gpAssignments,
           originalLeaders: _gpOriginalLeaders,
@@ -3647,7 +3678,7 @@
         const raw = localStorage.getItem(GP_STATE_KEY);
         if (!raw) return;
         const data = JSON.parse(raw);
-        if (!data || data.v !== 1) return;
+        if (!data || data.v !== 2) return;
         if (data.activeTrack) _gpActiveTrack = data.activeTrack;
         if (data.assignments && typeof data.assignments === 'object') {
           Object.keys(data.assignments).forEach(k => {
