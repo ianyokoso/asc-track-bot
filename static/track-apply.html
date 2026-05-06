@@ -951,9 +951,9 @@
 
       <!-- OAuth 결과를 보여주는 compact banner — 사용자가 자기 정보가 맞는지 즉시 확인 -->
       <div class="border border-border-hair rounded-md bg-surface px-4 py-3 mb-6 flex items-center gap-3 text-[13px]">
-        <div id="banner-avatar" class="w-7 h-7 rounded-full bg-navy-soft text-navy text-[11px] font-bold flex items-center justify-center flex-shrink-0 overflow-hidden">시</div>
+        <div id="banner-avatar" class="viewer-banner-avatar w-7 h-7 rounded-full bg-navy-soft text-navy text-[11px] font-bold flex items-center justify-center flex-shrink-0 overflow-hidden">시</div>
         <div class="flex-1 min-w-0">
-          <div class="text-ink font-medium truncate" id="banner-name">@시연유저</div>
+          <div class="text-ink font-medium truncate viewer-banner-name" id="banner-name">@시연유저</div>
           <div class="text-[11px] text-ink-soft mt-0.5">Discord OAuth</div>
         </div>
       </div>
@@ -1310,6 +1310,15 @@
         </span>
       </div>
 
+      <!-- OAuth viewer banner -->
+      <div class="border border-border-hair rounded-md bg-surface px-4 py-3 mb-6 flex items-center gap-3 text-[13px]">
+        <div class="viewer-banner-avatar w-7 h-7 rounded-full bg-navy-soft text-navy text-[11px] font-bold flex items-center justify-center flex-shrink-0 overflow-hidden">시</div>
+        <div class="flex-1 min-w-0">
+          <div class="text-ink font-medium truncate viewer-banner-name">@시연유저</div>
+          <div class="text-[11px] text-ink-soft mt-0.5">Discord OAuth</div>
+        </div>
+      </div>
+
       <!-- 트랙 상세보기 버튼 -->
       <div class="mb-8 flex items-center justify-between rounded-md border border-border-hair bg-canvas px-4 py-3">
         <div>
@@ -1340,6 +1349,15 @@
       <div class="flex items-center gap-2 mb-6">
         <span class="inline-flex items-center h-6 px-2 rounded-xs text-[11px] font-semibold tracking-wider" style="background:#FEF2F2; color:#DC2626;">마감됨</span>
         <span id="closed-window-label" class="text-[12px] text-ink-muted">· 2026-05-24(일) 23:59 KST 마감</span>
+      </div>
+
+      <!-- OAuth viewer banner -->
+      <div class="border border-border-hair rounded-md bg-surface px-4 py-3 mb-6 flex items-center gap-3 text-[13px]">
+        <div class="viewer-banner-avatar w-7 h-7 rounded-full bg-navy-soft text-navy text-[11px] font-bold flex items-center justify-center flex-shrink-0 overflow-hidden">시</div>
+        <div class="flex-1 min-w-0">
+          <div class="text-ink font-medium truncate viewer-banner-name">@시연유저</div>
+          <div class="text-[11px] text-ink-soft mt-0.5">Discord OAuth</div>
+        </div>
       </div>
 
       <p class="text-sm text-ink-muted mb-6">신청이 마감되어 수정할 수 없습니다. 조 배정 후 변경이 필요하면 운영진에게 문의해주세요.</p>
@@ -1788,16 +1806,18 @@
     }
 
     function applyViewerIdentity() {
-      setText('banner-name', VIEWER_HANDLE);
-      // Discord 아바타가 있으면 <img> 로 교체, 없으면 initial 텍스트.
-      const avatarEl = document.getElementById('banner-avatar');
-      if (avatarEl) {
+      // 여러 view (open-new / open-edit / closed) 에 동시 노출되는 viewer banner.
+      // ID 가 아니라 class 로 모두 선택해서 갱신.
+      document.querySelectorAll('.viewer-banner-name').forEach(el => {
+        el.textContent = VIEWER_HANDLE;
+      });
+      document.querySelectorAll('.viewer-banner-avatar').forEach(avatarEl => {
         if (VIEWER_AVATAR_URL) {
           avatarEl.innerHTML = `<img src="${VIEWER_AVATAR_URL}" alt="" class="w-full h-full object-cover" referrerpolicy="no-referrer">`;
         } else {
           avatarEl.textContent = getViewerInitial();
         }
-      }
+      });
     }
 
     function applyWindowLabels() {
