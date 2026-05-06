@@ -2938,11 +2938,14 @@
         const submittedCell = m.submitted
           ? `<span class="tabular-nums text-ink-muted">${m.submitted}</span>`
           : '<span class="text-ink-soft">—</span>';
+        const rosterAvatarHtml = m.avatarUrl
+          ? `<div class="w-8 h-8 rounded-full overflow-hidden bg-surface-2"><img src="${escapeAttr(m.avatarUrl)}" alt="" class="w-full h-full object-cover" referrerpolicy="no-referrer"></div>`
+          : `<div class="w-8 h-8 rounded-full ${bg} text-[11px] font-semibold flex items-center justify-center">${m.initials}</div>`;
         return `
           <tr class="hover-row border-b border-border-hair">
             <td class="py-3 pr-4">
               <div class="flex items-center gap-2.5">
-                <div class="w-8 h-8 rounded-full ${bg} text-[11px] font-semibold flex items-center justify-center">${m.initials}</div>
+                ${rosterAvatarHtml}
                 <div>
                   <div class="font-semibold text-ink">${getMemberDisplayName(m)}</div>
                   <div class="text-[11px] text-ink-soft">${m.handle}</div>
@@ -3576,6 +3579,46 @@
     const _gpOriginalLeaders = {};
     let _gpDirty = false;
 
+    // ── 조 배정 상태 localStorage 영속화 (페이지 재방문 시 복원) ─────
+    const GP_STATE_KEY = 'asc_track_gp_state_v1';
+    function gpSaveState() {
+      try {
+        localStorage.setItem(GP_STATE_KEY, JSON.stringify({
+          v: 1,
+          activeTrack: _gpActiveTrack,
+          assignments: _gpAssignments,
+          originalLeaders: _gpOriginalLeaders,
+          dirty: _gpDirty,
+          savedAt: new Date().toISOString(),
+        }));
+      } catch (e) { /* quota 등 실패해도 UI 는 계속 */ }
+      // 조장 토글은 MOCK_MEMBERS 내부도 변경하므로 같이 저장.
+      if (typeof saveState === 'function') saveState();
+    }
+    function gpLoadState() {
+      try {
+        const raw = localStorage.getItem(GP_STATE_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (!data || data.v !== 1) return;
+        if (data.activeTrack) _gpActiveTrack = data.activeTrack;
+        if (data.assignments && typeof data.assignments === 'object') {
+          Object.keys(data.assignments).forEach(k => {
+            const groups = data.assignments[k];
+            if (Array.isArray(groups)) _gpAssignments[k] = groups.map(g => Array.isArray(g) ? g.slice() : []);
+          });
+        }
+        if (data.originalLeaders && typeof data.originalLeaders === 'object') {
+          Object.assign(_gpOriginalLeaders, data.originalLeaders);
+        }
+        _gpDirty = !!data.dirty;
+      } catch (e) { /* 파싱 실패 시 기본 상태 유지 */ }
+    }
+    function gpClearState() {
+      try { localStorage.removeItem(GP_STATE_KEY); } catch (e) {}
+    }
+    gpLoadState();
+
     function gpGetTabEntries(tab) {
       if (tab.kind === 'weekday') return gpGetWeekdayMembers(tab.id);
       const lightIds = LIGHT_TAB_MAP[tab.id] || [];
@@ -3597,6 +3640,8 @@
       _gpAssignments[tab.id] = groups.map(g => g.map(e => e.member.id));
       // 빈 트랙 — 최소 1개 빈 조는 갖도록 (드롭 타겟 제공)
       if (_gpAssignments[tab.id].length === 0) _gpAssignments[tab.id].push([]);
+      // 자동 분할도 영속화 — 새로고침 후 동일한 분할 유지.
+      gpSaveState();
       return _gpAssignments[tab.id];
     }
 
@@ -3637,6 +3682,7 @@
       _gpDirty = true;
       gpRenderCards();
       gpRefreshDirty();
+      gpSaveState();
     }
 
     function gpMoveMember(memberId, fromIdx, toIdx, tab) {
@@ -3653,6 +3699,7 @@
       gpRenderCards();
       gpRenderTabs();
       gpRefreshDirty();
+      gpSaveState();
     }
 
     function gpAddNewGroup(tab) {
@@ -3662,6 +3709,7 @@
       gpRenderCards();
       gpRenderTabs();
       gpRefreshDirty();
+      gpSaveState();
     }
 
     function gpRemoveEmptyGroup(idx, tab) {
@@ -3673,6 +3721,7 @@
       gpRenderCards();
       gpRenderTabs();
       gpRefreshDirty();
+      gpSaveState();
     }
 
     function gpResetCurrentTab() {
@@ -3691,6 +3740,7 @@
       gpRenderCards();
       gpRenderTabs();
       gpRefreshDirty();
+      gpSaveState();
     }
 
     function gpRefreshDirty() {
@@ -4000,9 +4050,10 @@
         `;
       }
 
-      // 완료 → dirty 해제
+      // 완료 → dirty 해제 (조 배정 자체는 보존)
       _gpDirty = false;
       gpRefreshDirty();
+      gpSaveState();
     }
 
     /** 아바타 배경색 (initials 기반 해시) */
@@ -4032,6 +4083,9 @@
         ? (entry.creatorSub === 'short_long' ? ' · 숏+롱' : ' · 숏')
         : '';
       const colorCls = gpAvatarColor(m.initials);
+      const avatarHtml = m.avatarUrl
+        ? `<div class="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-surface-2"><img src="${escapeAttr(m.avatarUrl)}" alt="" class="w-full h-full object-cover" referrerpolicy="no-referrer"></div>`
+        : `<div class="w-8 h-8 rounded-full ${colorCls} text-[11px] font-semibold flex items-center justify-center flex-shrink-0">${m.initials}</div>`;
       const leaderBtn = tab.kind === 'weekday'
         ? (isLeader
             ? `<button type="button" data-no-drag data-toggle-leader="${escapeAttr(memberId)}" class="inline-flex items-center gap-1 h-6 px-2 rounded-xs bg-navy-soft text-navy text-[11px] font-semibold flex-shrink-0" title="조장 해제">★ 조장</button>`
@@ -4042,7 +4096,7 @@
              draggable="true"
              data-member-id="${escapeAttr(memberId)}"
              data-group-idx="${groupIdx}">
-          <div class="w-8 h-8 rounded-full ${colorCls} text-[11px] font-semibold flex items-center justify-center flex-shrink-0">${m.initials}</div>
+          ${avatarHtml}
           <div class="flex-1 min-w-0">
             <div class="text-[13px] font-medium text-ink truncate"><span class="font-semibold">${memberName}</span><span class="text-ink-soft">/${GP_TEST_COHORT_LABEL}${sub}</span></div>
             <div class="text-[11px] text-ink-soft truncate">${m.handle}</div>
@@ -4073,6 +4127,7 @@
           _gpActiveTrack = btn.dataset.gpTab;
           gpRenderTabs();
           gpRenderCards();
+          gpSaveState();
         });
       });
     }
