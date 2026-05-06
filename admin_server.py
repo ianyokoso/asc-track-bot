@@ -352,6 +352,30 @@ def _is_track_application_oauth_enabled():
     return _is_truthy_env(os.getenv('ENABLE_TRACK_APPLICATION_OAUTH'))
 
 
+def _get_admin_discord_user_ids():
+    """
+    .env 의 ADMIN_DISCORD_USER_IDS (comma-separated 디스코드 user id) 를 set 으로 반환.
+    예: ADMIN_DISCORD_USER_IDS=123456789012345678,234567890123456789
+    """
+    raw = str(os.getenv('ADMIN_DISCORD_USER_IDS', '')).strip()
+    if not raw:
+        return set()
+    return {part.strip() for part in raw.split(',') if part.strip()}
+
+
+def _is_admin_user(user_id):
+    """user_id 가 운영진(관리자) 목록에 포함되는지."""
+    if not user_id:
+        return False
+    return str(user_id).strip() in _get_admin_discord_user_ids()
+
+
+def _is_admin_session():
+    """현재 Flask 세션의 discord_user 가 admin 인지."""
+    user = session.get('discord_user') or {}
+    return _is_admin_user(user.get('id'))
+
+
 def _is_oauth_enabled_for_path(path):
     safe_path = _sanitize_relative_path(path)
     if safe_path == TEST_PERSONAL_DASHBOARD_PATH:
@@ -1393,6 +1417,7 @@ def discord_oauth_callback():
         session['discord_user'] = discord_user_info
         # Standalone /apply (Flask 가 직접 서빙) 에서 viewer 정보를 query param 으로 전달.
         # Wrapper(React) 가 사라져 /api/auth/me 호출 단계가 없으므로, callback 시 URL 에 박아 보낸다.
+        is_admin = _is_admin_user(discord_user_info['id'])
         return redirect(_build_app_redirect_url(
             next_path,
             discord_auth='success',
@@ -1400,6 +1425,7 @@ def discord_oauth_callback():
             discordDisplayName=discord_user_info['displayName'] or discord_user_info['username'],
             discordHandle=(f"@{discord_user_info['username']}" if discord_user_info['username'] else ''),
             discordAvatarUrl=discord_user_info['avatarUrl'] or '',
+            isAdmin='1' if is_admin else '0',
         ))
     except requests.RequestException as e:
         print(f"[ERROR] Discord OAuth exchange failed: {e}")
@@ -1430,6 +1456,7 @@ def get_authenticated_dashboard_data():
     payload['loginUrl'] = login_url
     payload['featureEnabled'] = True
     payload['testOnly'] = _is_test_only_auth_path(next_path)
+    payload['isAdmin'] = _is_admin_user(discord_user.get('id'))
     return jsonify(payload)
 
 
@@ -1506,6 +1533,12 @@ def save_track_application():
 
 @app.route('/api/mockups/track-applications/admin', methods=['PUT'])
 def save_admin_track_application_mock_members():
+    if not _is_admin_session():
+        return jsonify({
+            "status": "error",
+            "message": "운영진 권한이 필요합니다."
+        }), 403
+
     payload = request.get_json(silent=True) or {}
     cohort_label = _get_current_cohort_label(payload.get('cohortLabel') or payload.get('cohort'))
 
@@ -1556,6 +1589,12 @@ def save_admin_track_application_mock_members():
 
 @app.route('/api/track-applications/admin', methods=['PUT'])
 def save_admin_track_applications():
+    if not _is_admin_session():
+        return jsonify({
+            "status": "error",
+            "message": "운영진 권한이 필요합니다."
+        }), 403
+
     payload = request.get_json(silent=True) or {}
     cohort_label = _get_current_cohort_label(payload.get('cohortLabel') or payload.get('cohort'))
 
@@ -2959,6 +2998,13 @@ def get_group_data():
 
 @app.route('/api/mockups/group-preview/commit', methods=['POST'])
 def commit_group_preview_mockup():
+    # 운영진(관리자)만 commit 가능 — 클라이언트가 강제로 admin view 진입해도 서버에서 차단.
+    if not _is_admin_session():
+        return jsonify({
+            "status": "error",
+            "message": "운영진 권한이 필요합니다. 관리자 디스코드 계정으로 로그인하세요."
+        }), 403
+
     payload = request.get_json(silent=True) or {}
 
     try:

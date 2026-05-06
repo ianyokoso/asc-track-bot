@@ -1757,6 +1757,9 @@
     const VIEWER_HANDLE = (mockupParams.get('discordHandle') || '@시연유저').trim() || '@시연유저';
     const VIEWER_USER_ID = (mockupParams.get('discordUserId') || '').trim();
     const VIEWER_AVATAR_URL = (mockupParams.get('discordAvatarUrl') || '').trim();
+    // OAuth 콜백이 isAdmin=1 을 query 로 박아 보내는 경우 관리자 — Page reload 후에는
+    // /api/auth/me 응답으로 다시 확인 (아래 fetchAuthMe 참고).
+    let IS_VIEWER_ADMIN = mockupParams.get('isAdmin') === '1';
     // Wrapper(React) 가 사라진 standalone 모드에서는 query param 으로 loginUrl 이 안 들어옴.
     // /api/auth/discord 가 바로 Discord OAuth 로 redirect 하므로 그쪽으로 보내면 됨.
     const LOGIN_URL = (mockupParams.get('loginUrl') || '').trim()
@@ -1855,16 +1858,39 @@
       if (kind === 'upcoming') {
         headerActions.innerHTML = `<span class="text-[11px] font-semibold text-warn uppercase tracking-wider">${APPLICATION_OPENS_LABEL}</span>`;
       } else if (kind === 'user') {
+        const adminBtn = IS_VIEWER_ADMIN
+          ? `<button type="button" id="btn-go-admin" class="btn-ghost text-[12px] h-9 px-3 whitespace-nowrap" title="운영진 전용 — 신청자 관리 / 조 배정">
+               🛡️ 관리자 페이지
+             </button>`
+          : '';
         headerActions.innerHTML = `
+          ${adminBtn}
           <div class="inline-flex items-center gap-2 h-9 px-3 rounded-sm border border-border-hair bg-surface">
             <div class="w-6 h-6 rounded-full bg-navy-soft text-navy text-[10px] font-bold flex items-center justify-center">${getViewerInitial()}</div>
             <span class="text-[13px] text-ink font-medium">${VIEWER_HANDLE}</span>
           </div>`;
+        if (IS_VIEWER_ADMIN) {
+          requestAnimationFrame(() => {
+            document.getElementById('btn-go-admin')?.addEventListener('click', () => {
+              applyState('admin');
+            });
+          });
+        }
       } else if (kind === 'admin') {
+        const backToApplyBtn = (IS_VIEWER_ADMIN && VIEWER_USER_ID)
+          ? `<button type="button" id="btn-back-to-apply" class="btn-ghost text-[12px] h-9 px-3 whitespace-nowrap" title="내 신청 페이지로">
+               ← 신청 페이지
+             </button>`
+          : '';
         headerActions.innerHTML = `
+          ${backToApplyBtn}
           <button class="btn-ghost" id="admin-track-apply-sync">Full Sync</button>
           <button class="btn-navy" id="admin-track-apply-refresh">Refresh</button>`;
         requestAnimationFrame(() => {
+          document.getElementById('btn-back-to-apply')?.addEventListener('click', () => {
+            // 신청 상태에 따라 open-new / open-edit / closed 자동 판정 (간단히 open-new)
+            applyState('open-new');
+          });
           document.getElementById('admin-track-apply-sync')?.addEventListener('click', () => {
             void syncAdminMembersToServer();
           });
