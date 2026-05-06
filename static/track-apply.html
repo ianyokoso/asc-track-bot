@@ -1395,7 +1395,7 @@
       <div class="flex items-center justify-between mb-4">
         <p class="text-eyebrow">신청자 목록</p>
         <div class="flex items-center gap-2">
-          <input type="text" placeholder="이름·Discord 검색" class="h-9 w-64 px-3 text-[13px]" />
+          <input id="admin-search-input" type="text" placeholder="이름·Discord 검색" class="h-9 w-64 px-3 text-[13px]" autocomplete="off" />
           <button type="button" class="btn-navy h-9 px-4 text-[13px] whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5" data-open-group-preview>조 배정 <span aria-hidden="true">↗</span></button>
         </div>
       </div>
@@ -2800,8 +2800,18 @@
       return MOCK_MEMBERS.filter(m => matchesTrack(m, trackId)).length;
     }
 
+    let _adminSearchQuery = '';
     function getTrackMembers(trackId) {
-      return MOCK_MEMBERS.filter(m => matchesTrack(m, trackId));
+      const base = MOCK_MEMBERS.filter(m => matchesTrack(m, trackId));
+      const q = _adminSearchQuery.trim().toLowerCase();
+      if (!q) return base;
+      return base.filter(m => {
+        const name = String(getMemberDisplayName(m) || '').toLowerCase();
+        const handle = String(m.handle || '').toLowerCase();
+        const userId = String(m.userId || m.id || '').toLowerCase();
+        const altName = String(m.name || '').toLowerCase();
+        return name.includes(q) || handle.includes(q) || userId.includes(q) || altName.includes(q);
+      });
     }
 
     function getLeaderApplicants(trackId) {
@@ -3026,6 +3036,21 @@
     renderAdminTable('all');
     loadTrackApplications();
     scheduleHeightSync();
+
+    // 검색창: 활성 트랙 그대로 유지하면서 결과만 필터.
+    (() => {
+      const input = document.getElementById('admin-search-input');
+      if (!input) return;
+      let timer = null;
+      input.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          _adminSearchQuery = input.value || '';
+          const activeTrack = document.querySelector('.admin-tab.is-active')?.dataset.trackId || 'all';
+          renderAdminTable(activeTrack);
+        }, 80);
+      });
+    })();
 
     // ═════════════════════════════════════════════════════════════════════
     // 트랙 편집 모달 — 멤버의 트랙 추가/제거
