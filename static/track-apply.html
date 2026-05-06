@@ -1757,11 +1757,10 @@
     const TRACK_PREVIEW_TITLE = `${COHORT_LABEL} 트랙 미리보기`;
     const GROUP_ASSIGNMENT_TITLE = `${COHORT_LABEL} 조 배정`;
 
-    if (!IS_ADMIN_MOCK && !IS_GROUP_PREVIEW_DIRECT && !IS_APPLY_WRAPPER) {
-      const nextSearch = window.location.search || '';
-      window.location.replace(`/apply${nextSearch}`);
-      throw new Error('Redirecting non-admin preview entry to /apply');
-    }
+    // 과거(asc-bot-admin-dashboard 시절): 이 HTML 은 /mockups/track-apply.html 에 있었고
+    // /apply 는 React wrapper 였다. wrapper 없이 mockup 을 직접 열면 /apply 로 보내는 가드 였음.
+    // 현재(asc-track-bot): Flask 가 이 HTML 을 /apply 에 직접 서빙하므로 가드 불필요.
+    // 남겨두면 /apply → /apply 무한 리다이렉트 루프 발생.
 
     function setText(id, value) {
       const element = document.getElementById(id);
