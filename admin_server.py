@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, redirect, session
+from flask import Flask, request, jsonify, redirect, session, send_from_directory
 from flask_cors import CORS
 from datetime import timedelta, datetime, timezone
 import json
@@ -20,7 +20,25 @@ from env_utils import (
 )
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True)  # Enable CORS for Dashboard
+CORS(app, supports_credentials=True)  # Enable CORS for cross-origin API consumers (optional)
+
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
+
+
+@app.route('/')
+def serve_root():
+    return redirect('/apply', code=302)
+
+
+@app.route('/apply')
+def serve_apply_page():
+    """track-bot Flask 가 직접 apply UI 정적 HTML 을 서빙."""
+    return send_from_directory(STATIC_DIR, 'track-apply.html')
+
+
+@app.route('/static/<path:filename>')
+def serve_static_assets(filename):
+    return send_from_directory(STATIC_DIR, filename)
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

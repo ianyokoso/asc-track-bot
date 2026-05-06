@@ -1,0 +1,4241 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>트랙 신청 프리뷰 — 관리자 테스트</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // asc-bot-admin-dashboard의 tailwind config 그대로 복제
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Pretendard Variable', 'Pretendard', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'Roboto', 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'sans-serif'],
+          },
+          colors: {
+            canvas: '#FFFFFF',
+            surface: '#F4F6F8',
+            'surface-2': '#EDEFF2',
+            ink: '#141E3C',
+            'ink-muted': '#4B5563',
+            'ink-soft': '#9CA3AF',
+            'border-hair': '#E5E7EB',
+            'border-strong': '#D1D5DB',
+            navy: '#1E2A4A',
+            'navy-strong': '#141E3C',
+            'navy-soft': '#EEF0F6',
+            ok: '#16A34A',
+            bad: '#DC2626',
+            warn: '#D97706',
+          },
+          borderRadius: { 'xs': '4px', 'sm': '6px', 'md': '8px', 'lg': '12px' },
+          boxShadow: {
+            'hair': '0 1px 0 0 rgba(20, 30, 60, 0.04)',
+            'card': '0 1px 2px 0 rgba(20, 30, 60, 0.04)',
+          },
+          letterSpacing: { 'eyebrow': '0.14em' },
+        },
+      },
+    };
+  </script>
+  <style>
+    body { font-family: 'Pretendard Variable', 'Pretendard', -apple-system, sans-serif; }
+    .text-eyebrow {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.14em;
+      text-transform: uppercase; color: #9CA3AF;
+    }
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+    .btn-navy {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      background: #1E2A4A; color: white;
+      padding: 0 16px; height: 36px;
+      border-radius: 8px; font-size: 14px; font-weight: 600;
+      border: none; cursor: pointer;
+      transition: background-color 150ms;
+    }
+    .btn-navy:hover { background: #141E3C; }
+    .btn-navy:disabled { background: #D1D5DB; color: #9CA3AF; cursor: not-allowed; }
+    .btn-ghost {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      background: transparent; color: #141E3C;
+      padding: 0 14px; height: 36px;
+      border-radius: 8px; font-size: 14px; font-weight: 600;
+      border: 1px solid #E5E7EB;
+      cursor: pointer;
+      transition: background-color 150ms;
+    }
+    .btn-ghost:hover { background: #F4F6F8; }
+    .btn-discord {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      background: #5865F2; color: white;
+      padding: 0 18px; height: 40px;
+      border-radius: 8px; font-size: 14px; font-weight: 600;
+      border: none; cursor: pointer;
+    }
+    .btn-discord:hover { background: #4752C4; }
+
+    input[type="text"], textarea {
+      width: 100%;
+      height: 40px;
+      padding: 0 14px;
+      background: #FFFFFF;
+      border: 1px solid #D1D5DB;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 14px;
+      color: #141E3C;
+      transition: border-color 150ms, box-shadow 150ms;
+    }
+    textarea { height: auto; min-height: 96px; padding: 12px 14px; resize: vertical; }
+    input[type="text"]:focus, textarea:focus {
+      outline: none;
+      border-color: #1E2A4A;
+      box-shadow: 0 0 0 3px #EEF0F6;
+    }
+    input[type="radio"], input[type="checkbox"] {
+      accent-color: #1E2A4A;
+      width: 16px; height: 16px;
+      cursor: pointer;
+      vertical-align: -3px;
+    }
+
+    .hidden-view { display: none !important; }
+
+    .mockup-devtools {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      z-index: 60;
+      max-width: 260px;
+      background: #FFFFFF;
+      border: 1px solid #D1D5DB;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px -1px rgba(20, 30, 60, 0.08), 0 2px 4px -2px rgba(20, 30, 60, 0.06);
+      font-size: 12px;
+      user-select: none;
+    }
+    .mockup-devtools summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #4B5563;
+      font-weight: 600;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+    .mockup-devtools summary::-webkit-details-marker { display: none; }
+    .mockup-devtools summary::before {
+      content: "";
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-right: 1.5px solid #9CA3AF;
+      border-bottom: 1.5px solid #9CA3AF;
+      transform: rotate(-45deg);
+      transition: transform 120ms;
+    }
+    .mockup-devtools[open] summary::before { transform: rotate(45deg); }
+    .mockup-devtools .states {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 4px 6px 8px;
+      border-top: 1px solid #F4F6F8;
+    }
+    .mockup-devtools .states button {
+      background: transparent;
+      border: none;
+      text-align: left;
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #4B5563;
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: 500;
+    }
+    .mockup-devtools .states button:hover { background: #F4F6F8; color: #141E3C; }
+    .mockup-devtools .states button.active {
+      background: #141E3C;
+      color: white;
+      font-weight: 600;
+    }
+    .mockup-devtools .hint {
+      font-size: 10px;
+      color: #9CA3AF;
+      padding: 4px 12px 8px;
+      text-transform: none;
+      letter-spacing: normal;
+    }
+
+    /* Table row hover */
+    .hover-row:hover { background: #F4F6F8; }
+
+    /* ── 트랙 옵션 레이아웃 ────────────────────────────────────────────
+       한 요일 안에 여러 트랙이 나란히 쌓일 수 있으므로 옵션끼리 얕은
+       대시 구분선으로 분리해 다음 트랙 시작점이 한눈에 보이게 한다. */
+    .track-option {
+      padding-bottom: 20px;
+      border-bottom: 1px dashed #E5E7EB;
+    }
+    .track-option:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    /* ── 트랙 옵션 헤더: [라디오 + 라벨]  ·  [조장 지원 pill] 한 줄 ───── */
+    .track-option-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .track-radio-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #141E3C;
+      cursor: pointer;
+    }
+
+    /* ── 조장 지원 (Leader Apply) ─ Pill toggle, 확실한 시각적 강조 ─────
+       트랙을 선택한 상태에서만 활성. 체크 시 navy 배경 + 노란 별로
+       "내가 조장 지원함" 을 즉시 식별. 관리자 테이블에서도 동일 배지 재사용. */
+    .leader-apply {
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border: 1px solid #D1D5DB;
+      border-radius: 999px;
+      background: #FFFFFF;
+      font-size: 12px;
+      font-weight: 500;
+      color: #4B5563;
+      cursor: pointer;
+      transition: background-color 150ms, border-color 150ms, color 150ms;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .leader-apply input[type="checkbox"] {
+      /* 체크박스는 숨기고 pill 전체가 토글 UI */
+      position: absolute;
+      width: 1px; height: 1px;
+      padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0,0,0,0); border: 0;
+    }
+    .leader-apply:not(.is-disabled):hover {
+      border-color: #1E2A4A;
+      color: #141E3C;
+    }
+    .leader-apply.is-checked {
+      background: #1E2A4A;
+      border-color: #1E2A4A;
+      color: #FFFFFF;
+    }
+    .leader-apply.is-checked:hover {
+      background: #141E3C;
+    }
+    .leader-apply .leader-star {
+      font-size: 12px;
+      color: #9CA3AF;
+      transition: color 150ms;
+    }
+    .leader-apply:not(.is-disabled):hover .leader-star { color: #D97706; }
+    .leader-apply.is-checked .leader-star { color: #FBBF24; }
+    .leader-apply.is-disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      background: #F4F6F8;
+      border-color: #E5E7EB;
+    }
+
+    /* ── 트랙 주차별 일정 (노션 실데이터 — details 드롭다운 + 4열 테이블) ───
+       빌드 스크립트(docs/designs/notion-to-mockup.py)가 NOTION_SCHEDULE 마커
+       구간을 <details> 로 감싸서 치환한다. 기본 접힘.
+       레이아웃: 주차(64px) | 날짜(96px) | 시간(112px) | 세션(유동) */
+    .track-schedule {
+      margin-top: 10px;
+      margin-left: 24px;
+    }
+    .schedule-details { display: block; }
+    .schedule-summary {
+      list-style: none;
+      outline: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border: 1px solid #E5E7EB;
+      border-radius: 6px;
+      background: #F4F6F8;
+      font-size: 12px;
+      font-weight: 500;
+      color: #4B5563;
+      transition: background-color 150ms, color 150ms, border-color 150ms;
+      user-select: none;
+    }
+    .schedule-summary:hover {
+      background: #EDEFF2;
+      border-color: #D1D5DB;
+      color: #141E3C;
+    }
+    .schedule-summary::-webkit-details-marker { display: none; }
+    .schedule-summary::before {
+      content: "";
+      display: inline-block;
+      width: 5px; height: 5px;
+      border-right: 1.5px solid currentColor;
+      border-bottom: 1.5px solid currentColor;
+      transform: rotate(-45deg);
+      transition: transform 120ms;
+    }
+    .schedule-details[open] .schedule-summary::before { transform: rotate(45deg); }
+    .schedule-details[open] .schedule-summary {
+      background: #EEF0F6;
+      border-color: #1E2A4A;
+      color: #141E3C;
+    }
+    .schedule-body {
+      margin-top: 10px;
+      padding-left: 12px;
+      border-left: 1px solid #E5E7EB;
+    }
+    .track-schedule table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .track-schedule thead th {
+      text-align: left;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #9CA3AF;
+      padding: 6px 8px 6px 0;
+      border-bottom: 1px solid #E5E7EB;
+      white-space: nowrap;
+    }
+    .track-schedule tbody td {
+      padding: 6px 8px 6px 0;
+      vertical-align: top;
+      border-bottom: 1px solid #F4F6F8;
+    }
+    .track-schedule tbody tr:last-child td { border-bottom: 0; }
+    .track-schedule tbody tr.sched-row.is-group-meeting td,
+    .track-schedule tbody tr.sched-row.is-group-meeting .sched-title {
+      color: #4B5563;
+    }
+    .track-schedule tbody tr.sched-row.is-group-meeting .sched-title {
+      font-weight: 500;
+    }
+    .track-schedule .col-week  { width: 64px;  }
+    .track-schedule .col-date  { width: 96px;  font-variant-numeric: tabular-nums; color: #4B5563; white-space: nowrap; }
+    .track-schedule .col-time  { width: 112px; font-variant-numeric: tabular-nums; color: #4B5563; white-space: nowrap; }
+    .track-schedule .col-session { color: #141E3C; }
+    .track-schedule .sched-week {
+      display: inline-block;
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: #1E2A4A; background: #EEF0F6;
+      padding: 1px 6px; border-radius: 4px;
+      white-space: nowrap;
+    }
+    .track-schedule .sched-week.is-ot {
+      color: #D97706; background: #FFF7ED;
+    }
+    .track-schedule .sched-title {
+      font-weight: 600;
+      color: #141E3C;
+      line-height: 1.45;
+    }
+    .track-schedule .sched-detail {
+      margin-top: 2px;
+      font-size: 11px;
+      color: #4B5563;
+      line-height: 1.55;
+    }
+    .track-schedule .sched-participation {
+      margin-left: 6px;
+      font-size: 10px; color: #9CA3AF;
+      border: 1px solid #E5E7EB;
+      padding: 1px 5px; border-radius: 3px;
+      font-weight: 500;
+    }
+    .track-schedule .sched-empty {
+      font-size: 12px; color: #9CA3AF; padding: 6px 0;
+    }
+    .track-schedule .sched-error {
+      font-size: 12px; color: #DC2626; padding: 6px 0;
+    }
+
+    /* ── 관리자 탭 ─────────────────────────────────────────────────── */
+    .admin-tab {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 48px;
+      padding: 0 14px;
+      border: none;
+      background: transparent;
+      font-size: 13px;
+      font-weight: 500;
+      color: #4B5563;
+      cursor: pointer;
+      transition: color 150ms;
+      white-space: nowrap;
+    }
+    .admin-tab:hover { color: #141E3C; }
+    .admin-tab .admin-tab-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      background: #F4F6F8;
+      color: #9CA3AF;
+      font-variant-numeric: tabular-nums;
+    }
+    .admin-tab .admin-tab-underline {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: 2px;
+      background: transparent;
+    }
+    .admin-tab.is-active {
+      color: #141E3C;
+      font-weight: 600;
+    }
+    .admin-tab.is-active .admin-tab-count {
+      background: #1E2A4A;
+      color: #FFFFFF;
+    }
+    .admin-tab.is-active .admin-tab-underline { background: #1E2A4A; }
+
+    .admin-tab-divider {
+      width: 1px;
+      align-self: center;
+      height: 20px;
+      background: #E5E7EB;
+      margin: 0 10px;
+    }
+
+    /* ── 조장 지원자 바 (선택된 트랙의 조장 지원 현황) ──────────────── */
+    .admin-leader-bar {
+      border-bottom: 1px solid #E5E7EB;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    @media (min-width: 768px) {
+      .admin-leader-bar { padding: 14px 40px; }
+    }
+    .admin-leader-bar-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #9CA3AF;
+      flex-shrink: 0;
+    }
+    .admin-leader-bar-list {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      flex: 1;
+      font-size: 12px;
+      color: #4B5563;
+    }
+    .admin-leader-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: #EEF0F6;
+      color: #141E3C;
+      font-weight: 600;
+      font-size: 12px;
+    }
+    .admin-leader-chip .admin-leader-star { color: #1E2A4A; }
+    .admin-leader-chip .admin-leader-handle {
+      color: #4B5563;
+      font-weight: 400;
+      font-size: 11px;
+    }
+    .admin-leader-bar-count {
+      margin-left: auto;
+      font-size: 12px;
+      color: #4B5563;
+      font-variant-numeric: tabular-nums;
+    }
+    .admin-leader-bar-empty {
+      font-size: 12px;
+      color: #9CA3AF;
+    }
+
+    /* ── 테이블 행 편집 버튼 ────────────────────────────────────────── */
+    .admin-row-edit-btn {
+      background: transparent;
+      border: 1px solid #E5E7EB;
+      border-radius: 6px;
+      padding: 3px 10px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #4B5563;
+      cursor: pointer;
+      transition: all 150ms;
+      font-family: inherit;
+    }
+    .admin-row-edit-btn:hover {
+      border-color: #1E2A4A;
+      color: #141E3C;
+      background: #F4F6F8;
+    }
+
+    /* ── 편집 모달 ──────────────────────────────────────────────────── */
+    .admin-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .admin-modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(20, 30, 60, 0.45);
+    }
+    .admin-modal-panel {
+      position: relative;
+      width: 100%;
+      max-width: 560px;
+      margin: 24px;
+      background: #FFFFFF;
+      border-radius: 12px;
+      box-shadow: 0 20px 40px -12px rgba(20, 30, 60, 0.25);
+      display: flex;
+      flex-direction: column;
+      max-height: calc(100vh - 48px);
+      overflow: hidden;
+    }
+    .admin-modal-close {
+      position: absolute;
+      top: 12px; right: 12px;
+      width: 28px; height: 28px;
+      border: none; background: transparent;
+      color: #9CA3AF;
+      font-size: 16px;
+      cursor: pointer;
+      border-radius: 6px;
+    }
+    .admin-modal-close:hover { background: #F4F6F8; color: #141E3C; }
+    .admin-modal-header {
+      padding: 22px 24px 16px;
+      border-bottom: 1px solid #E5E7EB;
+    }
+    .admin-modal-header .text-eyebrow { margin-bottom: 4px; }
+    .admin-modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #141E3C;
+      letter-spacing: -0.01em;
+    }
+    .admin-modal-subtitle {
+      font-size: 12px;
+      color: #9CA3AF;
+      margin-top: 2px;
+    }
+    .admin-modal-body {
+      padding: 20px 24px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .admin-modal-footer {
+      padding: 14px 24px;
+      border-top: 1px solid #E5E7EB;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      background: #F4F6F8;
+    }
+
+    /* 모달 내부 — 트랙 리스트 */
+    .admin-edit-track-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .admin-edit-track-list:empty::after {
+      content: "현재 신청한 트랙이 없습니다. 아래에서 트랙을 추가할 수 있습니다.";
+      display: block;
+      font-size: 12px;
+      color: #9CA3AF;
+      padding: 12px;
+      border: 1px dashed #E5E7EB;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .admin-edit-track-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+      background: #FFFFFF;
+      flex-wrap: wrap;
+    }
+    .admin-edit-track-row.is-light { background: #FAFAFB; }
+    .admin-edit-track-info { flex: 1; min-width: 0; }
+    .admin-edit-track-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #141E3C;
+    }
+    .admin-edit-track-type-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #9CA3AF;
+      margin-right: 6px;
+    }
+    .admin-edit-creator-sub {
+      height: 28px;
+      padding: 0 8px;
+      border: 1px solid #D1D5DB;
+      border-radius: 6px;
+      font-size: 12px;
+      background: #FFFFFF;
+      color: #141E3C;
+      font-family: inherit;
+    }
+    .admin-edit-leader-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #4B5563;
+      cursor: pointer;
+    }
+    .admin-edit-leader-toggle input { width: 14px; height: 14px; accent-color: #1E2A4A; }
+    .admin-edit-remove {
+      background: transparent;
+      border: 1px solid #E5E7EB;
+      border-radius: 6px;
+      padding: 3px 10px;
+      font-size: 12px;
+      color: #4B5563;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .admin-edit-remove:hover { border-color: #DC2626; color: #DC2626; }
+
+    /* 모달 내부 — 추가 섹션 */
+    .admin-edit-add-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 540px) {
+      .admin-edit-add-row { grid-template-columns: 1fr; }
+    }
+    .admin-edit-add {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .admin-edit-add-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #9CA3AF;
+    }
+    .admin-edit-add select {
+      height: 34px;
+      padding: 0 10px;
+      border: 1px solid #D1D5DB;
+      border-radius: 6px;
+      background: #FFFFFF;
+      font-size: 13px;
+      color: #141E3C;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .admin-edit-add select:disabled {
+      background: #F4F6F8;
+      cursor: not-allowed;
+      color: #9CA3AF;
+    }
+
+    /* ── 대분류 카테고리 헤더 (정규 트랙 / 라이트 트랙) ──────────────── */
+    .track-category {
+      padding: 4px 0;
+    }
+    .track-category-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #1E2A4A;
+    }
+    .track-category-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: #141E3C;
+      letter-spacing: -0.01em;
+      margin-top: 4px;
+    }
+    .track-category-desc {
+      font-size: 13px;
+      color: #4B5563;
+      line-height: 1.6;
+      margin-top: 6px;
+      max-width: 640px;
+    }
+    .track-category-divider {
+      margin: 48px 0 32px;
+      border-top: 2px solid #E5E7EB;
+    }
+
+    /* ── 라이트 트랙 (독립 섹션) ────────────────────────────────────────
+       요일별 트랙과 동등한 시각 계층. 카드 그리드 레이아웃으로 옵션을
+       그룹별(크리에이터/빌더) 한눈에 비교. 각 그룹 최대 1개 선택. */
+    .light-tracks-badge {
+      display: inline-block;
+      vertical-align: 3px;
+      margin-left: 8px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #D97706;
+      background: #FFF7ED;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .light-tracks-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+    }
+    .light-track-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px 14px;
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+      background: #FFFFFF;
+      cursor: pointer;
+      transition: border-color 150ms, background-color 150ms;
+    }
+    .light-track-card:hover {
+      border-color: #1E2A4A;
+      background: #F4F6F8;
+    }
+    .light-track-card.is-checked {
+      border-color: #1E2A4A;
+      background: #EEF0F6;
+    }
+    .light-track-card input[type="checkbox"] {
+      margin-top: 2px;
+      width: 16px;
+      height: 16px;
+      accent-color: #1E2A4A;
+      flex-shrink: 0;
+    }
+    .light-track-body { flex: 1; min-width: 0; }
+    .light-track-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #141E3C;
+    }
+    .light-track-desc {
+      font-size: 11px;
+      color: #4B5563;
+      margin-top: 3px;
+      line-height: 1.5;
+    }
+
+    /* ── 조 배정 미리보기 (drag&drop) ───────────────────────────────── */
+    .gp-member-row {
+      cursor: grab;
+      user-select: none;
+      transition: background-color 120ms;
+    }
+    .gp-member-row:active { cursor: grabbing; }
+    .gp-member-row.gp-dragging { opacity: 0.35; }
+    .gp-member-row .gp-grip {
+      opacity: 0;
+      transition: opacity 120ms;
+      color: #9CA3AF;
+      font-size: 14px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .gp-member-row:hover .gp-grip { opacity: 1; }
+    .gp-card { transition: outline 120ms, background-color 120ms; }
+    .gp-card.gp-drag-over {
+      outline: 2px dashed #1E2A4A;
+      outline-offset: -4px;
+      background-color: rgba(30, 42, 74, 0.025);
+    }
+    .gp-empty-drop {
+      border: 2px dashed #D1D5DB;
+      border-radius: 12px;
+      min-height: 220px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #9CA3AF;
+      font-size: 13px;
+      transition: border-color 120ms, background-color 120ms;
+    }
+    .gp-empty-drop.gp-drag-over {
+      border-color: #1E2A4A;
+      background-color: rgba(30, 42, 74, 0.03);
+      color: #1E2A4A;
+    }
+    /* 조 배정 완료 모달 — 진행 단계 spinner */
+    .gp-spinner {
+      width: 14px; height: 14px;
+      border: 2px solid #1E2A4A;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: gp-spin 0.7s linear infinite;
+      display: inline-block;
+    }
+    @keyframes gp-spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="bg-canvas text-ink antialiased">
+
+  <details class="mockup-devtools" open>
+    <summary>Mockup States</summary>
+    <div class="states">
+      <button data-state="logout" class="active">로그아웃</button>
+      <button data-state="upcoming">오픈 전</button>
+      <button data-state="open-new">오픈 · 미제출</button>
+      <button data-state="open-edit">오픈 · 제출완료</button>
+      <button data-state="closed">마감</button>
+      <button data-state="admin">관리자</button>
+    </div>
+    <div style="border-top: 1px solid #F4F6F8; padding: 6px 6px 8px;">
+      <button id="devtools-reset" type="button"
+              style="width:100%; text-align:left; background:transparent; border:none; padding:7px 10px; border-radius:6px; font-size:12px; color:#DC2626; cursor:pointer; font-family:inherit; font-weight:500;">
+        데이터 초기화
+      </button>
+    </div>
+    <p class="hint">이 패널은 목업 전용입니다. 실제 화면에는 없고, 상태별 UI를 미리보기 위한 devtools입니다.</p>
+  </details>
+
+  <div id="admin-preview-banner" class="border-b border-border-hair bg-surface">
+    <div class="px-4 md:px-10 py-2.5 flex items-center justify-between gap-4 text-[12px] text-ink-muted">
+      <p class="leading-relaxed">
+        <strong class="text-ink font-semibold">관리자 테스트 프리뷰</strong>
+        <span class="mx-2 text-ink-soft">·</span>
+        공개 신청 플로우는 <span class="font-semibold text-ink">/apply</span> 에서 관리되고, 이 화면은 관리자/조 배정 검증만 위한 테스트 전용 진입점입니다.
+      </p>
+      <span class="text-eyebrow whitespace-nowrap">ADMIN PREVIEW</span>
+    </div>
+  </div>
+
+  <!-- ===== HEADER (공통) ===== -->
+  <header id="common-header" class="bg-canvas border-b border-border-hair">
+    <div class="px-4 md:px-10 pt-5 md:pt-7 pb-4 md:pb-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-8">
+      <div class="flex items-center gap-3 md:gap-4 min-w-0">
+        <div class="w-9 h-9 md:w-10 md:h-10 rounded-sm bg-navy text-white text-[13px] font-bold flex items-center justify-center flex-shrink-0">ASC</div>
+        <div class="min-w-0">
+          <p class="text-eyebrow mb-1">Dashboard</p>
+          <h1 class="text-lg md:text-xl font-bold text-ink tracking-tight truncate" id="header-title">트랙 신청</h1>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 flex-shrink-0" id="header-actions">
+        <!-- 상태별 동적 -->
+      </div>
+    </div>
+
+    <!-- Window progress (오픈 중·제출완료일 때만 표시) -->
+    <div id="window-progress" class="px-4 md:px-10 pb-5 md:pb-6 hidden-view">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-eyebrow">Application Window</span>
+        <span id="window-range-label" class="text-xs font-medium text-ink-muted tabular-nums">
+          05.20 <span class="text-ink-soft">→</span> 05.24
+        </span>
+      </div>
+      <div class="relative h-1.5 bg-surface rounded-full">
+        <div class="absolute inset-y-0 left-0 bg-navy rounded-full" style="width: 42%"></div>
+        <div class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style="left: 42%">
+          <div class="w-2.5 h-2.5 rounded-full bg-navy ring-4 ring-canvas"></div>
+        </div>
+      </div>
+      <div class="mt-2 flex justify-end">
+        <span class="text-[11px] font-medium text-ink-soft tabular-nums">
+          Today <span class="text-ink">05.21</span>
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== View: 로그아웃 ===== -->
+  <section class="view" id="view-logout">
+    <div class="max-w-lg mx-auto px-4 md:px-10 py-20 md:py-28 text-center">
+      <p class="text-eyebrow mb-3">Step 1</p>
+      <h2 class="text-xl md:text-2xl font-bold text-ink tracking-tight mb-4">트랙 신청을 시작하려면 로그인하세요</h2>
+      <p class="text-sm text-ink-muted mb-6 leading-relaxed">
+        ASC Discord 계정으로 로그인하면<br>본인 트랙을 직접 선택·수정할 수 있습니다.
+      </p>
+      <div class="inline-block text-[12px] text-ink-muted mb-10 tabular-nums bg-surface border border-border-hair rounded-md px-3 py-1.5">
+        신청 기간 <span id="login-period-label" class="text-ink font-semibold">05.20(수) 00:00 ~ 05.24(일) 23:59 KST</span>
+      </div>
+      <div>
+        <button id="btn-login" class="btn-discord" type="button">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0a12.64 12.64 0 0 0-.617-1.25a.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057a19.9 19.9 0 0 0 5.993 3.03a.078.078 0 0 0 .084-.028a14.09 14.09 0 0 0 1.226-1.994a.076.076 0 0 0-.041-.106a13.107 13.107 0 0 1-1.872-.892a.077.077 0 0 1-.008-.128a10.2 10.2 0 0 0 .372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127a12.299 12.299 0 0 1-1.873.892a.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028a19.839 19.839 0 0 0 6.002-3.03a.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03ZM8.02 15.33c-1.182 0-2.157-1.085-2.157-2.419c0-1.333.956-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.956 2.418-2.157 2.418Zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.946 2.418-2.157 2.418Z"/></svg>
+          Discord로 로그인
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== View: 오픈 전 ===== -->
+  <section class="view hidden-view" id="view-upcoming">
+    <div class="max-w-xl mx-auto px-4 md:px-10 py-16 md:py-24 text-center">
+      <p class="text-eyebrow mb-3">Opens In</p>
+      <div class="text-[44px] md:text-[56px] font-bold text-ink tracking-tight tabular-nums mb-2 leading-none">
+        3일 12:45:32
+      </div>
+      <p id="upcoming-window-label" class="text-sm text-ink-muted tabular-nums mb-10">
+        2026-05-20(수) 00:00 KST 오픈 · 2026-05-24(일) 23:59 KST 마감
+      </p>
+      <button type="button" class="btn-navy h-10 px-5 text-sm" data-open-tracks>
+        트랙 상세보기
+      </button>
+    </div>
+  </section>
+
+  <!-- ===== View: 오픈 · 미제출 (메인 폼) ===== -->
+  <section class="view hidden-view" id="view-open-new">
+    <div class="max-w-3xl mx-auto px-4 md:px-10 py-8 md:py-10">
+
+      <!--
+        Participation/Name 블록은 제거됨.
+        - Name: Discord OAuth 의 username 을 그대로 사용 (헤더 우측 persona chip 에 이미 노출).
+        - 라이트 트랙: 재참여 여부 구분 없이 전 사용자에게 노출, 복수 선택 가능.
+      -->
+
+      <!-- OAuth 결과를 보여주는 compact banner — 사용자가 자기 정보가 맞는지 즉시 확인 -->
+      <div class="border border-border-hair rounded-md bg-surface px-4 py-3 mb-6 flex items-center gap-3 text-[13px]">
+        <div class="w-7 h-7 rounded-full bg-navy-soft text-navy text-[11px] font-bold flex items-center justify-center flex-shrink-0">시</div>
+        <div class="flex-1 min-w-0">
+          <div class="text-ink font-medium truncate" id="banner-name">@시연유저</div>
+          <div class="text-[11px] text-ink-soft mt-0.5">Discord OAuth</div>
+        </div>
+      </div>
+
+      <!-- 트랙 상세보기 버튼 (별도 페이지로 이동) -->
+      <div class="mb-8 flex items-center justify-between rounded-md border border-border-hair bg-canvas px-4 py-3">
+        <div>
+          <p class="text-eyebrow mb-0.5">Detail</p>
+          <h3 class="text-[13px] font-medium text-ink">각 트랙의 일정·커리큘럼은 별도 페이지에서 확인하세요</h3>
+        </div>
+        <button type="button" class="btn-ghost text-[12px] h-8 px-3 whitespace-nowrap" data-open-tracks>
+          트랙 상세보기 →
+        </button>
+      </div>
+
+      <!-- ═════════════════ 카테고리 1 · 정규 트랙 ═════════════════ -->
+      <div class="track-category mb-4">
+        <p class="track-category-label">Category 1</p>
+        <h2 class="track-category-title">정규 트랙</h2>
+        <p class="track-category-desc">
+          요일별로 하나씩, 원하는 요일만 골라 신청합니다. 각 트랙의 <strong class="text-ink">조장 지원</strong>도 함께 체크할 수 있습니다.
+        </p>
+      </div>
+
+      <!-- 요일별 트랙 -->
+      <div class="mb-8">
+        <div class="flex items-baseline justify-between mb-5">
+          <div>
+            <p class="text-eyebrow mb-1">Schedule</p>
+            <h2 class="text-base font-bold text-ink">요일별 시간표</h2>
+          </div>
+          <p class="text-[11px] text-ink-soft">각 요일 최대 1개 · 미선택 가능</p>
+        </div>
+
+        <!-- Monday -->
+        <div class="border-t border-border-hair py-5">
+          <div class="flex flex-col md:flex-row md:items-start gap-4">
+            <p class="text-eyebrow w-20 pt-1 flex-shrink-0">월요일</p>
+            <div class="flex-1 space-y-2.5">
+              <div class="track-option">
+                <div class="track-option-header">
+                  <label class="track-radio-label">
+                    <input type="radio" name="mon"> 세일즈 실전 트랙
+                  </label>
+                  <label class="leader-apply is-disabled">
+                    <input type="checkbox" disabled>
+<span>세일즈 실전 트랙 조장 지원하기</span>
+                  </label>
+                </div>
+                <div class="track-schedule" data-track="sales_real">
+                  <!-- NOTION_SCHEDULE:sales_real -->
+<details class="schedule-details"><summary class="schedule-summary">일정 확인하기</summary><div class="schedule-body"><table><thead><tr><th class="col-week">주차</th><th class="col-date">날짜</th><th class="col-time">시간</th><th class="col-session">세션</th></tr></thead><tbody>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">4/20 (월)</td><td class="col-time">8:00-9:30PM</td><td class="col-session"><div class="sched-title">세일즈 마인드셋 + USP 정의 + 퍼널에 대한 이해</div><div class="sched-detail">세일즈 마인드셋 바꾸기 (이제 무조건 팔아야 한다.) · 나만의 USP(유니크셀링포인트)와 이상적 고객 정의 · 고객 인터뷰 진행하는 방법 · 퍼널 이론과 설계 방법</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">2주차</span></td><td class="col-date">4/27 (월)</td><td class="col-time">8:00-9:30PM</td><td class="col-session"><div class="sched-title">설득 구조가 담긴 랜딩 페이지 제작과 카피라이팅 기법</div><div class="sched-detail">설득 구조 (Problem → Agitate → Solution → Offer → Proof → CTA)와 랜딩페이지 카피 · 오퍼(Offer) 설계: 보너스, 한정, 환불보장 → “거절하기 힘든 제안” 만들기 · 고객 후기(Testimonial) 확보 방법 · 1:1 세일즈 스킬: DM 템플릿, 세일즈 콜 스크립트, 이의제기 대응법</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">2주차</span></td><td class="col-date">4/30 (목)</td><td class="col-time">8:00~10:00PM</td><td class="col-session"><div class="sched-title">세일즈 컨설팅 및 QnA (w/MDM 코치)<span class="sched-participation">선택</span></div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">3주차</span></td><td class="col-date">5/4 (월)</td><td class="col-time">8:00-9:30PM</td><td class="col-session"><div class="sched-title">리드마그넷 제작하기 &amp; 리드 전환 관리</div><div class="sched-detail">리드마그넷 제작 &amp; 배포 (체크리스트, PDF, 무료 세션/웨비나) · 이메일 시퀀스: 3~5개 자동화 메일 설정 → 리드 → 구매 연결 · 오가닉 세일즈 채널 실습: 커뮤니티 포스팅, SNS 콘텐츠, 콜드 메시지/메일</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">3주차</span></td><td class="col-date">5/7 (목)</td><td class="col-time">8:00~10:00PM</td><td class="col-session"><div class="sched-title">세일즈 컨설팅 및 QnA (w/MDM 코치)<span class="sched-participation">선택</span></div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">5/11 (월)</td><td class="col-time">8:00-9:30PM</td><td class="col-session"><div class="sched-title">올바른 광고 집행하기 + 고도화</div><div class="sched-detail">광고 집행 기본: 개인당 5~10만원 한도 · USP 기반 광고 소재 제작 (카피+이미지/영상) · 오가닉 트래픽 병행 전략 (광고 실패 시 대안) · 퍼널 분석: CTR, CVR, CPA → 병목 지점 개선LTV(고객 생애 가치) 개념 · 업셀링/크로스셀링 기초</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">5/15 (금)</td><td class="col-time">7:00~10:00PM</td><td class="col-session"><div class="sched-title">외부 연사 오프라인 특강(윤자동 님)<span class="sched-participation">선택</span></div></td></tr>
+<tr class="sched-row"><td class="col-week"></td><td class="col-date">5/17 (일)</td><td class="col-time">당일까지</td><td class="col-session"><div class="sched-title">최종 세일즈 성과표 제출 데드라인 - (최종 판매 성과, 광고 효과 정리)</div></td></tr>
+</tbody></table></div></details>
+<!-- /NOTION_SCHEDULE:sales_real -->
+                </div>
+              </div>
+              <div class="track-option">
+                <div class="track-option-header">
+                  <label class="track-radio-label">
+                    <input type="radio" name="mon"> 나 탐구 트랙
+                  </label>
+                  <label class="leader-apply is-disabled">
+                    <input type="checkbox" disabled>
+<span>나 탐구 트랙 조장 지원하기</span>
+                  </label>
+                </div>
+                <div class="track-schedule" data-track="self_inquiry">
+                  <!-- NOTION_SCHEDULE:self_inquiry -->
+<details class="schedule-details"><summary class="schedule-summary">일정 확인하기</summary><div class="schedule-body"><table><thead><tr><th class="col-week">주차</th><th class="col-date">날짜</th><th class="col-time">시간</th><th class="col-session">세션</th></tr></thead><tbody>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">4/20 (월)</td><td class="col-time">8:00-9:30PM</td><td class="col-session"><div class="sched-title">발견</div><div class="sched-detail">나다움 찾기 (라이브) · 진단 결과 리뷰 및 가치 단어 정리 · 이키가이 분석(좋아하는 것 × 잘하는 것 × 세상이 필요로 하는 것 × 돈 버는 것)</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">2주차</span></td><td class="col-date">4/27 (월)</td><td class="col-time">8:00-9:30PM</td><td class="col-session"><div class="sched-title">실행</div><div class="sched-detail">브랜딩과 콘텐츠 설계 (라이브) · 퍼스널 브랜딩 작업(나만의 슬로건, 프로필 정립) · 콘텐츠 기획서 작성 및 강연 자료 제작 (젠스파크 / 미리캔버스 등)</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">3주차</span></td><td class="col-date">5/6 (수)</td><td class="col-time">8:00-10:00PM</td><td class="col-session"><div class="sched-title">기록</div><div class="sched-detail">강연 발표 및 피드백 (라이브) · 강연 자료 실제 발표 (발표 연습) · 체크리스트 기반 피드백 및 수정 · 강연 확정본 완성</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">5/11 (월)</td><td class="col-time">7:30-9:30PM</td><td class="col-session"><div class="sched-title">공명</div><div class="sched-detail">최종 발표와 회고 · 최종 강연 발표 (외부 강연장)</div></td></tr>
+</tbody></table></div></details>
+<!-- /NOTION_SCHEDULE:self_inquiry -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tuesday -->
+        <div class="border-t border-border-hair py-5">
+          <div class="flex flex-col md:flex-row md:items-start gap-4">
+            <p class="text-eyebrow w-20 pt-1 flex-shrink-0">화요일</p>
+            <div class="flex-1 space-y-2.5">
+              <div class="track-option">
+                <div class="track-option-header">
+                  <label class="track-radio-label">
+                    <input type="radio" name="tue"> 빌더 심화 트랙
+                  </label>
+                  <label class="leader-apply is-disabled">
+                    <input type="checkbox" disabled>
+<span>빌더 심화 트랙 조장 지원하기</span>
+                  </label>
+                </div>
+                <div class="track-schedule" data-track="builder_advanced">
+                  <!-- NOTION_SCHEDULE:builder_advanced -->
+<details class="schedule-details"><summary class="schedule-summary">일정 확인하기</summary><div class="schedule-body"><table><thead><tr><th class="col-week">주차</th><th class="col-date">날짜</th><th class="col-time">시간</th><th class="col-session">세션</th></tr></thead><tbody>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">4/21 (화)</td><td class="col-time">8:00-9:00PM</td><td class="col-session"><div class="sched-title">바이브코딩 중급자의 환경 설정하기</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">4/23 (목)</td><td class="col-time">8:00~10:00PM</td><td class="col-session"><div class="sched-title">1:1 컨설팅 및 QnA (w/성구님)<span class="sched-participation">선택</span></div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">4/23 (목)</td><td class="col-time">10:00~12:00AM</td><td class="col-session"><div class="sched-title">모여서 각자 코딩 세션<span class="sched-participation">선택</span></div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">2주차</span></td><td class="col-date">4/28 (화)</td><td class="col-time">8:00-9:00PM</td><td class="col-session"><div class="sched-title">Cursor, Vooster로 나만의 MVP 만들기</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">2주차</span></td><td class="col-date">4/30 (목)</td><td class="col-time">8:00~10:00PM</td><td class="col-session"><div class="sched-title">1:1 컨설팅 및 QnA (w/성구님)<span class="sched-participation">선택</span></div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">2주차</span></td><td class="col-date">4/30 (목)</td><td class="col-time">10:00~12:00AM</td><td class="col-session"><div class="sched-title">모여서 각자 코딩 세션<span class="sched-participation">선택</span></div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">3주차</span></td><td class="col-date">5/5 (화)</td><td class="col-time">8:00-9:00PM</td><td class="col-session"><div class="sched-title">MVP 디버깅하기 + 출시하기</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">3주차</span></td><td class="col-date">5/7 (목)</td><td class="col-time">10:00~12:00AM</td><td class="col-session"><div class="sched-title">모여서 각자 코딩 세션<span class="sched-participation">선택</span></div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">5/12 (화)</td><td class="col-time">8:00-9:00PM</td><td class="col-session"><div class="sched-title">Github·Vercel 배포, 도메인 구매 + 보안 검토</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">5/14 (목)</td><td class="col-time">10:00~12:00AM</td><td class="col-session"><div class="sched-title">모여서 각자 코딩 세션<span class="sched-participation">선택</span></div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">5/15 (금)</td><td class="col-time">8:00~9:00PM</td><td class="col-session"><div class="sched-title">외부 연사 오프라인 특강(윤자동 님)<span class="sched-participation">선택</span></div></td></tr>
+</tbody></table></div></details>
+<!-- /NOTION_SCHEDULE:builder_advanced -->
+                </div>
+              </div>
+              <div class="track-option">
+                <div class="track-option-header">
+                  <label class="track-radio-label">
+                    <input type="radio" name="tue"> 빌더 기초 트랙
+                  </label>
+                  <label class="leader-apply is-disabled">
+                    <input type="checkbox" disabled>
+<span>빌더 기초 트랙 조장 지원하기</span>
+                  </label>
+                </div>
+                <div class="track-schedule" data-track="builder_basic">
+                  <!-- NOTION_SCHEDULE:builder_basic -->
+<details class="schedule-details"><summary class="schedule-summary">일정 확인하기</summary><div class="schedule-body"><table><thead><tr><th class="col-week">주차</th><th class="col-date">날짜</th><th class="col-time">시간</th><th class="col-session">세션</th></tr></thead><tbody>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">4/21 (화)</td><td class="col-time">8:00-9:00PM</td><td class="col-session"><div class="sched-title">바이브코딩 아이디어 선정 &amp; 초기 세팅</div><div class="sched-detail">아이디어 선정 &amp; 시장 검증 (Deep Research) · PRD 작성 &amp; Lovable 첫 페이지 제작 · 필수 툴 세팅 (GitHub, Vercel, Supabase, API Key)</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">4/23 (목)</td><td class="col-time">8:00~10:00PM</td><td class="col-session"><div class="sched-title">무엇이든 물어보세요 (w/빌더 코치 인디해커 성구님)<span class="sched-participation">선택</span></div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">2주차</span></td><td class="col-date">4/28 (화)</td><td class="col-time">8:00-9:00PM</td><td class="col-session"><div class="sched-title">핵심 기능 구현 (로그인 + AI)</div><div class="sched-detail">Supabase DB 구조 + 로그인(이메일/구글) 구현 · AI API 연동(OpenAI 또는 Gemini) · 무료 &amp; 유료 티어 설계 및 가격 페이지 제작 · 버그 디버깅 &amp; 코드 구조 개선</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">2주차</span></td><td class="col-date">4/30 (목)</td><td class="col-time">8:00~10:00PM</td><td class="col-session"><div class="sched-title">무엇이든 물어보세요 (w/빌더 코치 인디해커 성구님)<span class="sched-participation">선택</span></div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">3주차</span></td><td class="col-date">5/5 (화)</td><td class="col-time">8:00-9:00PM</td><td class="col-session"><div class="sched-title">디자인 업그레이드 + 결제 연동</div><div class="sched-detail">Magic MCP로 페이지 디자인 업그레이드 · Toss Payments 결제 연동 (+Supabase) · 결제 완료 후 DB 반영 &amp; 기능 제어 로직 구현</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">3주차</span></td><td class="col-date">5/7 (목)</td><td class="col-time">8:00~10:00PM</td><td class="col-session"><div class="sched-title">무엇이든 물어보세요 (w/빌더 코치 인디해커 성구님)<span class="sched-participation">선택</span></div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">5/12 (화)</td><td class="col-time">8:00-9:00PM</td><td class="col-session"><div class="sched-title">배포, 런칭 전 준비사항</div><div class="sched-detail">SEO 설정 &amp; 메타태그 수정 · 도메인 구입 &amp; 연결 · Vercel Analytics 설치 · Cursor 로 옮겨가는 방법</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">5/14 (목)</td><td class="col-time">8:00~10:00PM</td><td class="col-session"><div class="sched-title">무엇이든 물어보세요 (w/빌더 코치 인디해커 성구님)<span class="sched-participation">선택</span></div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">5/15 (금)</td><td class="col-time">7:00~10:00PM</td><td class="col-session"><div class="sched-title">외부 연사 오프라인 특강(윤자동 님)<span class="sched-participation">선택</span></div></td></tr>
+</tbody></table></div></details>
+<!-- /NOTION_SCHEDULE:builder_basic -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Wednesday -->
+        <div class="border-t border-border-hair py-5">
+          <div class="flex flex-col md:flex-row md:items-start gap-4">
+            <p class="text-eyebrow w-20 pt-1 flex-shrink-0">수요일</p>
+            <div class="flex-1 space-y-2.5">
+              <div class="track-option">
+                <div class="track-option-header">
+                  <label class="track-radio-label">
+                    <input type="radio" name="wed" id="wed-ai"> AI 에이전트 트랙
+                  </label>
+                  <label class="leader-apply is-disabled">
+                    <input type="checkbox" disabled>
+<span>AI 에이전트 트랙 조장 지원하기</span>
+                  </label>
+                </div>
+                <div class="track-schedule" data-track="ai_agent">
+                  <!-- NOTION_SCHEDULE:ai_agent -->
+<details class="schedule-details"><summary class="schedule-summary">일정 확인하기</summary><div class="schedule-body"><table><thead><tr><th class="col-week">주차</th><th class="col-date">날짜</th><th class="col-time">시간</th><th class="col-session">세션</th></tr></thead><tbody>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">4/22 (수)</td><td class="col-time">8:00-9:30PM</td><td class="col-session"><div class="sched-title">클로드 코드 기초, 스킬을 통한 PPT 자동화 구현</div><div class="sched-detail">Claude Code의 기본 개념 이해 · 스킬 시스템 활용하기 · 멀티 에이전트 시작해보기 · PPT 스킬로 프레젠테이션 자동 생성하기</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">2주차</span></td><td class="col-date">4/29 (수)</td><td class="col-time">8:00-9:30PM</td><td class="col-session"><div class="sched-title">멀티에이전트로 리드마그넷 만들기</div><div class="sched-detail">클로드 코드의 멀티 에이전트 및 AI 오케스트레이션 개념 이해 · 서브 에이전트 마스터하기 · 스킬 + MCP 알아보기 · 리드마그넷 자동 제작</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">3주차</span></td><td class="col-date">5/6 (수)</td><td class="col-time">8:00-9:30PM</td><td class="col-session"><div class="sched-title">MCP를 통한 더욱 강력한 자동화</div><div class="sched-detail">MCP로 외부 도구 (Notion, Slack) 연결하기 · Sub-agent + Skills + MCP 조합하기 · 나만의 완전 자동화 시스템 구축하기</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">5/13 (수)</td><td class="col-time">8:00-9:30PM</td><td class="col-session"><div class="sched-title">플러그인 + ‘예약’을 통한 100% 자동화</div><div class="sched-detail">플러그인 시작하기 · Cowork 실습해보기</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">5/15 (금)</td><td class="col-time">7:00~10:00PM</td><td class="col-session"><div class="sched-title">외부 연사 오프라인 특강 (윤자동 님)<span class="sched-participation">선택</span></div></td></tr>
+</tbody></table></div></details>
+<!-- /NOTION_SCHEDULE:ai_agent -->
+                </div>
+              </div>
+              <div class="track-option">
+                <div class="track-option-header">
+                  <label class="track-radio-label">
+                    <input type="radio" name="wed" id="wed-creator"> 크리에이터 트랙
+                  </label>
+                  <label class="leader-apply is-disabled" title="숏폼/롱폼 구분 없이 통합 운영">
+                    <input type="checkbox" disabled>
+<span>크리에이터 트랙 조장 지원하기</span>
+                  </label>
+                </div>
+                <div class="track-schedule" data-track="creator">
+                  <!-- NOTION_SCHEDULE:creator -->
+<details class="schedule-details"><summary class="schedule-summary">일정 확인하기</summary><div class="schedule-body"><table><thead><tr><th class="col-week">주차</th><th class="col-date">날짜</th><th class="col-time">시간</th><th class="col-session">세션</th></tr></thead><tbody>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">4/22 (수)</td><td class="col-time">8:00-9:30PM</td><td class="col-session"><div class="sched-title">구독을 불러일으키는 롱폼 글쓰기</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">2주차</span></td><td class="col-date">4/29 (수)</td><td class="col-time">8:00-9:30PM</td><td class="col-session"><div class="sched-title">마음을 움직이는 숏폼 글쓰기</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">3주차</span></td><td class="col-date">5/6 (수)</td><td class="col-time">8:00-9:30PM</td><td class="col-session"><div class="sched-title">AI를 활용한 글쓰기 및 자동화 방법</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">5/15 (금)</td><td class="col-time">7:00~10:00PM</td><td class="col-session"><div class="sched-title">외부 연사 오프라인 특강(윤자동 님)<span class="sched-participation">선택</span></div></td></tr>
+</tbody></table></div></details>
+<!-- /NOTION_SCHEDULE:creator -->
+                </div>
+                <!-- 숏/롱 sub-select (크리에이터 선택 시 활성) -->
+                <div class="ml-6 mt-2 pl-3 border-l border-border-hair flex gap-5">
+                  <label class="flex items-center gap-2 text-[13px] text-ink-muted cursor-pointer">
+                    <input type="radio" name="creator-sub" disabled> 숏폼만
+                  </label>
+                  <label class="flex items-center gap-2 text-[13px] text-ink-muted cursor-pointer">
+                    <input type="radio" name="creator-sub" disabled> 숏폼 + 롱폼
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Thursday -->
+        <div class="border-t border-b border-border-hair py-5">
+          <div class="flex flex-col md:flex-row md:items-start gap-4">
+            <p class="text-eyebrow w-20 pt-1 flex-shrink-0">목요일</p>
+            <div class="flex-1 space-y-2.5">
+              <div class="track-option">
+                <div class="track-option-header">
+                  <label class="track-radio-label">
+                    <input type="radio" name="thu"> 앱 개발 트랙
+                  </label>
+                  <label class="leader-apply is-disabled">
+                    <input type="checkbox" disabled>
+<span>앱 개발 트랙 조장 지원하기</span>
+                  </label>
+                </div>
+                <div class="track-schedule" data-track="app_dev">
+                  <!-- NOTION_SCHEDULE:app_dev -->
+<details class="schedule-details"><summary class="schedule-summary">일정 확인하기</summary><div class="schedule-body"><table><thead><tr><th class="col-week">주차</th><th class="col-date">날짜</th><th class="col-time">시간</th><th class="col-session">세션</th></tr></thead><tbody>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">4/23 (목)</td><td class="col-time">9:00-10:00PM</td><td class="col-session"><div class="sched-title">진행 일정 소개 &amp; 개념 강의</div><div class="sched-detail">앱 제작 한 판 정리 (깃헙-개발환경-언어-백엔드-프론트) · AI를 활용한 기능단위 PRD 작성 방법 · 안티그라비티 &amp; 플러터 환경 기본 세팅</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">2주차</span></td><td class="col-date">4/30 (목)</td><td class="col-time">9:00-10:00PM</td><td class="col-session"><div class="sched-title">서버가 없는 앱 제작</div><div class="sched-detail">플러터 기본 개념 (UI), 권한, API · 안티그라비티에서 앱 제작 라이브</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">3주차</span></td><td class="col-date">5/7 (목)</td><td class="col-time">9:00-10:00PM</td><td class="col-session"><div class="sched-title">수익화 방법 : 애드몹 광고</div><div class="sched-detail">디버깅 방법 (상황- 현상 - 기대결과) · 수익화 방법 (정기 결제 vs 광고) · 광고 유형</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">5/14 (목)</td><td class="col-time">9:00-10:00PM</td><td class="col-session"><div class="sched-title">배포 기본 개념, 마켓 등록하기</div><div class="sched-detail">앱 배포 기본 개념 (패키지 이름, 앱 버전, 빌드 번호) · iOS/AOS 앱 마켓 계정 만들고 등록하는 과정 소개</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">5/15 (금)</td><td class="col-time">7:00~10:00PM</td><td class="col-session"><div class="sched-title">외부 연사 오프라인 특강 (윤자동 님)<span class="sched-participation">선택</span></div></td></tr>
+</tbody></table></div></details>
+<!-- /NOTION_SCHEDULE:app_dev -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 공통 운영 안내 (요일별 트랙 섹션 하단에 한 번만) -->
+      <div class="mt-2 mb-8 rounded-md border border-border-hair bg-surface px-4 py-3 text-[12px] text-ink-muted leading-relaxed">
+        <span class="text-eyebrow mr-2" style="letter-spacing:0.1em;">공통 운영</span>
+        <strong class="text-ink">OT</strong> 4/19(일) 8:00PM
+        <span class="text-ink-soft">·</span>
+        매 주차 강의 후 <strong class="text-ink">조별 모임/피드백 세션</strong>
+        <span class="text-ink-soft">·</span>
+        주차별 <strong class="text-ink">과제 제출</strong>(자정까지) 포함
+      </div>
+
+      <!-- 카테고리 구분선 -->
+      <div class="track-category-divider"></div>
+
+      <!-- ═════════════════ 카테고리 2 · 라이트 트랙 ═════════════════
+           정규 트랙과 별개. 각 그룹 내 최대 1개 선택 (그룹 간은 동시 수강 가능). -->
+      <section id="light-tracks-block" class="mb-10">
+        <div class="track-category mb-6">
+          <p class="track-category-label">Category 2</p>
+          <h2 class="track-category-title">라이트 트랙</h2>
+          <p class="track-category-desc">
+            정규 트랙의 축약 커리큘럼. 정규 트랙과 <strong class="text-ink">동시 수강 가능</strong>.
+            크리에이터 라이트와 빌더 라이트는 <strong class="text-ink">각각 최대 1개</strong>씩 선택할 수 있습니다.
+          </p>
+        </div>
+
+        <!-- 크리에이터 라이트 그룹 -->
+        <div class="mb-6">
+          <div class="flex items-baseline justify-between mb-3">
+            <p class="text-eyebrow">크리에이터 라이트</p>
+            <span class="text-[11px] text-ink-soft">1개만 선택</span>
+          </div>
+          <div class="light-tracks-grid"
+               data-light-group-container
+               data-light-group="creator">
+            <label class="light-track-card">
+              <input type="checkbox"
+                     data-light-track
+                     data-light-group="creator"
+                     data-light-group-label="크리에이터 라이트">
+              <div class="light-track-body">
+                <div class="light-track-title">숏폼</div>
+              </div>
+            </label>
+            <label class="light-track-card">
+              <input type="checkbox"
+                     data-light-track
+                     data-light-group="creator"
+                     data-light-group-label="크리에이터 라이트">
+              <div class="light-track-body">
+                <div class="light-track-title">롱폼</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- 빌더 라이트 그룹 -->
+        <div>
+          <div class="flex items-baseline justify-between mb-3">
+            <p class="text-eyebrow">빌더 라이트</p>
+            <span class="text-[11px] text-ink-soft">1개만 선택</span>
+          </div>
+          <div class="light-tracks-grid"
+               data-light-group-container
+               data-light-group="builder">
+            <label class="light-track-card">
+              <input type="checkbox"
+                     data-light-track
+                     data-light-group="builder"
+                     data-light-group-label="빌더 라이트">
+              <div class="light-track-body">
+                <div class="light-track-title">기초</div>
+              </div>
+            </label>
+            <label class="light-track-card">
+              <input type="checkbox"
+                     data-light-track
+                     data-light-group="builder"
+                     data-light-group-label="빌더 라이트">
+              <div class="light-track-body">
+                <div class="light-track-title">심화</div>
+              </div>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- Notes -->
+      <div class="mb-10">
+        <p class="text-eyebrow mb-2">Notes <span class="ml-2 text-ink-soft normal-case tracking-normal">(선택)</span></p>
+        <textarea placeholder="전달하고 싶은 내용이 있으면 자유롭게 적어주세요."></textarea>
+      </div>
+
+      <div class="flex items-center gap-2 pt-6 border-t border-border-hair">
+        <button type="button" id="btn-submit" class="btn-navy h-10 px-5 text-sm">저장하기</button>
+        <button type="button" id="btn-logout" class="btn-ghost">로그아웃</button>
+        <span id="submit-validation-msg" class="hidden-view text-[12px] text-[#DC2626] ml-2"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== View: 오픈 · 제출완료 (수정 전 요약) ===== -->
+  <section class="view hidden-view" id="view-open-edit">
+    <div class="max-w-3xl mx-auto px-4 md:px-10 py-8 md:py-10">
+      <div class="flex items-center gap-2 mb-6">
+        <span class="inline-flex items-center h-6 px-2 rounded-xs text-[11px] font-semibold uppercase tracking-wider" style="background:#F0FDF4; color:#16A34A;">제출 완료</span>
+        <span class="text-[12px] text-ink-muted">
+          <span id="edit-count-line">· 수정 0회</span>
+          <span id="edit-deadline-line"></span>
+        </span>
+      </div>
+
+      <!-- 트랙 상세보기 버튼 -->
+      <div class="mb-8 flex items-center justify-between rounded-md border border-border-hair bg-canvas px-4 py-3">
+        <div>
+          <p class="text-eyebrow mb-0.5">Detail</p>
+          <h3 class="text-[13px] font-medium text-ink">각 트랙의 일정·커리큘럼은 별도 페이지에서 확인하세요</h3>
+        </div>
+        <button type="button" class="btn-ghost text-[12px] h-8 px-3 whitespace-nowrap" data-open-tracks>
+          트랙 상세보기 →
+        </button>
+      </div>
+
+      <div class="mb-8">
+        <p class="text-eyebrow mb-3">신청 내역</p>
+        <div id="edit-summary" class="border-t border-border-hair">
+          <!-- JS: renderSelectionSummary() 가 주입 -->
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button type="button" id="btn-edit-resume" class="btn-navy h-10 px-5 text-sm">수정하기</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== View: 마감 ===== -->
+  <section class="view hidden-view" id="view-closed">
+    <div class="max-w-3xl mx-auto px-4 md:px-10 py-8 md:py-10">
+      <div class="flex items-center gap-2 mb-6">
+        <span class="inline-flex items-center h-6 px-2 rounded-xs text-[11px] font-semibold tracking-wider" style="background:#FEF2F2; color:#DC2626;">마감됨</span>
+        <span id="closed-window-label" class="text-[12px] text-ink-muted">· 2026-05-24(일) 23:59 KST 마감</span>
+      </div>
+
+      <p class="text-sm text-ink-muted mb-6">신청이 마감되어 수정할 수 없습니다. 조 배정 후 변경이 필요하면 운영진에게 문의해주세요.</p>
+
+      <!-- 트랙 상세보기 버튼 -->
+      <div class="mb-8 flex items-center justify-between rounded-md border border-border-hair bg-canvas px-4 py-3">
+        <div>
+          <p class="text-eyebrow mb-0.5">Detail</p>
+          <h3 class="text-[13px] font-medium text-ink">각 트랙의 일정·커리큘럼은 별도 페이지에서 확인하세요</h3>
+        </div>
+        <button type="button" class="btn-ghost text-[12px] h-8 px-3 whitespace-nowrap" data-open-tracks>
+          트랙 상세보기 →
+        </button>
+      </div>
+
+      <p class="text-eyebrow mb-3">최종 제출</p>
+      <div id="closed-summary" class="border-t border-border-hair opacity-90 pointer-events-none">
+        <!-- JS: renderClosedSummary() 가 주입. lastSubmittedData 없으면 '제출 없음' 안내. -->
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== View: 관리자 ===== -->
+  <section class="view hidden-view" id="view-admin">
+    <!-- Stats — 멤버 마스터 DB 요약 (실시간 전사) -->
+    <div class="bg-canvas border-b border-border-hair px-4 md:px-10 py-4">
+      <div class="flex items-center gap-8 text-[13px] flex-wrap">
+        <div><span class="text-eyebrow mr-2">전체 멤버</span><span class="font-semibold text-ink tabular-nums" id="stat-total">0</span></div>
+        <div><span class="text-eyebrow mr-2">신청 완료</span><span class="font-semibold text-ink tabular-nums" id="stat-applied">0</span></div>
+        <div><span class="text-eyebrow mr-2">미신청</span><span class="font-semibold text-ink tabular-nums" id="stat-unapplied">0</span></div>
+      </div>
+    </div>
+
+    <!-- Track tabs (JS 가 MOCK_MEMBERS 기반으로 렌더) -->
+    <nav class="bg-canvas border-b border-border-hair">
+      <div class="px-4 md:px-10 overflow-x-auto">
+        <ul id="admin-tabs" class="flex items-stretch gap-0 min-w-max">
+          <!-- renderAdminTabs() 가 주입 -->
+        </ul>
+      </div>
+    </nav>
+
+    <!-- 조장 지원자 바 (선택된 트랙의 조장 지원 현황) -->
+    <div id="admin-leader-bar" class="admin-leader-bar">
+      <span class="admin-leader-bar-label">조장 지원</span>
+      <div id="admin-leader-bar-list" class="admin-leader-bar-list">
+        <!-- renderAdminLeaderBar() 가 주입 -->
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="px-4 md:px-10 py-6">
+      <div class="flex items-center justify-between mb-4">
+        <p class="text-eyebrow">신청자 목록</p>
+        <div class="flex items-center gap-2">
+          <input type="text" placeholder="이름·Discord 검색" class="h-9 w-64 px-3 text-[13px]" />
+          <button type="button" class="btn-navy h-9 px-3 text-[13px]" data-open-group-preview>조 배정 ↗</button>
+        </div>
+      </div>
+
+      <table class="w-full text-[13px]">
+        <thead>
+          <tr class="border-b border-border-hair">
+            <th class="text-eyebrow text-left py-2 pr-4 font-semibold">이름</th>
+            <th class="text-eyebrow text-left py-2 pr-4 font-semibold">트랙</th>
+            <th class="text-eyebrow text-center py-2 pr-4 font-semibold w-16">조장</th>
+            <th class="text-eyebrow text-center py-2 pr-4 font-semibold w-16">수정</th>
+            <th class="text-eyebrow text-right py-2 pr-4 font-semibold w-28">제출</th>
+            <th class="text-eyebrow text-right py-2 font-semibold w-16">편집</th>
+          </tr>
+        </thead>
+        <tbody id="admin-applicants-body">
+          <!-- renderAdminTable() 이 주입 -->
+        </tbody>
+      </table>
+    </div>
+
+  </section>
+
+  <!-- ===== View: 조 배정 미리보기 (관리자 전용 / 새 창에서 진입 가능) ===== -->
+  <section class="view hidden-view" id="view-group-preview">
+    <!-- 상단 네비게이션 -->
+    <div class="sticky top-0 z-10 bg-canvas/95 backdrop-blur border-b border-border-hair">
+      <div class="max-w-7xl mx-auto px-5 md:px-10 py-3 flex items-center justify-between">
+        <button type="button" class="inline-flex items-center gap-1.5 text-[13px] font-semibold text-ink-muted hover:text-ink" data-back-from-group-preview>
+          <span>←</span> 돌아가기
+        </button>
+        <span class="text-[12px] text-ink-soft" id="gp-top-label">9기 조 배정</span>
+      </div>
+    </div>
+
+    <!-- 테스트 프리뷰 배너 — 운영이 아닌 테스트 대상에만 반영 -->
+    <div class="bg-[#FEF3C7] border-b border-[#FCD34D]">
+      <div class="max-w-7xl mx-auto px-5 md:px-10 py-2.5 flex items-center justify-center gap-2 text-[12px]">
+        <span class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-warn text-white text-[10px] font-bold">!</span>
+        <span class="text-[#78350F] font-semibold">테스트 전용 프리뷰</span>
+        <span class="text-[#92400E]">— 운영 워크스페이스가 아니라 테스트 Notion / 테스트 Discord 대상으로만 반영됩니다.</span>
+      </div>
+    </div>
+
+    <!-- 페이지 헤더 -->
+    <div class="max-w-7xl mx-auto px-5 md:px-10 pt-10 pb-6">
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-md bg-navy text-white text-[12px] font-bold flex items-center justify-center tracking-wide">ASC</div>
+        <div>
+          <p class="text-eyebrow mb-0.5">DASHBOARD</p>
+          <h1 class="text-[24px] font-bold text-ink leading-tight">조 배정</h1>
+        </div>
+      </div>
+    </div>
+
+    <!-- GROUPS 섹션 헤더 -->
+    <div class="max-w-7xl mx-auto px-5 md:px-10 pt-2 pb-3">
+      <p class="text-eyebrow mb-1">GROUPS</p>
+      <p class="text-[13px] text-ink-muted" id="gp-summary">0개 트랙 · 총 0개 조</p>
+    </div>
+
+    <!-- 트랙 탭 -->
+    <div class="border-b border-border-hair">
+      <div class="max-w-7xl mx-auto px-5 md:px-10 overflow-x-auto">
+        <ul id="gp-tabs" class="flex items-stretch gap-0 min-w-max"></ul>
+      </div>
+    </div>
+
+    <!-- 카드 그리드 -->
+    <div class="max-w-7xl mx-auto px-5 md:px-10 py-8">
+      <!-- 편집 툴바 -->
+      <div class="flex items-center justify-between mb-5 flex-wrap gap-2">
+        <p class="text-[12px] text-ink-soft">
+          <span class="inline-flex items-center gap-1"><span class="text-navy">⠿</span> 행을 끌어다 다른 조로 이동</span>
+          <span class="mx-2 text-border-strong">·</span>
+          <span class="inline-flex items-center gap-1"><span class="text-navy">★</span> 조장 토글</span>
+          <span id="gp-dirty-flag" class="ml-3 text-warn font-semibold hidden">· 저장되지 않은 변경 있음</span>
+        </p>
+        <div class="flex items-center gap-2">
+          <button type="button" id="gp-reset-btn" class="btn-ghost text-[12px] h-8 px-3">초기화</button>
+          <button type="button" id="gp-add-group-btn" class="btn-ghost text-[12px] h-8 px-3">+ 빈 조 추가</button>
+          <button type="button" id="gp-finish-btn" class="btn-navy text-[12px] h-8 px-3.5">조 배정 완료 →</button>
+        </div>
+      </div>
+      <div id="gp-cards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"></div>
+    </div>
+  </section>
+
+  <!-- ===== 조 배정 완료 모달 (3단계: 확인 → 진행 → 성공) ===== -->
+  <div id="gp-finish-modal" class="admin-modal hidden-view" role="dialog" aria-modal="true" aria-labelledby="gp-finish-modal-title">
+    <div class="admin-modal-backdrop" data-gp-finish-close></div>
+    <div class="admin-modal-panel" style="max-width: 580px;">
+      <button type="button" class="admin-modal-close" data-gp-finish-close aria-label="닫기">✕</button>
+
+      <!-- Step 1: 확인 -->
+      <div id="gp-finish-step-confirm">
+        <div class="admin-modal-header">
+          <p class="text-eyebrow">Step 1 of 3 · 확인</p>
+          <div class="admin-modal-title" id="gp-finish-modal-title">조 배정을 확정합니다</div>
+          <div class="admin-modal-subtitle" id="gp-finish-summary">아래 작업이 자동으로 실행됩니다.</div>
+        </div>
+        <div class="bg-[#FEF3C7] border-b border-[#FCD34D] px-6 py-2.5 flex items-start gap-2 text-[11.5px] leading-relaxed">
+          <span class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-warn text-white text-[10px] font-bold flex-shrink-0 mt-0.5">!</span>
+          <span class="text-[#78350F]"><strong>테스트 프리뷰:</strong> 아래 단계는 운영이 아니라 테스트 Notion / 테스트 Discord 기준으로만 반영됩니다.</span>
+        </div>
+        <div class="admin-modal-body">
+          <section class="mb-5">
+            <div class="flex items-center gap-2 mb-2">
+              <div class="w-6 h-6 rounded-md bg-[#2D2D2D] text-white text-[11px] font-bold flex items-center justify-center">N</div>
+              <h3 class="text-[14px] font-bold text-ink">Notion</h3>
+            </div>
+            <ul class="text-[12px] text-ink-muted space-y-1.5 pl-8 list-disc">
+              <li><span class="font-semibold text-ink" id="gp-confirm-cohort-label">9기 조 배정</span> 데이터베이스에 <span id="gp-confirm-notion-groups" class="tabular-nums font-semibold text-ink">0</span>개 조 페이지 생성·업데이트</li>
+              <li>각 조 페이지에 <span id="gp-confirm-notion-members" class="tabular-nums font-semibold text-ink">0</span>명 멤버 relation + <span id="gp-confirm-leaders" class="tabular-nums font-semibold text-ink">0</span>명 조장 표시</li>
+              <li>트랙 메타 (요일·시간·코치) 자동 매핑</li>
+            </ul>
+          </section>
+          <section class="mb-5">
+            <div class="flex items-center gap-2 mb-2">
+              <div class="w-6 h-6 rounded-md bg-[#5865F2] text-white text-[11px] font-bold flex items-center justify-center">D</div>
+              <h3 class="text-[14px] font-bold text-ink">Discord</h3>
+            </div>
+            <ul class="text-[12px] text-ink-muted space-y-1.5 pl-8 list-disc">
+              <li>트랙·조별 역할 자동 부여 — <span id="gp-confirm-roles" class="tabular-nums font-semibold text-ink">0</span>건 (없는 역할은 신규 생성)</li>
+              <li><span id="gp-confirm-discord-channels" class="tabular-nums font-semibold text-ink">0</span>개 비공개 채널 생성 (이미 있으면 권한만 갱신)</li>
+              <li>각 채널에 조원 초대 + 조장에게 채널 관리 권한 부여</li>
+            </ul>
+          </section>
+          <div class="rounded-md bg-surface p-3 text-[11px] text-ink-muted leading-relaxed">
+            <strong class="text-ink font-semibold">주의:</strong> 테스트 환경에는 실제 반영됩니다. 자동 롤백은 없으니 테스트 데이터 정리까지 한 흐름으로 확인해야 합니다.
+          </div>
+        </div>
+        <div class="admin-modal-footer">
+          <button type="button" class="btn-ghost" data-gp-finish-close>취소</button>
+          <button type="button" class="btn-navy" data-gp-finish-start>시뮬레이션 시작</button>
+        </div>
+      </div>
+
+      <!-- Step 2: 진행 -->
+      <div id="gp-finish-step-progress" class="hidden-view">
+        <div class="admin-modal-header">
+          <p class="text-eyebrow">Step 2 of 3 · 진행 중</p>
+          <div class="admin-modal-title">조 배정을 처리하고 있습니다</div>
+          <div class="admin-modal-subtitle">완료될 때까지 창을 닫지 마세요.</div>
+        </div>
+        <div class="admin-modal-body">
+          <ul id="gp-progress-list" class="space-y-3 text-[13px]">
+            <li data-step="notion" class="flex items-center gap-3">
+              <span class="gp-step-icon w-5 h-5 inline-flex items-center justify-center text-ink-soft">○</span>
+              <span class="gp-step-label flex-1 text-ink-muted">Notion 조 배정 DB 페이지 생성·업데이트</span>
+              <span class="gp-step-detail text-[11px] text-ink-soft tabular-nums">대기</span>
+            </li>
+            <li data-step="roles" class="flex items-center gap-3">
+              <span class="gp-step-icon w-5 h-5 inline-flex items-center justify-center text-ink-soft">○</span>
+              <span class="gp-step-label flex-1 text-ink-muted">Discord 트랙·조 역할 부여</span>
+              <span class="gp-step-detail text-[11px] text-ink-soft tabular-nums">대기</span>
+            </li>
+            <li data-step="channels" class="flex items-center gap-3">
+              <span class="gp-step-icon w-5 h-5 inline-flex items-center justify-center text-ink-soft">○</span>
+              <span class="gp-step-label flex-1 text-ink-muted">Discord 비공개 채널 생성</span>
+              <span class="gp-step-detail text-[11px] text-ink-soft tabular-nums">대기</span>
+            </li>
+            <li data-step="invite" class="flex items-center gap-3">
+              <span class="gp-step-icon w-5 h-5 inline-flex items-center justify-center text-ink-soft">○</span>
+              <span class="gp-step-label flex-1 text-ink-muted">채널 멤버 초대 + 조장 관리 권한</span>
+              <span class="gp-step-detail text-[11px] text-ink-soft tabular-nums">대기</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Step 3: 성공 -->
+      <div id="gp-finish-step-success" class="hidden-view">
+        <div class="admin-modal-header">
+          <p class="text-eyebrow text-ok">Step 3 of 3 · 시뮬레이션 완료</p>
+          <div class="admin-modal-title flex items-center gap-2">
+            <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-ok text-white text-[13px]">✓</span>
+            조 배정 흐름이 완료되었습니다
+          </div>
+          <div class="admin-modal-subtitle" id="gp-success-summary">테스트 환경 반영이 완료되었습니다. 운영 워크스페이스는 건드리지 않았습니다.</div>
+        </div>
+        <div class="bg-[#FEF3C7] border-b border-[#FCD34D] px-6 py-2.5 flex items-start gap-2 text-[11.5px] leading-relaxed">
+          <span class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-warn text-white text-[10px] font-bold flex-shrink-0 mt-0.5">!</span>
+          <span class="text-[#78350F]"><strong>테스트 결과:</strong> 아래 링크와 요약은 테스트 워크스페이스 기준 결과를 가리킵니다.</span>
+        </div>
+        <div class="admin-modal-body">
+          <section class="mb-4">
+            <p class="text-eyebrow mb-2">Notion <span class="text-ink-soft font-normal normal-case tracking-normal text-[10px] ml-1">· 예시</span></p>
+            <div class="flex items-center justify-between rounded-md border border-border-hair bg-canvas px-3 py-2.5 cursor-not-allowed opacity-80">
+              <span class="flex items-center gap-2">
+                <div class="w-5 h-5 rounded bg-[#2D2D2D] text-white text-[10px] font-bold flex items-center justify-center">N</div>
+                <span class="text-[13px] text-ink font-medium" id="gp-success-group-db-label">9기 조 배정 데이터베이스</span>
+              </span>
+              <span class="text-[12px] text-ink-soft">테스트 ↗</span>
+            </div>
+          </section>
+          <section class="mb-4">
+            <p class="text-eyebrow mb-2">Discord <span class="text-ink-soft font-normal normal-case tracking-normal text-[10px] ml-1">· 예시</span></p>
+            <div id="gp-success-channels" class="space-y-1.5"></div>
+          </section>
+          <div class="rounded-md bg-surface p-3 text-[12px] text-ink-muted leading-relaxed">
+            <span id="gp-success-stats">시뮬레이션 통계가 표시됩니다.</span>
+          </div>
+        </div>
+        <div class="admin-modal-footer">
+          <button type="button" class="btn-navy" data-gp-finish-close>닫기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 트랙 편집 모달 (관리자 전용) ===== -->
+  <div id="admin-edit-modal" class="admin-modal hidden-view" role="dialog" aria-modal="true" aria-labelledby="admin-edit-modal-title">
+    <div class="admin-modal-backdrop" data-close-modal></div>
+    <div class="admin-modal-panel">
+      <button type="button" class="admin-modal-close" data-close-modal aria-label="닫기">✕</button>
+      <div class="admin-modal-header">
+        <p class="text-eyebrow">트랙 편집</p>
+        <div class="admin-modal-title" id="admin-edit-modal-title">멤버 ID</div>
+        <div class="admin-modal-subtitle" id="admin-edit-modal-subtitle">@handle</div>
+      </div>
+      <div class="admin-modal-body">
+        <p class="text-eyebrow mb-2">현재 트랙</p>
+        <div id="admin-edit-track-list" class="admin-edit-track-list">
+          <!-- renderEditTrackList() 가 주입 -->
+        </div>
+
+        <p class="text-eyebrow mb-2">트랙 추가</p>
+        <div class="admin-edit-add-row">
+          <div class="admin-edit-add">
+            <span class="admin-edit-add-label">정규 트랙</span>
+            <select id="admin-edit-add-weekday">
+              <option value="">선택...</option>
+            </select>
+          </div>
+          <div class="admin-edit-add">
+            <span class="admin-edit-add-label">라이트 트랙</span>
+            <select id="admin-edit-add-light">
+              <option value="">선택...</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="admin-modal-footer">
+        <button type="button" class="btn-ghost" data-close-modal>취소</button>
+        <button type="button" id="admin-edit-save" class="btn-navy">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== View: 트랙 상세보기 (모든 상태에서 진입 가능) ===== -->
+  <section class="view hidden-view" id="view-tracks">
+    <!-- 상단 네비게이션: 돌아가기 -->
+    <div class="sticky top-0 z-10 bg-canvas/95 backdrop-blur border-b border-border-hair">
+      <div class="max-w-4xl mx-auto px-5 md:px-8 py-3 flex items-center justify-between">
+        <button type="button" class="inline-flex items-center gap-1.5 text-[13px] font-semibold text-ink-muted hover:text-ink" data-back-from-tracks>
+          <span>←</span> 돌아가기
+        </button>
+        <span class="text-[12px] text-ink-soft" id="tracks-preview-nav-title">9기 트랙 미리보기</span>
+      </div>
+    </div>
+
+    <!-- Hero -->
+    <div class="border-b border-border-hair">
+      <div class="max-w-4xl mx-auto px-5 md:px-8 py-12 md:py-16">
+        <span class="text-eyebrow inline-block mb-4" id="tracks-preview-eyebrow">Cohort 9기</span>
+        <h1 class="text-3xl md:text-5xl font-bold tracking-tight text-ink leading-[1.08]">
+          <span id="tracks-preview-hero-cohort">9기</span> 트랙을 한눈에<br class="hidden md:block" />살펴보세요
+        </h1>
+        <p class="mt-5 text-base md:text-lg text-ink-muted leading-relaxed max-w-2xl">
+          본인에게 맞는 트랙을 미리 둘러보고, 신청 시 빠르게 선택하실 수 있도록 정리했습니다.
+        </p>
+      </div>
+    </div>
+
+    <!-- 공통 운영 안내 -->
+    <div class="bg-surface border-b border-border-hair">
+      <div class="max-w-4xl mx-auto px-5 md:px-8 py-5 text-[13px] text-ink-muted leading-relaxed">
+        <span class="text-eyebrow mr-2">공통 운영</span>
+        <strong class="text-ink">OT</strong> 4/19(일) 8:00 PM
+        <span class="mx-2 text-ink-soft">·</span>
+        매 주차 강의 후 <strong class="text-ink">조별 모임/피드백 세션</strong>
+        <span class="mx-2 text-ink-soft">·</span>
+        주차별 <strong class="text-ink">과제 제출</strong>(자정까지) 포함
+      </div>
+    </div>
+
+    <!-- Track sections — JS로 렌더 -->
+    <div id="tracks-list"></div>
+
+    <!-- Light tracks — JS로 렌더 -->
+    <div id="tracks-light"></div>
+
+    <!-- Footer note -->
+    <div class="bg-canvas">
+      <div class="max-w-4xl mx-auto px-5 md:px-8 py-8 text-center text-[11px] text-ink-soft">
+        데이터는 운영 사정에 따라 일부 조정될 수 있습니다 · 최신 일정은 디스코드 공지를 확인해주세요
+      </div>
+    </div>
+  </section>
+
+  <script>
+    const stateButtons = document.querySelectorAll('.mockup-devtools .states button');
+    const views = document.querySelectorAll('.view');
+    const headerTitle = document.getElementById('header-title');
+    const headerActions = document.getElementById('header-actions');
+    const windowProgress = document.getElementById('window-progress');
+    const mockupParams = new URLSearchParams(window.location.search);
+    const SETTINGS_API_BASE = (window.location.hostname === 'localhost' || window.location.hostname.includes('vercel.app'))
+      ? '/api-proxy'
+      : 'http://168.107.16.76:8000';
+    if (!mockupParams.get('cohortName')) {
+      const loadingTarget = document.getElementById('app') || document.body;
+      if (loadingTarget) {
+        loadingTarget.innerHTML = '<div class="min-h-screen flex items-center justify-center text-[14px] text-ink-soft">현재 기수 설정을 불러오는 중입니다...</div>';
+      }
+      (async () => {
+        try {
+          const response = await fetch(`${SETTINGS_API_BASE}/api/settings`, { credentials: 'include' });
+          const data = await response.json().catch(() => ({}));
+          const configured = String(data?.cohortName || '').trim();
+          const resolved = configured ? (configured.endsWith('기') ? configured : `${configured}기`) : '9기';
+          const nextParams = new URLSearchParams(window.location.search);
+          nextParams.set('cohortName', resolved);
+          window.location.replace(`${window.location.pathname}?${nextParams.toString()}${window.location.hash}`);
+        } catch (error) {
+          const fallbackParams = new URLSearchParams(window.location.search);
+          fallbackParams.set('cohortName', '9기');
+          window.location.replace(`${window.location.pathname}?${fallbackParams.toString()}${window.location.hash}`);
+        }
+      })();
+      throw new Error('Reloading mockup with resolved cohortName');
+    }
+    const DEFAULT_COHORT_LABEL = '9기';
+    const rawCohortLabel = (mockupParams.get('cohortName') || DEFAULT_COHORT_LABEL).trim();
+    const COHORT_LABEL = rawCohortLabel || DEFAULT_COHORT_LABEL;
+    // track-bot Flask 가 이 HTML 을 직접 서빙 → API 도 같은 origin.
+    const APPLICATION_API_BASE = '';
+    const VIEWER_DISPLAY_NAME = (mockupParams.get('discordDisplayName') || '시연유저').trim() || '시연유저';
+    const VIEWER_HANDLE = (mockupParams.get('discordHandle') || '@시연유저').trim() || '@시연유저';
+    const VIEWER_USER_ID = (mockupParams.get('discordUserId') || '').trim();
+    const VIEWER_AVATAR_URL = (mockupParams.get('discordAvatarUrl') || '').trim();
+    const LOGIN_URL = (mockupParams.get('loginUrl') || '').trim();
+    const REQUESTED_STATE = (mockupParams.get('state') || '').trim();
+    const APPLICATION_START_DATE = (mockupParams.get('applicationStartDate') || '2026-05-20').trim();
+    const APPLICATION_END_DATE = (mockupParams.get('applicationEndDate') || '2026-05-24').trim();
+    const APPLICATION_OPEN_AT = (mockupParams.get('applicationOpenAt') || '2026-05-20T00:00:00+09:00').trim();
+    const APPLICATION_CLOSE_AT = (mockupParams.get('applicationCloseAt') || '2026-05-24T23:59:59+09:00').trim();
+    const APPLICATION_START_DISPLAY = (mockupParams.get('applicationStartDisplay') || '05.20').trim();
+    const APPLICATION_END_DISPLAY = (mockupParams.get('applicationEndDisplay') || '05.24').trim();
+    const APPLICATION_WINDOW_LABEL = (mockupParams.get('applicationWindowLabel') || '05.20(수) 00:00 ~ 05.24(일) 23:59 KST').trim();
+    const APPLICATION_UPCOMING_LABEL = (mockupParams.get('applicationUpcomingLabel') || '2026-05-20(수) 00:00 KST 오픈 · 2026-05-24(일) 23:59 KST 마감').trim();
+    const APPLICATION_CLOSED_LABEL = (mockupParams.get('applicationClosedLabel') || '2026-05-24(일) 23:59 KST 마감').trim();
+    const APPLICATION_OPENS_LABEL = (mockupParams.get('applicationOpensLabel') || 'Opens 05.20 Wed').trim();
+    const IS_GROUP_PREVIEW_DIRECT = window.location.hash === '#group-preview';
+    const IS_ADMIN_MOCK = REQUESTED_STATE === 'admin' || REQUESTED_STATE === 'admin-preview';
+    const IS_APPLY_WRAPPER = mockupParams.get('source') === 'apply';
+    const TRACK_APPLY_TITLE = `${COHORT_LABEL} 트랙 신청`;
+    const TRACK_APPLY_STATUS_TITLE = `${COHORT_LABEL} 트랙 신청 프리뷰`;
+    const TRACK_PREVIEW_TITLE = `${COHORT_LABEL} 트랙 미리보기`;
+    const GROUP_ASSIGNMENT_TITLE = `${COHORT_LABEL} 조 배정`;
+
+    if (!IS_ADMIN_MOCK && !IS_GROUP_PREVIEW_DIRECT && !IS_APPLY_WRAPPER) {
+      const nextSearch = window.location.search || '';
+      window.location.replace(`/apply${nextSearch}`);
+      throw new Error('Redirecting non-admin preview entry to /apply');
+    }
+
+    function setText(id, value) {
+      const element = document.getElementById(id);
+      if (element) element.textContent = value;
+    }
+
+    function applyCohortLabels() {
+      document.title = `${TRACK_APPLY_STATUS_TITLE} — 관리자 테스트 프리뷰`;
+      setText('gp-top-label', GROUP_ASSIGNMENT_TITLE);
+      setText('gp-confirm-cohort-label', GROUP_ASSIGNMENT_TITLE);
+      setText('gp-success-group-db-label', `${GROUP_ASSIGNMENT_TITLE} 데이터베이스`);
+      setText('tracks-preview-nav-title', TRACK_PREVIEW_TITLE);
+      setText('tracks-preview-eyebrow', `Cohort ${COHORT_LABEL}`);
+      setText('tracks-preview-hero-cohort', COHORT_LABEL);
+    }
+
+    function getViewerInitial() {
+      const source = (VIEWER_DISPLAY_NAME || VIEWER_HANDLE || 'A').replace(/^@/, '').trim();
+      return source ? source.charAt(0).toUpperCase() : 'A';
+    }
+
+    function applyViewerIdentity() {
+      setText('banner-name', VIEWER_HANDLE);
+    }
+
+    function applyWindowLabels() {
+      const rangeLabel = document.getElementById('window-range-label');
+      if (rangeLabel) {
+        rangeLabel.innerHTML = `${APPLICATION_START_DISPLAY} <span class="text-ink-soft">→</span> ${APPLICATION_END_DISPLAY}`;
+      }
+      setText('login-period-label', APPLICATION_WINDOW_LABEL);
+      setText('upcoming-window-label', APPLICATION_UPCOMING_LABEL);
+      setText('closed-window-label', `· ${APPLICATION_CLOSED_LABEL}`);
+    }
+
+    applyCohortLabels();
+    applyViewerIdentity();
+    applyWindowLabels();
+    if (!IS_ADMIN_MOCK) {
+      document.getElementById('admin-preview-banner')?.classList.add('hidden-view');
+    }
+
+    const STATES = {
+      logout:      { title: TRACK_APPLY_TITLE, showProgress: false, action: null },
+      upcoming:    { title: TRACK_APPLY_TITLE, showProgress: false, action: 'upcoming' },
+      'open-new':  { title: TRACK_APPLY_TITLE, showProgress: true,  action: 'user' },
+      'open-edit': { title: TRACK_APPLY_TITLE, showProgress: true,  action: 'user' },
+      closed:      { title: TRACK_APPLY_TITLE, showProgress: false, action: 'user' },
+      admin:       { title: TRACK_APPLY_STATUS_TITLE, showProgress: true,  action: 'admin' },
+    };
+
+    function renderHeaderActions(kind) {
+      if (kind === 'upcoming') {
+        headerActions.innerHTML = `<span class="text-[11px] font-semibold text-warn uppercase tracking-wider">${APPLICATION_OPENS_LABEL}</span>`;
+      } else if (kind === 'user') {
+        headerActions.innerHTML = `
+          <div class="inline-flex items-center gap-2 h-9 px-3 rounded-sm border border-border-hair bg-surface">
+            <div class="w-6 h-6 rounded-full bg-navy-soft text-navy text-[10px] font-bold flex items-center justify-center">${getViewerInitial()}</div>
+            <span class="text-[13px] text-ink font-medium">${VIEWER_HANDLE}</span>
+          </div>`;
+      } else if (kind === 'admin') {
+        headerActions.innerHTML = `
+          <button class="btn-ghost" id="admin-track-apply-sync">Full Sync</button>
+          <button class="btn-navy" id="admin-track-apply-refresh">Refresh</button>`;
+        requestAnimationFrame(() => {
+          document.getElementById('admin-track-apply-sync')?.addEventListener('click', () => {
+            void syncAdminMembersToServer();
+          });
+          document.getElementById('admin-track-apply-refresh')?.addEventListener('click', () => {
+            void loadTrackApplications();
+          });
+        });
+      } else {
+        headerActions.innerHTML = '';
+      }
+    }
+
+    function notifyParentHeight() {
+      if (!window.parent || window.parent === window) return;
+      const height = Math.max(
+        document.body?.scrollHeight || 0,
+        document.documentElement?.scrollHeight || 0,
+        document.body?.offsetHeight || 0,
+        document.documentElement?.offsetHeight || 0,
+      );
+      window.parent.postMessage({ type: 'track-apply:height', height }, window.location.origin);
+    }
+
+    function scheduleHeightSync() {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          notifyParentHeight();
+        });
+      });
+    }
+
+    function applyState(stateKey) {
+      const conf = STATES[stateKey];
+      headerTitle.textContent = conf.title;
+      windowProgress.classList.toggle('hidden-view', !conf.showProgress);
+      renderHeaderActions(conf.action);
+      views.forEach(v => v.classList.add('hidden-view'));
+      document.getElementById('view-' + stateKey).classList.remove('hidden-view');
+      stateButtons.forEach(b => b.classList.toggle('active', b.dataset.state === stateKey));
+
+      // open-edit / closed 상태로 전환되면 마지막 제출 스냅샷 기준으로 다시 그린다.
+      // (devtools 에서 강제 전환되는 경우 포함)
+      if (stateKey === 'open-edit' && typeof renderSelectionSummary === 'function') {
+        renderSelectionSummary(lastSubmittedData);
+      }
+
+      if (stateKey === 'closed' && typeof renderClosedSummary === 'function') {
+        renderClosedSummary();
+      }
+
+      notifyParentHeight();
+    }
+
+    stateButtons.forEach(btn => btn.addEventListener('click', () => applyState(btn.dataset.state)));
+    const initialState = (() => {
+      if (IS_GROUP_PREVIEW_DIRECT) return 'admin';
+      if (IS_ADMIN_MOCK) return 'admin';
+      if (REQUESTED_STATE && STATES[REQUESTED_STATE]) return REQUESTED_STATE;
+      if (VIEWER_USER_ID || VIEWER_HANDLE) return 'open-new';
+      return 'logout';
+    })();
+    applyState(initialState);
+    document.getElementById('btn-login')?.addEventListener('click', () => {
+      const targetWindow = window.top || window;
+      if (LOGIN_URL) {
+        targetWindow.location.assign(LOGIN_URL);
+        return;
+      }
+      targetWindow.location.assign('/apply');
+    });
+
+    if (window.ResizeObserver) {
+      const resizeObserver = new ResizeObserver(() => scheduleHeightSync());
+      resizeObserver.observe(document.body);
+    }
+    window.addEventListener('load', scheduleHeightSync);
+
+    // 재참여자 구분 로직 제거됨. 라이트 트랙은 전 사용자 항시 노출.
+
+    // ── 크리에이터 선택 시 sub radio 활성화 ─────────────────────────────
+    document.querySelectorAll('input[name="wed"]').forEach(r => r.addEventListener('change', () => {
+      const isCreator = document.getElementById('wed-creator').checked;
+      document.querySelectorAll('input[name="creator-sub"]').forEach(s => {
+        s.disabled = !isCreator;
+        if (!isCreator) s.checked = false;
+      });
+    }));
+
+    // ── 조장 지원 (leader-apply) 상태 동기화 ────────────────────────────
+    // 요일 라디오가 선택된 트랙만 조장 지원 활성. 다른 트랙은 자동 is-disabled.
+    function syncLeaderApply(dayName) {
+      document.querySelectorAll(`input[type="radio"][name="${dayName}"]`).forEach(radio => {
+        const option = radio.closest('.track-option');
+        const label = option?.querySelector('.leader-apply');
+        const input = label?.querySelector('input[type="checkbox"]');
+        if (!label || !input) return;
+        if (radio.checked) {
+          label.classList.remove('is-disabled');
+          input.disabled = false;
+        } else {
+          label.classList.add('is-disabled');
+          label.classList.remove('is-checked');
+          input.disabled = true;
+          input.checked = false;
+        }
+      });
+    }
+    ['mon', 'tue', 'wed', 'thu'].forEach(day => {
+      document.querySelectorAll(`input[type="radio"][name="${day}"]`).forEach(radio => {
+        radio.addEventListener('change', () => syncLeaderApply(day));
+      });
+    });
+
+    // 조장 지원 체크박스 toggle → 부모 label 의 is-checked 클래스 동기화 (강조 스타일 트리거)
+    document.querySelectorAll('.leader-apply input[type="checkbox"]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const label = cb.closest('.leader-apply');
+        if (label) label.classList.toggle('is-checked', cb.checked);
+      });
+    });
+
+    // ── 라이트 트랙 카드 체크 동기화 + 그룹 내 single-choice mutex ─────
+    // 같은 data-light-group 내에서 다른 카드가 이미 체크된 상태라면 자동 해제.
+    // 본인을 다시 클릭하면 해제(checkbox 기본 동작). 그룹 간에는 영향 없음.
+    document.querySelectorAll('.light-track-card input[data-light-track]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const card = cb.closest('.light-track-card');
+        if (card) card.classList.toggle('is-checked', cb.checked);
+
+        if (cb.checked) {
+          const group = cb.dataset.lightGroup;
+          if (group) {
+            document.querySelectorAll(
+              `.light-track-card input[data-light-track][data-light-group="${group}"]`
+            ).forEach(other => {
+              if (other !== cb && other.checked) {
+                other.checked = false;
+                const otherCard = other.closest('.light-track-card');
+                if (otherCard) otherCard.classList.remove('is-checked');
+              }
+            });
+          }
+        }
+      });
+    });
+
+    // ═════════════════════════════════════════════════════════════════════
+    // 제출 플로우: 저장하기 → 제출완료 화면으로 전환
+    // ═════════════════════════════════════════════════════════════════════
+    // 실 구현에서는 POST /api/track-applications 가 이 자리. 목업은 DOM 기반
+    // 상태로만 전환하되 그 변환 자체가 제대로 작동하는지를 보여주는 게 목적.
+
+    const WEEKDAYS_META = [
+      { name: 'mon', key: 'monday',    kr: '월요일' },
+      { name: 'tue', key: 'tuesday',   kr: '화요일' },
+      { name: 'wed', key: 'wednesday', kr: '수요일' },
+      { name: 'thu', key: 'thursday',  kr: '목요일' },
+    ];
+
+    function getMemberIdentityKey(member) {
+      return String(member?.userId || member?.id || '').trim();
+    }
+
+    function getMemberDisplayName(member) {
+      return String(member?.name || member?.id || member?.handle || '이름없음').trim();
+    }
+
+    function getActiveAdminTrackId() {
+      return document.querySelector('.admin-tab.is-active')?.dataset.trackId || 'all';
+    }
+
+    function refreshAdminViews(activeTrackId) {
+      const nextTrackId = activeTrackId || getActiveAdminTrackId();
+      refreshStats();
+      renderAdminTabs(nextTrackId);
+      renderAdminLeaderBar(nextTrackId);
+      renderAdminTable(nextTrackId);
+    }
+
+    function collectNormalizedTracks() {
+      const tracks = [];
+
+      document.querySelectorAll('.track-option').forEach(option => {
+        const radio = option.querySelector('input[type="radio"]');
+        if (!radio || !radio.checked) return;
+
+        const trackId = option.querySelector('.track-schedule')?.dataset.track;
+        if (!trackId) return;
+
+        const track = {
+          type: 'weekday',
+          id: trackId,
+          leader: !!option.querySelector('.leader-apply input[type="checkbox"]')?.checked,
+        };
+
+        if (trackId === 'creator') {
+          const creatorSub = getCreatorSub();
+          if (creatorSub === '숏폼 + 롱폼') track.creatorSub = 'short_long';
+          else if (creatorSub === '숏폼만') track.creatorSub = 'short_only';
+        }
+
+        tracks.push(track);
+      });
+
+      document.querySelectorAll('.light-track-card input[data-light-track]:checked').forEach(cb => {
+        const card = cb.closest('.light-track-card');
+        const title = card?.querySelector('.light-track-title')?.textContent.trim() || '';
+        const group = cb.dataset.lightGroup || '';
+
+        let trackId = '';
+        if (group === 'creator' && title === '숏폼') trackId = 'creator_light_short';
+        else if (group === 'creator' && title === '롱폼') trackId = 'creator_light_long';
+        else if (group === 'builder' && title === '기초') trackId = 'builder_light_basic';
+        else if (group === 'builder' && title === '심화') trackId = 'builder_light_adv';
+
+        if (trackId) {
+          tracks.push({ type: 'light', id: trackId });
+        }
+      });
+
+      return tracks;
+    }
+
+    function memberToSubmissionData(member) {
+      const tracks = Array.isArray(member?.tracks) ? member.tracks : [];
+      const weekday = {
+        monday: null,
+        tuesday: null,
+        wednesday: null,
+        thursday: null,
+      };
+      const leaderApply = [];
+      const lightTracks = [];
+      let creatorSub = null;
+
+      tracks.forEach(track => {
+        if (track.type === 'weekday') {
+          if (track.id === 'sales_real') weekday.monday = TRACK_LABELS.sales_real;
+          if (track.id === 'self_inquiry') weekday.monday = TRACK_LABELS.self_inquiry;
+          if (track.id === 'builder_advanced') weekday.tuesday = TRACK_LABELS.builder_advanced;
+          if (track.id === 'builder_basic') weekday.tuesday = TRACK_LABELS.builder_basic;
+          if (track.id === 'ai_agent') weekday.wednesday = TRACK_LABELS.ai_agent;
+          if (track.id === 'creator') {
+            weekday.wednesday = TRACK_LABELS.creator;
+            if (track.creatorSub === 'short_long') creatorSub = '숏폼 + 롱폼';
+            else if (track.creatorSub === 'short_only') creatorSub = '숏폼만';
+          }
+          if (track.id === 'app_dev') weekday.thursday = TRACK_LABELS.app_dev;
+          if (track.leader && TRACK_LABELS[track.id]) {
+            leaderApply.push(TRACK_LABELS[track.id]);
+          }
+        }
+
+        if (track.type === 'light' && TRACK_LABELS[track.id]) {
+          lightTracks.push(TRACK_LABELS[track.id]);
+        }
+      });
+
+      return {
+        weekday,
+        creatorSub,
+        leaderApply,
+        lightTracks,
+        notes: String(member?.notes || '').trim(),
+      };
+    }
+
+    function normalizeRemoteMember(raw) {
+      if (!raw || typeof raw !== 'object') return null;
+
+      const userId = String(raw.userId || raw.id || '').trim();
+      if (!userId) return null;
+
+      const tracks = Array.isArray(raw.tracks)
+        ? raw.tracks
+            .map(track => {
+              if (!track || typeof track !== 'object') return null;
+              const type = String(track.type || '').trim();
+              const id = String(track.id || '').trim();
+              if (!type || !id) return null;
+              const normalized = { type, id };
+              if (type === 'weekday') {
+                normalized.leader = !!track.leader;
+                if (track.creatorSub) normalized.creatorSub = track.creatorSub;
+              }
+              return normalized;
+            })
+            .filter(Boolean)
+        : [];
+
+      const name = String(raw.name || raw.displayName || raw.username || userId).trim() || userId;
+      const handleRaw = String(raw.handle || '').trim();
+      const handle = handleRaw ? (handleRaw.startsWith('@') ? handleRaw : `@${handleRaw}`) : '';
+
+      return {
+        id: userId,
+        userId,
+        name,
+        handle,
+        initials: String(raw.initials || '').trim() || name.replace(/\s+/g, '').slice(0, 2).toUpperCase() || '??',
+        avatarUrl: raw.avatarUrl || '',
+        edits: Number(raw.edits || 0),
+        submitted: raw.submitted || null,
+        submittedAt: raw.submittedAt || null,
+        notes: String(raw.notes || '').trim(),
+        tracks,
+      };
+    }
+
+    function shouldMergeRemoteMember(member) {
+      if (!member) return false;
+      const memberId = getMemberIdentityKey(member);
+      if (memberId && BASE_MOCK_MEMBER_IDS.has(memberId)) return true;
+      return isApplied(member);
+    }
+
+    function replaceMockMembers(members) {
+      (Array.isArray(members) ? members : []).forEach(member => {
+        const normalized = normalizeRemoteMember(member);
+        if (!normalized) return;
+        if (!shouldMergeRemoteMember(normalized)) return;
+        const memberId = getMemberIdentityKey(normalized);
+        const idx = MOCK_MEMBERS.findIndex(existing => getMemberIdentityKey(existing) === memberId);
+        if (idx >= 0) MOCK_MEMBERS[idx] = { ...MOCK_MEMBERS[idx], ...normalized };
+        else MOCK_MEMBERS.push(normalized);
+      });
+    }
+
+    function upsertMockMember(rawMember) {
+      const normalized = normalizeRemoteMember(rawMember);
+      if (!normalized) return null;
+      const memberId = getMemberIdentityKey(normalized);
+      const idx = MOCK_MEMBERS.findIndex(member => getMemberIdentityKey(member) === memberId);
+      if (idx >= 0) MOCK_MEMBERS[idx] = normalized;
+      else MOCK_MEMBERS.push(normalized);
+      return normalized;
+    }
+
+    async function saveAdminMembersToServer(payload) {
+      const response = await fetch(`${APPLICATION_API_BASE}/api/mockups/track-applications/admin`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.status !== 'success') {
+        throw new Error(result.message || '관리자 신청 데이터 저장에 실패했습니다.');
+      }
+      replaceMockMembers(result.members || []);
+      saveState();
+      return result;
+    }
+
+    async function loadAdminMockMembers() {
+      if (!IS_ADMIN_MOCK) return [];
+      const response = await fetch(
+        `${APPLICATION_API_BASE}/api/mockups/track-applications?cohortLabel=${encodeURIComponent(COHORT_LABEL)}`,
+        {
+          credentials: 'include',
+        }
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.status !== 'success' || !Array.isArray(data.members)) {
+        throw new Error(data.message || '관리자 목업 목록을 불러오지 못했습니다.');
+      }
+      return data.members;
+    }
+
+    async function syncAdminMembersToServer() {
+      if (!IS_ADMIN_MOCK) return null;
+      const result = await saveAdminMembersToServer({
+        cohortLabel: COHORT_LABEL,
+        members: MOCK_MEMBERS,
+      });
+      refreshAdminViews(getActiveAdminTrackId());
+      await loadTrackApplications();
+      return result;
+    }
+
+    function syncViewerSubmissionState(member) {
+      if (!member || !isApplied(member)) return;
+      lastSubmittedData = normalizeSubmissionData(member);
+      editCount = Number(member.edits || 0);
+      renderSelectionSummary(lastSubmittedData);
+      renderEditStatus();
+      // 사용자가 이미 admin/group-preview/closed 등 다른 뷰로 이동했다면 덮어쓰지 않는다.
+      // (관리자가 devtools 로 관리자 뷰에 진입하거나 조 배정 ↗ 버튼으로 group-preview 로 들어간 경우 등)
+      if (IS_ADMIN_MOCK) return;
+      const currentState = getCurrentStateKey();
+      if (currentState && currentState !== 'open-new' && currentState !== 'open-edit') return;
+      if (document.getElementById('view-open-edit')) {
+        applyState('open-edit');
+      }
+    }
+
+    async function loadTrackApplications() {
+      try {
+        const response = await fetch(
+          `${APPLICATION_API_BASE}/api/track-applications?cohortLabel=${encodeURIComponent(COHORT_LABEL)}`,
+          {
+            credentials: 'include',
+          }
+        );
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.status !== 'success' || !Array.isArray(data.members)) {
+          throw new Error(data.message || '신청 목록을 불러오지 못했습니다.');
+        }
+
+        replaceMockMembers(data.members);
+        if (IS_ADMIN_MOCK) {
+          const persistedAdminMembers = await loadAdminMockMembers();
+          replaceMockMembers(persistedAdminMembers);
+        }
+        await migrateLegacyViewerSubmission(data.members);
+        saveState();
+        refreshAdminViews(getActiveAdminTrackId());
+
+        const viewerId = String(data.viewerUserId || VIEWER_USER_ID || '').trim();
+        const viewerHandle = String(VIEWER_HANDLE || '').trim().toLowerCase();
+        let viewerMember = normalizeRemoteMember(data.viewerMember);
+        if (viewerMember) {
+          viewerMember = upsertMockMember(viewerMember);
+        }
+        if (!viewerMember && viewerId) {
+          viewerMember = MOCK_MEMBERS.find(member => getMemberIdentityKey(member) === viewerId) || null;
+        }
+        if (!viewerMember && viewerHandle) {
+          viewerMember = MOCK_MEMBERS.find(member => String(member?.handle || '').trim().toLowerCase() === viewerHandle) || null;
+        }
+        if (viewerMember) {
+          syncViewerSubmissionState(viewerMember);
+        }
+      } catch (error) {
+        console.warn('[트랙 신청] 신청 목록을 불러오지 못했습니다.', error);
+      }
+    }
+
+    // 마감 시각 (Plan §1-2 고정값)
+    const WINDOW_CLOSES_AT = new Date(APPLICATION_CLOSE_AT).getTime();
+
+    // 세션 내에서 누적되는 수정 횟수 (저장하기 누를 때마다 +1)
+    let editCount = 0;
+
+    // 마감 뷰에서 재사용할 마지막 제출 스냅샷
+    let lastSubmittedData = null;
+    let locallyPersistedMembers = [];
+
+    function findLocallyPersistedViewerMember() {
+      const viewerId = String(VIEWER_USER_ID || '').trim();
+      const viewerHandle = String(VIEWER_HANDLE || '').trim().toLowerCase();
+      return locallyPersistedMembers.find(member => {
+        const memberId = getMemberIdentityKey(member);
+        const memberHandle = String(member?.handle || '').trim().toLowerCase();
+        return (viewerId && memberId === viewerId) || (viewerHandle && memberHandle === viewerHandle);
+      }) || null;
+    }
+
+    async function migrateLegacyViewerSubmission(remoteMembers = []) {
+      if (IS_ADMIN_MOCK || !VIEWER_USER_ID) return false;
+
+      const hasRemoteSubmission = remoteMembers.some(member => {
+        return getMemberIdentityKey(member) === VIEWER_USER_ID && isApplied(member);
+      });
+      if (hasRemoteSubmission) return false;
+
+      const localMember = findLocallyPersistedViewerMember();
+      if (!localMember || !isApplied(localMember) || !Array.isArray(localMember.tracks) || localMember.tracks.length === 0) {
+        return false;
+      }
+
+      try {
+        const response = await fetch(`${APPLICATION_API_BASE}/api/track-applications`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cohortLabel: COHORT_LABEL,
+            displayName: localMember.name || VIEWER_DISPLAY_NAME,
+            handle: localMember.handle || VIEWER_HANDLE,
+            avatarUrl: localMember.avatarUrl || VIEWER_AVATAR_URL,
+            tracks: localMember.tracks,
+            notes: localMember.notes || '',
+          }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || result.status !== 'success') {
+          throw new Error(result.message || '기존 신청 내역을 복구하지 못했습니다.');
+        }
+
+        const savedMember = upsertMockMember(result.member);
+        if (savedMember) {
+          syncViewerSubmissionState(savedMember);
+        }
+        saveState();
+        return true;
+      } catch (error) {
+        console.warn('[트랙 신청] 기존 제출 복구에 실패했습니다.', error);
+        return false;
+      }
+    }
+
+    /** 특정 트랙의 라디오 라벨 텍스트를 뽑아낸다. "세일즈 실전 트랙" 등 */
+    function getSelectedWeekdayTrack(name) {
+      const radio = document.querySelector(`input[type="radio"][name="${name}"]:checked`);
+      if (!radio) return null;
+      const label = radio.closest('label');
+      return label ? label.textContent.trim() : null;
+    }
+
+    function getCreatorSub() {
+      const radio = document.querySelector('input[type="radio"][name="creator-sub"]:checked');
+      if (!radio) return null;
+      const label = radio.closest('label');
+      return label ? label.textContent.trim() : null;
+    }
+
+    /** 조장 지원 트랙 id 집합. track-option 내 checked 체크박스를 기준으로 판정. */
+    function getLeaderApplyTrackLabels() {
+      const labels = [];
+      document.querySelectorAll('.track-option').forEach(opt => {
+        const leaderCb = opt.querySelector('.leader-apply input[type="checkbox"]');
+        if (!leaderCb || !leaderCb.checked) return;
+        const trackRadioLabel = opt.querySelector('.track-radio-label');
+        if (trackRadioLabel) labels.push(trackRadioLabel.textContent.trim());
+      });
+      return labels;
+    }
+
+    function getSelectedLightTracks() {
+      const items = [];
+      document.querySelectorAll('.light-track-card input[data-light-track]:checked').forEach(cb => {
+        const card = cb.closest('.light-track-card');
+        const title = card?.querySelector('.light-track-title')?.textContent.trim() || '';
+        const groupLabel = cb.dataset.lightGroupLabel || '라이트';
+        items.push(`${groupLabel} (${title})`);
+      });
+      return items;
+    }
+
+    function getNotes() {
+      const ta = document.querySelector('#view-open-new textarea');
+      return ta ? ta.value.trim() : '';
+    }
+
+    /** 폼 상태 전체 스냅샷 */
+    function collectFormData() {
+      return {
+        weekday: {
+          monday:    getSelectedWeekdayTrack('mon'),
+          tuesday:   getSelectedWeekdayTrack('tue'),
+          wednesday: getSelectedWeekdayTrack('wed'),
+          thursday:  getSelectedWeekdayTrack('thu'),
+        },
+        creatorSub: getCreatorSub(),
+        leaderApply: getLeaderApplyTrackLabels(),
+        lightTracks: getSelectedLightTracks(),
+        notes: getNotes(),
+      };
+    }
+
+    function createEmptySubmissionData() {
+      return {
+        weekday: {
+          monday: null,
+          tuesday: null,
+          wednesday: null,
+          thursday: null,
+        },
+        creatorSub: null,
+        leaderApply: [],
+        lightTracks: [],
+        notes: '',
+      };
+    }
+
+    function normalizeSubmissionData(data) {
+      if (!data || typeof data !== 'object') {
+        return createEmptySubmissionData();
+      }
+
+      if (Array.isArray(data.tracks)) {
+        return memberToSubmissionData(data);
+      }
+
+      const base = createEmptySubmissionData();
+      return {
+        weekday: {
+          ...base.weekday,
+          ...(data.weekday && typeof data.weekday === 'object' ? data.weekday : {}),
+        },
+        creatorSub: typeof data.creatorSub === 'string' && data.creatorSub.trim() ? data.creatorSub : null,
+        leaderApply: Array.isArray(data.leaderApply) ? data.leaderApply.filter(Boolean) : [],
+        lightTracks: Array.isArray(data.lightTracks) ? data.lightTracks.filter(Boolean) : [],
+        notes: typeof data.notes === 'string' ? data.notes.trim() : '',
+      };
+    }
+
+    function validate(data) {
+      const hasWeekday = Object.values(data.weekday).some(Boolean);
+      const hasLight = data.lightTracks.length > 0;
+      if (!hasWeekday && !hasLight) {
+        return '최소 한 트랙 이상 선택해주세요.';
+      }
+      // 크리에이터 선택했는데 sub 미지정
+      if (data.weekday.wednesday === '크리에이터 트랙' && !data.creatorSub) {
+        return '크리에이터 트랙을 선택했으면 숏폼/롱폼 여부를 지정해주세요.';
+      }
+      return null;
+    }
+
+    /** edit-summary 컨테이너에 주입할 row HTML 생성 */
+    function rowHtml(label, body, opts = {}) {
+      const muted = opts.muted ? 'text-ink-soft' : 'text-ink';
+      const weight = opts.muted ? '' : 'font-medium';
+      return `
+        <div class="flex border-b border-border-hair py-3">
+          <div class="w-24 text-eyebrow pt-0.5">${label}</div>
+          <div class="flex-1 text-sm ${muted} ${weight}">${body}</div>
+        </div>`;
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    function leaderBadgeHtml(trackLabel, leaderApplyList) {
+      if (!leaderApplyList.includes(trackLabel)) return '';
+      return '<span class="ml-2 inline-flex items-center h-5 px-1.5 rounded-xs text-[11px] font-semibold bg-navy-soft text-navy">조장</span>';
+    }
+
+    /** 제출 데이터를 요일/라이트/메모 row HTML 로 변환 (edit·closed 공통) */
+    function buildSubmissionRowsHtml(data) {
+      const rows = [];
+      WEEKDAYS_META.forEach(w => {
+        const val = data.weekday[w.key];
+        if (!val) {
+          rows.push(rowHtml(w.kr, '—', { muted: true }));
+          return;
+        }
+        let body = escapeHtml(val);
+        if (w.name === 'wed' && val === '크리에이터 트랙' && data.creatorSub) {
+          body += `<span class="text-ink-soft font-normal ml-1">· ${escapeHtml(data.creatorSub)}</span>`;
+        }
+        body += leaderBadgeHtml(val, data.leaderApply);
+        rows.push(rowHtml(w.kr, body));
+      });
+      if (data.lightTracks.length > 0) {
+        rows.push(rowHtml('라이트 트랙', data.lightTracks.map(escapeHtml).join(', ')));
+      } else {
+        rows.push(rowHtml('라이트 트랙', '—', { muted: true }));
+      }
+      if (data.notes) {
+        rows.push(rowHtml('메모', escapeHtml(data.notes)));
+      }
+      return rows.join('');
+    }
+
+    function renderSelectionSummary(data) {
+      const normalized = normalizeSubmissionData(data);
+      if (data) {
+        lastSubmittedData = normalized;
+      }
+      document.getElementById('edit-summary').innerHTML = buildSubmissionRowsHtml(normalized);
+    }
+
+    /** 마감 뷰 렌더. lastSubmittedData 가 있으면 내용, 없으면 미제출 안내. */
+    function renderClosedSummary() {
+      const container = document.getElementById('closed-summary');
+      if (!container) return;
+      if (!lastSubmittedData) {
+        container.innerHTML = `
+          <div class="py-8 text-center">
+            <div class="text-[13px] text-ink-muted">신청 기간 중 제출된 내역이 없습니다.</div>
+            <div class="text-[11px] text-ink-soft mt-1">운영진에게 문의해주세요.</div>
+          </div>`;
+        return;
+      }
+      container.innerHTML = buildSubmissionRowsHtml(normalizeSubmissionData(lastSubmittedData));
+    }
+
+    function renderEditStatus() {
+      document.getElementById('edit-count-line').textContent =
+        `· 수정 ${editCount}회`;
+      const remainMs = WINDOW_CLOSES_AT - Date.now();
+      const deadlineEl = document.getElementById('edit-deadline-line');
+      if (remainMs > 0) {
+        const days = Math.floor(remainMs / 86400000);
+        const hours = Math.floor((remainMs % 86400000) / 3600000);
+        deadlineEl.textContent = days > 0
+          ? ` · 마감까지 ${days}일 ${hours}시간`
+          : ` · 마감까지 ${hours}시간`;
+      } else {
+        deadlineEl.textContent = ' · 마감';
+      }
+    }
+
+    function resetFormState() {
+      // 라디오 전부 해제
+      document.querySelectorAll('#view-open-new input[type="radio"]').forEach(r => { r.checked = false; });
+      // 조장 체크박스 해제 + 클래스 리셋
+      document.querySelectorAll('#view-open-new .leader-apply').forEach(l => {
+        l.classList.remove('is-checked');
+        l.classList.add('is-disabled');
+        const cb = l.querySelector('input[type="checkbox"]');
+        if (cb) { cb.checked = false; cb.disabled = true; }
+      });
+      // 크리에이터 sub radio disabled
+      document.querySelectorAll('input[name="creator-sub"]').forEach(s => { s.disabled = true; s.checked = false; });
+      // 라이트 트랙 카드
+      document.querySelectorAll('.light-track-card').forEach(c => {
+        c.classList.remove('is-checked');
+        const cb = c.querySelector('input[type="checkbox"]');
+        if (cb) cb.checked = false;
+      });
+      // notes
+      const ta = document.querySelector('#view-open-new textarea');
+      if (ta) ta.value = '';
+      // validation 메시지
+      hideValidationMsg();
+      // 수정 횟수 초기화
+      editCount = 0;
+      // 로그아웃 시 제출 스냅샷도 파기 (다른 사용자 화면에 남지 않도록)
+      lastSubmittedData = null;
+    }
+
+    function showValidationMsg(msg) {
+      const el = document.getElementById('submit-validation-msg');
+      el.textContent = msg;
+      el.classList.remove('hidden-view');
+    }
+    function hideValidationMsg() {
+      const el = document.getElementById('submit-validation-msg');
+      el.textContent = '';
+      el.classList.add('hidden-view');
+    }
+
+    // 저장하기 클릭 → 수집 → validate → summary 렌더 → state 전환
+    document.getElementById('btn-submit').addEventListener('click', async () => {
+      const data = collectFormData();
+      const err = validate(data);
+      if (err) {
+        showValidationMsg(err);
+        return;
+      }
+      hideValidationMsg();
+      const payload = {
+        cohortLabel: COHORT_LABEL,
+        displayName: VIEWER_DISPLAY_NAME,
+        handle: VIEWER_HANDLE,
+        avatarUrl: VIEWER_AVATAR_URL,
+        tracks: collectNormalizedTracks(),
+        notes: data.notes,
+      };
+      try {
+        const response = await fetch(`${APPLICATION_API_BASE}/api/track-applications`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || result.status !== 'success') {
+          throw new Error(result.message || '신청 저장에 실패했습니다.');
+        }
+
+        const savedMember = upsertMockMember(result.member);
+        if (savedMember) {
+          syncViewerSubmissionState(savedMember);
+        } else {
+          editCount += 1;
+          renderSelectionSummary(data);
+          renderEditStatus();
+        }
+        refreshAdminViews(getActiveAdminTrackId());
+        applyState('open-edit');
+      // 상단으로 스크롤
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      // persist (껐다 켜도 복구)
+        if (typeof saveState === 'function') saveState();
+      } catch (error) {
+        showValidationMsg(error?.message || '신청 저장에 실패했습니다.');
+      }
+    });
+
+    // 수정하기 클릭 → open-new 로 복귀. DOM 값은 그대로 유지되므로 사용자의
+    // 직전 선택이 폼에 남아있어 바로 이어서 수정 가능.
+    document.getElementById('btn-edit-resume').addEventListener('click', () => {
+      applyState('open-new');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // 로그아웃 → view-logout + 폼 리셋 (세션 파기 시뮬)
+    document.getElementById('btn-logout').addEventListener('click', () => {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'track-apply:logout-request' }, window.location.origin);
+        return;
+      }
+      resetFormState();
+      applyState('logout');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // ═════════════════════════════════════════════════════════════════════
+    // Admin 뷰 — 트랙별 탭 / 조장 지원자 현황 / 테이블 동적 렌더
+    // ═════════════════════════════════════════════════════════════════════
+    // 실 구현에선 서버 컴포넌트가 DB 집계한 결과를 받지만, 목업은 로컬 mock.
+    // 한 persona 가 여러 트랙(정규 + 라이트) 에 동시 신청 가능 — 테이블 트랙
+    // 컬럼은 여러 트랙을 ' · ' 로 이어 표시.
+
+    const TRACK_LABELS = {
+      sales_real:         '세일즈 실전',
+      self_inquiry:       '나 탐구',
+      builder_advanced:   '빌더 심화',
+      builder_basic:      '빌더 기초',
+      ai_agent:           'AI 에이전트',
+      creator:            '크리에이터',
+      app_dev:            '앱 개발',
+      creator_light_short:'크리에이터 라이트 (숏폼)',
+      creator_light_long: '크리에이터 라이트 (롱폼)',
+      builder_light_basic:'빌더 라이트 (기초)',
+      builder_light_adv:  '빌더 라이트 (심화)',
+    };
+
+    // 탭 그룹 매핑: 라이트 탭은 여러 세부 옵션 전부 포함
+    const LIGHT_TAB_MAP = {
+      creator_light: ['creator_light_short', 'creator_light_long'],
+      builder_light: ['builder_light_basic', 'builder_light_adv'],
+    };
+
+    // 멤버의 트랙은 배열 — 한 사람이 여러 요일 + 여러 라이트 그룹 동시에 가질 수 있음.
+    // track 항목:
+    //   { type: 'weekday', id: 'sales_real'|..., creatorSub?: 'short_only'|'short_long', leader?: boolean }
+    //   { type: 'light',   id: 'creator_light_short'|'creator_light_long'|'builder_light_basic'|'builder_light_adv' }
+    const MOCK_MEMBERS = [
+      { id: 'c2d0e119', handle: '@anon_0209', edits: 1, submitted: '05-20 18:12', initials: 'c2',
+        tracks: [{ type: 'weekday', id: 'sales_real', leader: true }] },
+      { id: 'f7a9b328', handle: '@anon_0674', edits: 0, submitted: '05-21 11:30', initials: 'f7',
+        tracks: [{ type: 'weekday', id: 'sales_real', leader: false }] },
+      { id: 'w3x6y905', handle: '@anon_0558', edits: 2, submitted: '05-22 15:45', initials: 'w3',
+        tracks: [{ type: 'weekday', id: 'sales_real', leader: true }] },
+
+      { id: '9c1d7e02', handle: '@anon_0138', edits: 0, submitted: '05-20 09:15', initials: '9c',
+        tracks: [{ type: 'weekday', id: 'self_inquiry', leader: true }] },
+      { id: 'd1a5b672', handle: '@anon_0294', edits: 1, submitted: '05-21 20:41', initials: 'd1',
+        tracks: [{ type: 'weekday', id: 'self_inquiry', leader: false }] },
+
+      { id: 'm4d9e108', handle: '@anon_0815', edits: 3, submitted: '05-22 10:03', initials: 'm4',
+        tracks: [
+          { type: 'weekday', id: 'builder_advanced', leader: true },
+          { type: 'light',   id: 'creator_light_short' },
+        ] },
+      { id: 'j2l8q503', handle: '@anon_0389', edits: 0, submitted: '05-20 23:12', initials: 'j2',
+        tracks: [{ type: 'weekday', id: 'builder_advanced', leader: false }] },
+
+      { id: 'e5b2c104', handle: '@anon_0350', edits: 2, submitted: '05-20 21:47', initials: 'e5',
+        tracks: [{ type: 'weekday', id: 'builder_basic', leader: false }] },
+      { id: 'h8d4f276', handle: '@anon_0491', edits: 0, submitted: '05-22 08:18', initials: 'h8',
+        tracks: [
+          { type: 'weekday', id: 'builder_basic', leader: true },
+          { type: 'light',   id: 'builder_light_basic' },
+        ] },
+
+      { id: 'a3f2e8b1', handle: '@anon_0421', edits: 2, submitted: '05-20 14:22', initials: 'a3',
+        tracks: [{ type: 'weekday', id: 'ai_agent', leader: false }] },
+      { id: 'r9s6t418', handle: '@anon_0183', edits: 2, submitted: '05-20 16:03', initials: 'r9',
+        tracks: [
+          { type: 'weekday', id: 'ai_agent', leader: true },
+          { type: 'light',   id: 'creator_light_long' },
+        ] },
+
+      { id: 'b7f3a215', handle: '@anon_0572', edits: 1, submitted: '05-21 22:48', initials: 'b7',
+        tracks: [{ type: 'weekday', id: 'creator', creatorSub: 'short_long', leader: true }] },
+      { id: 'v4u7z201', handle: '@anon_0639', edits: 0, submitted: '05-22 17:04', initials: 'v4',
+        tracks: [{ type: 'weekday', id: 'creator', creatorSub: 'short_only', leader: false }] },
+
+      { id: 'k1n5p823', handle: '@anon_0732', edits: 1, submitted: '05-21 14:55', initials: 'k1',
+        tracks: [{ type: 'weekday', id: 'app_dev', leader: false }] },
+
+      // ── 미신청 관습생 (관리자 직권 추가 / 시연용 대상) ─────────────────
+      { id: 'p2q8r456', handle: '@anon_0013', edits: 0, submitted: null, initials: 'p2', tracks: [] },
+      { id: 's3t6u782', handle: '@anon_0247', edits: 0, submitted: null, initials: 's3', tracks: [] },
+      { id: 'n0l4m915', handle: '@anon_0508', edits: 0, submitted: null, initials: 'n0', tracks: [] },
+      { id: 'o8i2j367', handle: '@anon_0620', edits: 0, submitted: null, initials: 'o8', tracks: [] },
+      { id: 'g6k9h042', handle: '@anon_0791', edits: 0, submitted: null, initials: 'g6', tracks: [] },
+      { id: 'x4y1z583', handle: '@anon_0854', edits: 0, submitted: null, initials: 'x4', tracks: [] },
+      { id: 'u7v2w110', handle: '@anon_0902', edits: 0, submitted: null, initials: 'u7', tracks: [] },
+      { id: 't5d7e896', handle: '@anon_0166', edits: 0, submitted: null, initials: 't5', tracks: [] },
+      { id: 'l9n3a429', handle: '@anon_0305', edits: 0, submitted: null, initials: 'l9', tracks: [] },
+      { id: 'i1b5c764', handle: '@anon_0443', edits: 0, submitted: null, initials: 'i1', tracks: [] },
+    ];
+
+    /** 신청 여부 — tracks 가 비어있으면 미신청 */
+    const BASE_MOCK_MEMBER_IDS = new Set(
+      MOCK_MEMBERS.map(member => getMemberIdentityKey(member)).filter(Boolean)
+    );
+
+    function isApplied(m) {
+      return Array.isArray(m.tracks) && m.tracks.length > 0;
+    }
+
+    // 요일 ↔ 트랙 매핑 (편집 모달에서 '이 멤버가 해당 요일에 이미 트랙이 있는가' 판정용)
+    const WEEKDAY_OF_TRACK = {
+      sales_real: 'monday', self_inquiry: 'monday',
+      builder_advanced: 'tuesday', builder_basic: 'tuesday',
+      ai_agent: 'wednesday', creator: 'wednesday',
+      app_dev: 'thursday',
+    };
+    const LIGHT_GROUP_OF_TRACK = {
+      creator_light_short: 'creator_light',
+      creator_light_long: 'creator_light',
+      builder_light_basic: 'builder_light',
+      builder_light_adv: 'builder_light',
+    };
+
+    // 탭 정의 (정규 · 라이트 · 미신청 · 전체 순서)
+    const ADMIN_TABS = [
+      { id: 'sales_real',       label: '세일즈 실전' },
+      { id: 'self_inquiry',     label: '나 탐구' },
+      { id: 'builder_advanced', label: '빌더 심화' },
+      { id: 'builder_basic',    label: '빌더 기초' },
+      { id: 'ai_agent',         label: 'AI 에이전트' },
+      { id: 'creator',          label: '크리에이터' },
+      { id: 'app_dev',          label: '앱 개발' },
+      { type: 'divider' },
+      { id: 'creator_light',    label: '크리에이터 라이트', isLight: true },
+      { id: 'builder_light',    label: '빌더 라이트',       isLight: true },
+      { type: 'divider' },
+      { id: 'unapplied',        label: '미신청' },
+      { id: 'all',              label: '전체' },
+    ];
+
+    function matchesTrack(m, trackId) {
+      if (trackId === 'all') return true;
+      if (trackId === 'unapplied') return !isApplied(m);
+      if (trackId in LIGHT_TAB_MAP) {
+        return m.tracks.some(t => t.type === 'light' && LIGHT_TAB_MAP[trackId].includes(t.id));
+      }
+      return m.tracks.some(t => t.type === 'weekday' && t.id === trackId);
+    }
+
+    function getTrackCount(trackId) {
+      return MOCK_MEMBERS.filter(m => matchesTrack(m, trackId)).length;
+    }
+
+    function getTrackMembers(trackId) {
+      return MOCK_MEMBERS.filter(m => matchesTrack(m, trackId));
+    }
+
+    function getLeaderApplicants(trackId) {
+      if (trackId === 'all') return null;           // 가이드 메시지
+      if (trackId in LIGHT_TAB_MAP) return [];      // 라이트 조장 없음
+      return MOCK_MEMBERS.filter(m =>
+        m.tracks.some(t => t.type === 'weekday' && t.id === trackId && t.leader)
+      );
+    }
+
+    function escapeAttr(s) {
+      return String(s).replace(/"/g, '&quot;');
+    }
+
+    function formatWeekdayTrackText(t) {
+      let s = TRACK_LABELS[t.id];
+      if (t.id === 'creator' && t.creatorSub) {
+        const suffix = t.creatorSub === 'short_long' ? '숏+롱' : '숏';
+        s += ` <span class="text-ink-soft">(${suffix})</span>`;
+      }
+      return s;
+    }
+
+    /**
+     * 선택된 탭 맥락에 맞춰 해당 멤버의 트랙 라벨을 생성.
+     * - 정규 트랙 탭: 그 트랙만 (라이트 동시 수강 정보는 숨김)
+     * - 라이트 트랙 탭: 해당 세부 라이트만
+     * - 전체 탭: 정규 + 라이트 모두 병합 표시 (다중 수강 케이스 확인용)
+     */
+    const UNAPPLIED_BADGE =
+      '<span class="inline-flex items-center h-5 px-1.5 rounded-xs text-[11px] font-semibold bg-surface text-ink-soft" style="letter-spacing:0.06em;">미신청</span>';
+
+    function formatTrackTextFor(m, trackId) {
+      if (trackId === 'all') {
+        if (!isApplied(m)) return UNAPPLIED_BADGE;
+        const weekday = m.tracks.filter(t => t.type === 'weekday').map(formatWeekdayTrackText);
+        const light = m.tracks.filter(t => t.type === 'light')
+          .map(t => `<span class="text-ink-soft">${TRACK_LABELS[t.id]}</span>`);
+        const parts = [...weekday, ...light];
+        return parts.length ? parts.join(' <span class="text-ink-soft">·</span> ') : UNAPPLIED_BADGE;
+      }
+      if (trackId === 'unapplied') return UNAPPLIED_BADGE;
+      if (trackId in LIGHT_TAB_MAP) {
+        const t = m.tracks.find(x => x.type === 'light' && LIGHT_TAB_MAP[trackId].includes(x.id));
+        return t ? TRACK_LABELS[t.id] : '—';
+      }
+      const t = m.tracks.find(x => x.type === 'weekday' && x.id === trackId);
+      return t ? formatWeekdayTrackText(t) : '—';
+    }
+
+    /** 현재 탭에서 '조장' 셀 표시 여부 판정 — 탭이 정규 트랙일 때 그 트랙 leader 체크. */
+    function leaderCellHtmlFor(m, trackId) {
+      if (trackId === 'all') {
+        // 전체 탭: 어느 트랙이든 조장이면 뱃지
+        const anyLeader = m.tracks.some(t => t.type === 'weekday' && t.leader);
+        return anyLeader
+          ? '<span class="inline-flex items-center h-5 px-1.5 rounded-xs text-[11px] font-semibold bg-navy-soft text-navy">조장</span>'
+          : '<span class="text-ink-soft">—</span>';
+      }
+      if (trackId in LIGHT_TAB_MAP) return '<span class="text-ink-soft">—</span>';
+      const t = m.tracks.find(x => x.type === 'weekday' && x.id === trackId);
+      return (t && t.leader)
+        ? '<span class="inline-flex items-center h-5 px-1.5 rounded-xs text-[11px] font-semibold bg-navy-soft text-navy">조장</span>'
+        : '<span class="text-ink-soft">—</span>';
+    }
+
+    function renderAdminTabs(activeId) {
+      const ul = document.getElementById('admin-tabs');
+      ul.innerHTML = ADMIN_TABS.map(t => {
+        if (t.type === 'divider') return '<li class="admin-tab-divider" aria-hidden="true"></li>';
+        const count = getTrackCount(t.id);
+        const activeCls = t.id === activeId ? ' is-active' : '';
+        return (
+          `<li><button class="admin-tab${activeCls}" data-track-id="${escapeAttr(t.id)}">` +
+            `<span>${t.label}</span>` +
+            `<span class="admin-tab-count">${count}</span>` +
+            `<span class="admin-tab-underline" aria-hidden="true"></span>` +
+          `</button></li>`
+        );
+      }).join('');
+      ul.querySelectorAll('.admin-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.trackId;
+          renderAdminTabs(id);
+          renderAdminLeaderBar(id);
+          renderAdminTable(id);
+        });
+      });
+    }
+
+    function renderAdminLeaderBar(trackId) {
+      const list = document.getElementById('admin-leader-bar-list');
+      const leaders = getLeaderApplicants(trackId);
+      if (leaders === null) {
+        list.innerHTML =
+          '<span class="admin-leader-bar-empty">트랙별 탭을 선택하면 해당 트랙의 조장 지원자 현황을 확인할 수 있습니다.</span>';
+        return;
+      }
+      if (trackId in LIGHT_TAB_MAP) {
+        list.innerHTML = '<span class="admin-leader-bar-empty">라이트 트랙은 조장 제도가 없습니다.</span>';
+        return;
+      }
+      if (leaders.length === 0) {
+        list.innerHTML = '<span class="admin-leader-bar-empty">아직 조장 지원자가 없습니다.</span>';
+        return;
+      }
+      const chips = leaders.map(m =>
+        `<span class="admin-leader-chip">` +
+          `<span>${getMemberDisplayName(m)}</span>` +
+          `<span class="admin-leader-handle">${m.handle}</span>` +
+        `</span>`
+      ).join('');
+      list.innerHTML = chips +
+        `<span class="admin-leader-bar-count">총 ${leaders.length}명</span>`;
+    }
+
+    function renderAdminTable(trackId) {
+      const body = document.getElementById('admin-applicants-body');
+      const members = getTrackMembers(trackId);
+      if (members.length === 0) {
+        body.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-[12px] text-ink-soft">해당 트랙 신청자가 없습니다.</td></tr>';
+        return;
+      }
+      body.innerHTML = members.map((m, idx) => {
+        const trackText = formatTrackTextFor(m, trackId);
+        const applied = isApplied(m);
+        const bg = applied
+          ? ((idx % 2 === 0) ? 'bg-navy-soft text-navy' : 'bg-surface-2 text-ink')
+          : 'bg-surface text-ink-soft';
+        const leaderCell = applied
+          ? leaderCellHtmlFor(m, trackId)
+          : '<span class="text-ink-soft">—</span>';
+        const editsCell = applied
+          ? `<span class="tabular-nums text-ink">${m.edits}</span>`
+          : '<span class="text-ink-soft">—</span>';
+        const submittedCell = m.submitted
+          ? `<span class="tabular-nums text-ink-muted">${m.submitted}</span>`
+          : '<span class="text-ink-soft">—</span>';
+        return `
+          <tr class="hover-row border-b border-border-hair">
+            <td class="py-3 pr-4">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-full ${bg} text-[11px] font-semibold flex items-center justify-center">${m.initials}</div>
+                <div>
+                  <div class="font-semibold text-ink">${getMemberDisplayName(m)}</div>
+                  <div class="text-[11px] text-ink-soft">${m.handle}</div>
+                </div>
+              </div>
+            </td>
+            <td class="py-3 pr-4 text-ink">${trackText}</td>
+            <td class="py-3 pr-4 text-center">${leaderCell}</td>
+            <td class="py-3 pr-4 text-center">${editsCell}</td>
+            <td class="py-3 pr-4 text-right">${submittedCell}</td>
+            <td class="py-3 text-right">
+              <button class="admin-row-edit-btn" data-edit-member="${escapeAttr(getMemberIdentityKey(m))}" type="button">편집</button>
+            </td>
+          </tr>`;
+      }).join('');
+
+      // 편집 버튼 이벤트 위임
+      body.querySelectorAll('[data-edit-member]').forEach(btn => {
+        btn.addEventListener('click', () => openEditModal(btn.dataset.editMember));
+      });
+    }
+
+    // ── localStorage persistence (편집 결과 유지 / 껐다 켜도 복구) ─────
+    const ADMIN_STORAGE_KEY = 'asc_track_apply_mockup_v2';
+    function saveState() {
+      try {
+        localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify({
+          v: 2,
+          members: MOCK_MEMBERS,
+          lastSubmitted: lastSubmittedData,
+          savedAt: new Date().toISOString(),
+        }));
+      } catch (e) { /* quota 등 실패해도 UI 는 계속 */ }
+    }
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(ADMIN_STORAGE_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (!data || data.v !== 2) return;
+        if (Array.isArray(data.members)) {
+          locallyPersistedMembers = data.members.map(member => ({ ...member }));
+          replaceMockMembers(data.members);
+        }
+        if (data.lastSubmitted !== undefined) {
+          lastSubmittedData = data.lastSubmitted ? normalizeSubmissionData(data.lastSubmitted) : null;
+        }
+      } catch (e) { /* 파싱 실패 시 기본 mock 유지 */ }
+    }
+    function resetState() {
+      if (!confirm('mock 데이터를 초기 상태로 되돌립니다. 계속하시겠습니까?')) return;
+      try { localStorage.removeItem(ADMIN_STORAGE_KEY); } catch (e) {}
+      location.reload();
+    }
+
+    // 최초 로드: 저장된 상태 복구
+    loadState();
+
+    // Stats 3수치 (전체 멤버 / 신청 완료 / 미신청)
+    function refreshStats() {
+      const total = MOCK_MEMBERS.length;
+      const applied = MOCK_MEMBERS.filter(isApplied).length;
+      const unapplied = total - applied;
+      const totalEl = document.getElementById('stat-total');
+      const appliedEl = document.getElementById('stat-applied');
+      const unappliedEl = document.getElementById('stat-unapplied');
+      if (totalEl) totalEl.textContent = String(total);
+      if (appliedEl) appliedEl.textContent = String(applied);
+      if (unappliedEl) unappliedEl.textContent = String(unapplied);
+    }
+
+    // 초기 렌더: 전체 탭 active (refreshStats 먼저 호출 — 탭 카운트가 데이터 의존)
+    refreshStats();
+    renderAdminTabs('all');
+    renderAdminLeaderBar('all');
+    renderAdminTable('all');
+    loadTrackApplications();
+    scheduleHeightSync();
+
+    // ═════════════════════════════════════════════════════════════════════
+    // 트랙 편집 모달 — 멤버의 트랙 추가/제거
+    // ═════════════════════════════════════════════════════════════════════
+    // 편집 중인 멤버 id + 편집본 tracks 배열 (저장 전까지는 MOCK_MEMBERS 에 반영 안 됨).
+    let editingMemberId = null;
+    let editingTracks = [];
+
+    const WEEKDAY_TRACK_CHOICES = [
+      { id: 'sales_real',       label: '세일즈 실전 트랙',    weekday: 'monday' },
+      { id: 'self_inquiry',     label: '나 탐구 트랙',        weekday: 'monday' },
+      { id: 'builder_advanced', label: '빌더 심화 트랙',      weekday: 'tuesday' },
+      { id: 'builder_basic',    label: '빌더 기초 트랙',      weekday: 'tuesday' },
+      { id: 'ai_agent',         label: 'AI 에이전트 트랙',    weekday: 'wednesday' },
+      { id: 'creator',          label: '크리에이터 트랙',     weekday: 'wednesday' },
+      { id: 'app_dev',          label: '앱 개발 트랙',        weekday: 'thursday' },
+    ];
+    const LIGHT_TRACK_CHOICES = [
+      { id: 'creator_light_short', label: '크리에이터 라이트 (숏폼)', group: 'creator_light' },
+      { id: 'creator_light_long',  label: '크리에이터 라이트 (롱폼)', group: 'creator_light' },
+      { id: 'builder_light_basic', label: '빌더 라이트 (기초)',       group: 'builder_light' },
+      { id: 'builder_light_adv',   label: '빌더 라이트 (심화)',       group: 'builder_light' },
+    ];
+
+    function openEditModal(memberId) {
+      const m = MOCK_MEMBERS.find(x => x.id === memberId);
+      if (!m) return;
+      editingMemberId = memberId;
+      // 깊은 복제 (저장 전까지 원본 건드리지 않음)
+      editingTracks = m.tracks.map(t => ({ ...t }));
+      document.getElementById('admin-edit-modal-title').textContent = getMemberDisplayName(m);
+      document.getElementById('admin-edit-modal-subtitle').textContent = m.handle;
+      renderEditTrackList();
+      renderEditAddSelects();
+      document.getElementById('admin-edit-modal').classList.remove('hidden-view');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeEditModal() {
+      document.getElementById('admin-edit-modal').classList.add('hidden-view');
+      document.body.style.overflow = '';
+      editingMemberId = null;
+      editingTracks = [];
+    }
+
+    function renderEditTrackList() {
+      const list = document.getElementById('admin-edit-track-list');
+      if (editingTracks.length === 0) {
+        list.innerHTML = '';  // CSS :empty::after 가 가이드 메시지 표시
+        return;
+      }
+      list.innerHTML = editingTracks.map((t, idx) => {
+        if (t.type === 'weekday') {
+          const label = TRACK_LABELS[t.id] || t.id;
+          const weekdayKr = WEEKDAY_OF_TRACK[t.id] === 'monday' ? '월'
+            : WEEKDAY_OF_TRACK[t.id] === 'tuesday' ? '화'
+            : WEEKDAY_OF_TRACK[t.id] === 'wednesday' ? '수' : '목';
+          const creatorSubSelect = (t.id === 'creator')
+            ? `<select class="admin-edit-creator-sub" data-creator-sub-idx="${idx}">
+                 <option value="short_only"  ${t.creatorSub === 'short_only'  ? 'selected' : ''}>숏폼만</option>
+                 <option value="short_long"  ${t.creatorSub === 'short_long'  ? 'selected' : ''}>숏폼 + 롱폼</option>
+               </select>` : '';
+          return `
+            <div class="admin-edit-track-row">
+              <div class="admin-edit-track-info">
+                <div class="admin-edit-track-title">
+                  <span class="admin-edit-track-type-label">${weekdayKr}요일</span>
+                  ${label}
+                </div>
+              </div>
+              ${creatorSubSelect}
+              <label class="admin-edit-leader-toggle">
+                <input type="checkbox" data-leader-idx="${idx}" ${t.leader ? 'checked' : ''}>
+                조장
+              </label>
+              <button type="button" class="admin-edit-remove" data-remove-idx="${idx}">제거</button>
+            </div>
+          `;
+        }
+        // light
+        return `
+          <div class="admin-edit-track-row is-light">
+            <div class="admin-edit-track-info">
+              <div class="admin-edit-track-title">
+                <span class="admin-edit-track-type-label">라이트</span>
+                ${TRACK_LABELS[t.id]}
+              </div>
+            </div>
+            <button type="button" class="admin-edit-remove" data-remove-idx="${idx}">제거</button>
+          </div>
+        `;
+      }).join('');
+
+      // 이벤트 위임
+      list.querySelectorAll('[data-remove-idx]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const i = parseInt(btn.dataset.removeIdx, 10);
+          editingTracks.splice(i, 1);
+          renderEditTrackList();
+          renderEditAddSelects();
+        });
+      });
+      list.querySelectorAll('[data-leader-idx]').forEach(cb => {
+        cb.addEventListener('change', () => {
+          const i = parseInt(cb.dataset.leaderIdx, 10);
+          if (editingTracks[i]) editingTracks[i].leader = cb.checked;
+        });
+      });
+      list.querySelectorAll('[data-creator-sub-idx]').forEach(sel => {
+        sel.addEventListener('change', () => {
+          const i = parseInt(sel.dataset.creatorSubIdx, 10);
+          if (editingTracks[i]) editingTracks[i].creatorSub = sel.value;
+        });
+      });
+    }
+
+    function renderEditAddSelects() {
+      // 이미 같은 요일에 트랙이 있으면 해당 요일의 옵션들 disabled
+      const occupiedWeekdays = new Set(
+        editingTracks
+          .filter(t => t.type === 'weekday')
+          .map(t => WEEKDAY_OF_TRACK[t.id])
+      );
+      const wdSel = document.getElementById('admin-edit-add-weekday');
+      wdSel.innerHTML = '<option value="">선택...</option>' +
+        WEEKDAY_TRACK_CHOICES.map(c => {
+          const dis = occupiedWeekdays.has(c.weekday) ? ' disabled' : '';
+          return `<option value="${c.id}"${dis}>${c.label}</option>`;
+        }).join('');
+
+      // 이미 같은 라이트 그룹에 트랙이 있으면 해당 그룹 옵션 disabled
+      const occupiedGroups = new Set(
+        editingTracks
+          .filter(t => t.type === 'light')
+          .map(t => LIGHT_GROUP_OF_TRACK[t.id])
+      );
+      const ltSel = document.getElementById('admin-edit-add-light');
+      ltSel.innerHTML = '<option value="">선택...</option>' +
+        LIGHT_TRACK_CHOICES.map(c => {
+          const dis = occupiedGroups.has(c.group) ? ' disabled' : '';
+          return `<option value="${c.id}"${dis}>${c.label}</option>`;
+        }).join('');
+    }
+
+    document.getElementById('admin-edit-add-weekday').addEventListener('change', (e) => {
+      const id = e.target.value;
+      if (!id) return;
+      const newTrack = { type: 'weekday', id, leader: false };
+      if (id === 'creator') newTrack.creatorSub = 'short_only';
+      editingTracks.push(newTrack);
+      e.target.value = '';
+      renderEditTrackList();
+      renderEditAddSelects();
+    });
+    document.getElementById('admin-edit-add-light').addEventListener('change', (e) => {
+      const id = e.target.value;
+      if (!id) return;
+      editingTracks.push({ type: 'light', id });
+      e.target.value = '';
+      renderEditTrackList();
+      renderEditAddSelects();
+    });
+
+    document.getElementById('admin-edit-save').addEventListener('click', async () => {
+      if (!editingMemberId) return;
+      const m = MOCK_MEMBERS.find(x => x.id === editingMemberId);
+      if (!m) return;
+      m.tracks = editingTracks.map(t => ({ ...t }));
+      m.edits = (m.edits || 0) + 1;  // 관리자 직권 수정도 카운트
+      try {
+        await saveAdminMembersToServer({
+          cohortLabel: COHORT_LABEL,
+          member: m,
+        });
+        closeEditModal();
+        // 전체 화면 리렌더 (탭 카운트/stats까지 업데이트) + 영구 저장
+        const activeTab = document.querySelector('.admin-tab.is-active')?.dataset.trackId || 'all';
+        refreshStats();
+        renderAdminTabs(activeTab);
+        renderAdminLeaderBar(activeTab);
+        renderAdminTable(activeTab);
+        saveState();
+      } catch (error) {
+        alert(error?.message || '관리자 수정 저장에 실패했습니다.');
+      }
+    });
+
+    // 닫기 핸들러 (backdrop / × / 취소 / ESC)
+    document.querySelectorAll('#admin-edit-modal [data-close-modal]').forEach(el => {
+      el.addEventListener('click', closeEditModal);
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !document.getElementById('admin-edit-modal').classList.contains('hidden-view')) {
+        closeEditModal();
+      }
+    });
+
+    // devtools 데이터 초기화
+    document.getElementById('devtools-reset')?.addEventListener('click', resetState);
+
+    // ============================================================
+    // 오픈 전 (view-upcoming) — 트랙 미리보기 렌더
+    // ============================================================
+    const PREOPEN_TRACKS = [
+      {
+        id: 'sales_real', label: '세일즈 실전 트랙', weekday: '월요일',
+        tagline: 'USP 정의부터 광고·세일즈 퍼널까지, 실제 매출을 만들어내는 4주',
+        target: '본인의 제품·서비스를 보유했고 실제 판매 성과를 만들고 싶은 분',
+        coach: 'MDM 코치',
+        weeks: [
+          { week: '1주차', date: '4/20 (월)', time: '8:00-9:30PM', title: '세일즈 마인드셋 + USP 정의 + 퍼널에 대한 이해', detail: '세일즈 마인드셋 바꾸기 · USP와 이상적 고객 정의 · 고객 인터뷰 · 퍼널 이론과 설계' },
+          { week: '2주차', date: '4/27 (월)', time: '8:00-9:30PM', title: '설득 구조가 담긴 랜딩 페이지 제작과 카피라이팅', detail: 'PASOPC 구조 카피 · 오퍼 설계 · 후기 확보 · DM 템플릿/세일즈 콜 스크립트' },
+          { week: '2주차', date: '4/30 (목)', time: '8:00-10:00PM', title: '세일즈 컨설팅 및 QnA (w/MDM 코치)', optional: true },
+          { week: '3주차', date: '5/4 (월)', time: '8:00-9:30PM', title: '리드마그넷 제작 & 리드 전환 관리', detail: '리드마그넷 배포 · 이메일 시퀀스 · 오가닉 세일즈 채널 실습' },
+          { week: '3주차', date: '5/7 (목)', time: '8:00-10:00PM', title: '세일즈 컨설팅 및 QnA (w/MDM 코치)', optional: true },
+          { week: '4주차', date: '5/11 (월)', time: '8:00-9:30PM', title: '올바른 광고 집행하기 + 고도화', detail: '광고 소재 제작 · 오가닉 병행 · CTR/CVR/CPA 분석 · LTV/업셀링 기초' },
+          { week: '4주차', date: '5/15 (금)', time: '7:00-10:00PM', title: '외부 연사 오프라인 특강 (윤자동 님)', optional: true },
+          { week: '', date: '5/17 (일)', time: '당일까지', title: '최종 세일즈 성과표 제출 데드라인' },
+        ],
+      },
+      {
+        id: 'self_inquiry', label: '나 탐구 트랙', weekday: '월요일',
+        tagline: '나다움 발견 → 퍼스널 브랜딩 → 실제 강연까지, 4주 만에 무대 위로',
+        target: '본인의 정체성·메시지를 정리하고 싶은 분, 강연·콘텐츠 시작이 막막한 분',
+        weeks: [
+          { week: '1주차', date: '4/20 (월)', time: '8:00-9:30PM', title: '발견', detail: '나다움 찾기 (라이브) · 진단 결과 리뷰 · 이키가이 분석' },
+          { week: '2주차', date: '4/27 (월)', time: '8:00-9:30PM', title: '실행', detail: '브랜딩과 콘텐츠 설계 · 퍼스널 브랜딩 · 강연 자료 제작' },
+          { week: '3주차', date: '5/6 (수)', time: '8:00-10:00PM', title: '기록', detail: '강연 발표 및 피드백 (라이브) · 발표 연습 · 강연 확정본 완성' },
+          { week: '4주차', date: '5/11 (월)', time: '7:30-9:30PM', title: '공명', detail: '최종 발표와 회고 · 외부 강연장에서 강연 발표' },
+        ],
+      },
+      {
+        id: 'builder_advanced', label: '빌더 심화 트랙', weekday: '화요일',
+        tagline: 'Cursor·Vooster로 MVP 만들고, 배포까지 직접. 코딩 경험자를 위한 4주',
+        target: '바이브코딩 경험이 있고 본인의 MVP를 본격적으로 출시하고 싶은 분',
+        coach: '인디해커 성구님',
+        weeks: [
+          { week: '1주차', date: '4/21 (화)', time: '8:00-9:00PM', title: '바이브코딩 중급자의 환경 설정하기' },
+          { week: '1주차', date: '4/23 (목)', time: '8:00-10:00PM', title: '1:1 컨설팅 및 QnA (w/성구님)', optional: true },
+          { week: '2주차', date: '4/28 (화)', time: '8:00-9:00PM', title: 'Cursor, Vooster로 나만의 MVP 만들기' },
+          { week: '3주차', date: '5/5 (화)', time: '8:00-9:00PM', title: 'MVP 디버깅하기 + 출시하기' },
+          { week: '4주차', date: '5/12 (화)', time: '8:00-9:00PM', title: 'Github·Vercel 배포, 도메인 구매 + 보안 검토' },
+          { week: '4주차', date: '5/15 (금)', time: '7:00-10:00PM', title: '외부 연사 오프라인 특강 (윤자동 님)', optional: true },
+        ],
+      },
+      {
+        id: 'builder_basic', label: '빌더 기초 트랙', weekday: '화요일',
+        tagline: 'Lovable로 첫 SaaS를 4주 안에. 결제 연동까지 한 사이클 완주',
+        target: '코딩 처음이지만 본인의 SaaS 아이디어를 출시까지 끌고 가고 싶은 분',
+        coach: '인디해커 성구님',
+        weeks: [
+          { week: '1주차', date: '4/21 (화)', time: '8:00-9:00PM', title: '바이브코딩 아이디어 선정 & 초기 세팅', detail: 'Deep Research · PRD · Lovable 첫 페이지 · GitHub/Vercel/Supabase 세팅' },
+          { week: '1주차', date: '4/23 (목)', time: '8:00-10:00PM', title: '무엇이든 물어보세요 (w/빌더 코치 성구님)', optional: true },
+          { week: '2주차', date: '4/28 (화)', time: '8:00-9:00PM', title: '핵심 기능 구현 (로그인 + AI)', detail: 'Supabase DB + 로그인 · AI API 연동 · 무료/유료 티어 + 가격 페이지' },
+          { week: '3주차', date: '5/5 (화)', time: '8:00-9:00PM', title: '디자인 업그레이드 + 결제 연동', detail: 'Magic MCP 디자인 · Toss Payments · 결제 후 DB 반영 + 기능 제어' },
+          { week: '4주차', date: '5/12 (화)', time: '8:00-9:00PM', title: '배포, 런칭 전 준비사항', detail: 'SEO/메타태그 · 도메인 · Vercel Analytics · Cursor 이관' },
+          { week: '4주차', date: '5/15 (금)', time: '7:00-10:00PM', title: '외부 연사 오프라인 특강 (윤자동 님)', optional: true },
+        ],
+      },
+      {
+        id: 'ai_agent', label: 'AI 에이전트 트랙', weekday: '수요일',
+        tagline: 'Claude Code의 스킬·MCP·서브에이전트로 만드는 100% 자동화 시스템',
+        target: '반복 업무를 AI로 자동화하고 싶은 분, 멀티 에이전트 시스템에 입문하고 싶은 분',
+        weeks: [
+          { week: '1주차', date: '4/22 (수)', time: '8:00-9:30PM', title: '클로드 코드 기초, 스킬을 통한 PPT 자동화 구현', detail: 'Claude Code 기본 · 스킬 시스템 · 멀티 에이전트 시작 · PPT 자동 생성' },
+          { week: '2주차', date: '4/29 (수)', time: '8:00-9:30PM', title: '멀티에이전트로 리드마그넷 만들기', detail: '서브 에이전트 · 스킬 + MCP · 리드마그넷 자동 제작' },
+          { week: '3주차', date: '5/6 (수)', time: '8:00-9:30PM', title: 'MCP를 통한 더욱 강력한 자동화', detail: 'Notion·Slack 연결 · Sub-agent + Skills + MCP 조합' },
+          { week: '4주차', date: '5/13 (수)', time: '8:00-9:30PM', title: '플러그인 + 예약을 통한 100% 자동화', detail: '플러그인 · Cowork 실습' },
+          { week: '4주차', date: '5/15 (금)', time: '7:00-10:00PM', title: '외부 연사 오프라인 특강 (윤자동 님)', optional: true },
+        ],
+      },
+      {
+        id: 'creator', label: '크리에이터 트랙', weekday: '수요일',
+        tagline: '롱폼·숏폼 글쓰기와 AI 자동화로 본인 채널의 구독을 만들어내는 4주',
+        target: '본인 콘텐츠 채널을 시작·강화하고 싶은 분 (글쓰기 위주)',
+        variants: [{ id: 'short_only', label: '숏폼만' }, { id: 'short_long', label: '숏폼 + 롱폼' }],
+        weeks: [
+          { week: '1주차', date: '4/22 (수)', time: '8:00-9:30PM', title: '구독을 불러일으키는 롱폼 글쓰기' },
+          { week: '2주차', date: '4/29 (수)', time: '8:00-9:30PM', title: '마음을 움직이는 숏폼 글쓰기' },
+          { week: '3주차', date: '5/6 (수)', time: '8:00-9:30PM', title: 'AI를 활용한 글쓰기 및 자동화 방법' },
+          { week: '4주차', date: '5/15 (금)', time: '7:00-10:00PM', title: '외부 연사 오프라인 특강 (윤자동 님)', optional: true },
+        ],
+      },
+      {
+        id: 'app_dev', label: '앱 개발 트랙', weekday: '목요일',
+        tagline: 'Flutter + 안티그라비티로 서버 없는 앱을 만들고 마켓에 등록까지',
+        target: '앱 출시를 직접 해보고 싶고, AI 기반 모바일 앱에 관심 있는 분',
+        weeks: [
+          { week: '1주차', date: '4/23 (목)', time: '9:00-10:00PM', title: '진행 일정 소개 & 개념 강의', detail: '깃헙·개발환경·언어·백엔드·프론트 · AI 기반 PRD · 안티그라비티 + 플러터 세팅' },
+          { week: '2주차', date: '4/30 (목)', time: '9:00-10:00PM', title: '서버가 없는 앱 제작', detail: '플러터 UI/권한/API · 안티그라비티 라이브 코딩' },
+          { week: '3주차', date: '5/7 (목)', time: '9:00-10:00PM', title: '수익화 방법: 애드몹 광고', detail: '디버깅 방법론 · 정기 결제 vs 광고 · 광고 유형' },
+          { week: '4주차', date: '5/14 (목)', time: '9:00-10:00PM', title: '배포 기본 개념, 마켓 등록하기', detail: '패키지 이름·버전 · iOS/AOS 마켓 계정 만들고 등록' },
+          { week: '4주차', date: '5/15 (금)', time: '7:00-10:00PM', title: '외부 연사 오프라인 특강 (윤자동 님)', optional: true },
+        ],
+      },
+    ];
+
+    const PREOPEN_LIGHT_TRACKS = [
+      { parent: '크리에이터', label: '크리에이터 라이트 (숏폼)', note: '숏폼 글쓰기에 집중한 가벼운 코스' },
+      { parent: '크리에이터', label: '크리에이터 라이트 (롱폼)', note: '롱폼 글쓰기 중심의 라이트 코스' },
+      { parent: '빌더', label: '빌더 라이트 (기초)', note: 'Lovable 기반 가벼운 빌더 입문' },
+      { parent: '빌더', label: '빌더 라이트 (심화)', note: 'Cursor 기반 가벼운 중급자 코스' },
+    ];
+
+    function escHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function getWeeklyHighlights(weeks) {
+      const seen = new Set();
+      const out = [];
+      for (const w of weeks) {
+        if (!w.week || w.optional) continue;
+        if (seen.has(w.week)) continue;
+        seen.add(w.week);
+        out.push(w);
+      }
+      return out;
+    }
+
+    function renderTrackSection(track, index) {
+      const altBg = index % 2 === 0 ? 'bg-canvas' : 'bg-surface';
+      const highlights = getWeeklyHighlights(track.weeks);
+
+      const metaCells = [
+        `<div><div class="text-eyebrow mb-2">요일</div><p class="text-[14px] text-ink font-medium">${escHtml(track.weekday)}</p></div>`,
+        `<div class="md:col-span-2"><div class="text-eyebrow mb-2">대상</div><p class="text-[14px] text-ink leading-relaxed">${escHtml(track.target)}</p></div>`,
+      ];
+      if (track.coach) {
+        metaCells.push(`<div><div class="text-eyebrow mb-2">코치</div><p class="text-[14px] text-ink">${escHtml(track.coach)}</p></div>`);
+      } else if (track.variants) {
+        const v = track.variants.map(x => escHtml(x.label)).join(' / ');
+        metaCells.push(`<div><div class="text-eyebrow mb-2">2차 선택</div><p class="text-[14px] text-ink">${v}</p></div>`);
+      }
+
+      const variantsRow = (track.variants && track.coach)
+        ? `<div class="mt-4 pt-4 border-t border-border-hair"><span class="text-eyebrow mr-3">2차 선택</span><span class="text-[14px] text-ink">${track.variants.map(x => escHtml(x.label)).join(' / ')}</span></div>`
+        : '';
+
+      const highlightsHtml = highlights.map((w, i) => `
+        <li class="flex items-start gap-4 md:gap-6">
+          <div class="shrink-0 w-11 h-11 md:w-12 md:h-12 rounded-md bg-navy text-white flex items-center justify-center font-bold tabular-nums text-sm md:text-base">${String(i + 1).padStart(2, '0')}</div>
+          <div class="flex-1 pt-1.5 min-w-0">
+            <h3 class="text-lg md:text-xl font-bold text-ink leading-snug">${escHtml(w.title)}</h3>
+            ${w.detail ? `<p class="mt-2 text-[13px] md:text-[14px] text-ink-muted leading-relaxed">${escHtml(w.detail)}</p>` : ''}
+          </div>
+        </li>`).join('');
+
+      const tableRows = track.weeks.map(w => `
+        <tr class="border-b border-border-hair last:border-0 align-top">
+          <td class="px-3 md:px-4 py-3 text-navy font-semibold tabular-nums">${escHtml(w.week || '—')}</td>
+          <td class="px-3 md:px-4 py-3 text-ink-muted tabular-nums">${escHtml(w.date)}</td>
+          <td class="px-3 md:px-4 py-3 text-ink-muted tabular-nums whitespace-nowrap">${escHtml(w.time)}</td>
+          <td class="px-3 md:px-4 py-3 text-ink">
+            <div class="flex items-start gap-2 flex-wrap">
+              <span class="leading-snug font-medium">${escHtml(w.title)}</span>
+              ${w.optional ? '<span class="shrink-0 inline-flex items-center rounded bg-surface px-1.5 py-0.5 text-[10px] font-semibold text-ink-soft">선택</span>' : ''}
+            </div>
+            ${w.detail ? `<p class="mt-1.5 text-[12px] text-ink-soft leading-relaxed">${escHtml(w.detail)}</p>` : ''}
+          </td>
+        </tr>`).join('');
+
+      return `
+        <section id="preopen-track-${track.id}" class="${altBg} border-b border-border-hair scroll-mt-16">
+          <div class="max-w-4xl mx-auto px-5 md:px-8 py-16 md:py-24">
+            <h2 class="text-4xl md:text-5xl font-bold tracking-tight text-ink leading-[1.08]">${escHtml(track.label)}</h2>
+            <p class="mt-6 text-lg md:text-xl text-ink-muted leading-relaxed max-w-3xl">${escHtml(track.tagline)}</p>
+
+            <div class="mt-10 pt-8 border-t border-border-hair grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
+              ${metaCells.join('')}
+            </div>
+            ${variantsRow}
+
+            <div class="mt-14">
+              <div class="text-eyebrow mb-6">4주 커리큘럼</div>
+              <ol class="space-y-5">${highlightsHtml}</ol>
+            </div>
+
+            <details class="mt-12 group">
+              <summary class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border-strong bg-canvas text-[13px] font-semibold text-ink hover:bg-surface transition-colors cursor-pointer list-none select-none">
+                <span class="group-open:hidden">전체 일정 + 컨설팅·외부 특강 보기 ▼</span>
+                <span class="hidden group-open:inline">전체 일정 접기 ▲</span>
+              </summary>
+              <div class="mt-5 rounded-lg border border-border-hair bg-canvas overflow-hidden">
+                <table class="w-full text-[13px]">
+                  <thead>
+                    <tr class="text-ink-soft border-b border-border-hair">
+                      <th class="text-left font-medium px-3 md:px-4 py-3 w-[16%]">주차</th>
+                      <th class="text-left font-medium px-3 md:px-4 py-3 w-[18%]">날짜</th>
+                      <th class="text-left font-medium px-3 md:px-4 py-3 w-[22%]">시간</th>
+                      <th class="text-left font-medium px-3 md:px-4 py-3">세션</th>
+                    </tr>
+                  </thead>
+                  <tbody>${tableRows}</tbody>
+                </table>
+              </div>
+            </details>
+          </div>
+        </section>`;
+    }
+
+    function renderPreopenLight() {
+      return `
+        <section class="bg-canvas border-b border-border-hair">
+          <div class="max-w-4xl mx-auto px-5 md:px-8 py-16 md:py-24">
+            <div class="flex items-center gap-4 mb-6">
+              <span class="text-eyebrow text-navy">Light Tracks</span>
+              <span class="h-px flex-1 bg-border-strong max-w-[80px]"></span>
+              <span class="text-[12px] text-ink-muted">재참여자 전용</span>
+            </div>
+            <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-ink leading-[1.1]">가볍게 추가하는 라이트 트랙</h2>
+            <p class="mt-5 text-lg text-ink-muted leading-relaxed max-w-3xl">
+              재참여자만 선택 가능. 정규 트랙과 <strong class="text-ink">동시 수강 가능</strong>하고, 라이트끼리도 복수 선택할 수 있습니다.
+            </p>
+            <div class="mt-10 grid grid-cols-1 md:grid-cols-2 gap-3">
+              ${PREOPEN_LIGHT_TRACKS.map(lt => `
+                <div class="card-hairline p-5">
+                  <div class="text-eyebrow mb-2">${escHtml(lt.parent)}</div>
+                  <div class="text-[18px] font-bold text-ink">${escHtml(lt.label)}</div>
+                  <p class="mt-2 text-[13px] text-ink-muted leading-relaxed">${escHtml(lt.note)}</p>
+                </div>`).join('')}
+            </div>
+          </div>
+        </section>`;
+    }
+
+    // 트랙 미리보기는 view-tracks 한 곳에 단일 렌더
+    function renderTracksView() {
+      const tracksEl = document.getElementById('tracks-list');
+      const lightEl = document.getElementById('tracks-light');
+      if (tracksEl) tracksEl.innerHTML = PREOPEN_TRACKS.map((t, i) => renderTrackSection(t, i)).join('');
+      if (lightEl) lightEl.innerHTML = renderPreopenLight();
+    }
+    renderTracksView();
+
+    // ============================================================
+    // view-tracks 네비게이션
+    // - data-open-tracks 버튼 클릭 → 현재 view 저장하고 view-tracks로 전환
+    // - data-back-from-tracks 클릭 → 이전 view로 복귀
+    // ============================================================
+    let _previousState = 'logout';
+
+    function getCurrentStateKey() {
+      // 현재 보이는 .view 중에서 stateKey를 추출 (id가 'view-XYZ' 형식)
+      for (const v of views) {
+        if (!v.classList.contains('hidden-view') && v.id.startsWith('view-')) {
+          return v.id.replace('view-', '');
+        }
+      }
+      return null;
+    }
+
+    function showTracksView() {
+      const cur = getCurrentStateKey();
+      if (cur && cur !== 'tracks') _previousState = cur;
+      views.forEach(v => v.classList.add('hidden-view'));
+      document.getElementById('view-tracks').classList.remove('hidden-view');
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }
+
+    function backFromTracksView() {
+      // 이전 state가 STATES에 있으면 applyState로 복원, 아니면 logout으로
+      if (STATES[_previousState]) {
+        applyState(_previousState);
+      } else {
+        applyState('logout');
+      }
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }
+
+    document.addEventListener('click', (e) => {
+      const openBtn = e.target.closest('[data-open-tracks]');
+      if (openBtn) { e.preventDefault(); showTracksView(); return; }
+      const backBtn = e.target.closest('[data-back-from-tracks]');
+      if (backBtn) { e.preventDefault(); backFromTracksView(); return; }
+    });
+
+    // ============================================================
+    // view-group-preview — 조 배정 미리보기
+    // - 관리자 페이지의 [조 배정 미리보기 ↗] 버튼 → window.open 으로 새 창
+    //   같은 mockup 페이지를 #group-preview 해시와 함께 열어 직접 진입
+    // - 새 창이 아닌 같은 창에서도 (data-open-group-preview 직접 클릭 시)
+    //   view 전환으로 진입 가능
+    // ============================================================
+
+    /** weekday 트랙 멤버 + 조장 여부 + 크리에이터 sub */
+    function gpGetWeekdayMembers(trackId) {
+      return MOCK_MEMBERS.filter(m =>
+        m.tracks.some(t => t.type === 'weekday' && t.id === trackId)
+      ).map(m => {
+        const t = m.tracks.find(tt => tt.type === 'weekday' && tt.id === trackId);
+        return { member: m, leader: !!t.leader, creatorSub: t.creatorSub || null };
+      });
+    }
+
+    /** light 트랙 멤버 */
+    function gpGetLightMembers(trackId) {
+      return MOCK_MEMBERS.filter(m =>
+        m.tracks.some(t => t.type === 'light' && t.id === trackId)
+      ).map(m => ({ member: m, leader: false, creatorSub: null }));
+    }
+
+    /** 조장 우선 1명 + 일반 4명을 1조로 하여 size(=5)명씩 분할 */
+    function gpChunk(entries, size = 5) {
+      const leaders = entries.filter(e => e.leader);
+      const others = entries.filter(e => !e.leader);
+      const total = entries.length;
+      const numGroups = Math.max(1, Math.ceil(total / size));
+      const groups = Array.from({ length: numGroups }, () => []);
+
+      // 1단계: 조장 1명씩 각 조에 배치
+      leaders.slice(0, numGroups).forEach((l, i) => groups[i].push(l));
+
+      // 2단계: 일반 멤버를 size 가 찰 때까지 라운드로빈
+      let gi = 0;
+      others.forEach(o => {
+        let safety = 0;
+        while (groups[gi].length >= size && safety < numGroups) {
+          gi = (gi + 1) % numGroups;
+          safety++;
+        }
+        groups[gi].push(o);
+        gi = (gi + 1) % numGroups;
+      });
+
+      // 3단계: 남은 조장은 빈자리 우선 채움
+      leaders.slice(numGroups).forEach(l => {
+        const slot = groups.findIndex(g => g.length < size);
+        if (slot >= 0) groups[slot].push(l);
+        else groups[groups.length - 1].push(l);
+      });
+
+      return groups;
+    }
+
+    /** 트랙 탭 정의 (정규 7개 + 라이트 2개 그룹) */
+    const GP_TABS = [
+      { id: 'creator',          label: '크리에이터',        kind: 'weekday' },
+      { id: 'builder_basic',    label: '빌더 기초',         kind: 'weekday' },
+      { id: 'builder_advanced', label: '빌더 심화',         kind: 'weekday' },
+      { id: 'sales_real',       label: '세일즈 실전',       kind: 'weekday' },
+      { id: 'ai_agent',         label: 'AI 에이전트',       kind: 'weekday' },
+      { id: 'app_dev',          label: '앱 개발',           kind: 'weekday' },
+      { id: 'self_inquiry',     label: '나 탐구',           kind: 'weekday' },
+      { id: 'creator_light',    label: '크리에이터 라이트', kind: 'light_group' },
+      { id: 'builder_light',    label: '빌더 라이트',       kind: 'light_group' },
+    ];
+
+    let _gpActiveTrack = null;
+    /** 트랙별 조 배정 상태: { tabId: [[memberId, ...], ...] } */
+    const _gpAssignments = {};
+    /** 트랙별 조장 원본 스냅샷: { "memberId|trackId": bool } — 초기화용 */
+    const _gpOriginalLeaders = {};
+    let _gpDirty = false;
+
+    function gpGetTabEntries(tab) {
+      if (tab.kind === 'weekday') return gpGetWeekdayMembers(tab.id);
+      const lightIds = LIGHT_TAB_MAP[tab.id] || [];
+      return lightIds.flatMap(id => gpGetLightMembers(id));
+    }
+
+    /** 탭 배지에 보일 조 개수: 배정 상태가 있으면 그 길이, 없으면 자동 산출 */
+    function gpGetGroupCount(tab) {
+      if (_gpAssignments[tab.id]) return _gpAssignments[tab.id].length;
+      const n = gpGetTabEntries(tab).length;
+      return n === 0 ? 0 : Math.ceil(n / 5);
+    }
+
+    /** 첫 진입 시 자동 분할 결과를 저장 (이후 drag/drop 으로 변형) */
+    function gpEnsureAssignment(tab) {
+      if (_gpAssignments[tab.id]) return _gpAssignments[tab.id];
+      const entries = gpGetTabEntries(tab);
+      const groups = gpChunk(entries, 5);
+      _gpAssignments[tab.id] = groups.map(g => g.map(e => e.member.id));
+      // 빈 트랙 — 최소 1개 빈 조는 갖도록 (드롭 타겟 제공)
+      if (_gpAssignments[tab.id].length === 0) _gpAssignments[tab.id].push([]);
+      return _gpAssignments[tab.id];
+    }
+
+    /** 활성 트랙의 조장 원본 스냅샷 (없을 때만 저장) */
+    function gpEnsureLeaderSnapshot(tab) {
+      if (tab.kind !== 'weekday') return;
+      MOCK_MEMBERS.forEach(m => {
+        const t = m.tracks.find(tt => tt.type === 'weekday' && tt.id === tab.id);
+        if (!t) return;
+        const key = m.id + '|' + tab.id;
+        if (!(key in _gpOriginalLeaders)) _gpOriginalLeaders[key] = !!t.leader;
+      });
+    }
+
+    /** memberId 를 entry({ member, leader, creatorSub }) 형태로 변환 */
+    function gpResolveEntry(memberId, tab) {
+      const m = MOCK_MEMBERS.find(x => x.id === memberId);
+      if (!m) return null;
+      if (tab.kind === 'weekday') {
+        const t = m.tracks.find(tt => tt.type === 'weekday' && tt.id === tab.id);
+        // 다른 트랙에서 옮겨온 멤버일 수 있음 — 그래도 행은 보여줌 (조장은 false)
+        return { member: m, leader: t ? !!t.leader : false, creatorSub: t?.creatorSub || null };
+      }
+      return { member: m, leader: false, creatorSub: null };
+    }
+
+    function gpToggleLeader(memberId, tab) {
+      if (tab.kind !== 'weekday') return;
+      const m = MOCK_MEMBERS.find(x => x.id === memberId);
+      if (!m) return;
+      let t = m.tracks.find(tt => tt.type === 'weekday' && tt.id === tab.id);
+      // 옮겨온 멤버라 트랙 항목이 없으면 추가
+      if (!t) {
+        t = { type: 'weekday', id: tab.id, leader: false };
+        m.tracks.push(t);
+      }
+      t.leader = !t.leader;
+      _gpDirty = true;
+      gpRenderCards();
+      gpRefreshDirty();
+    }
+
+    function gpMoveMember(memberId, fromIdx, toIdx, tab) {
+      if (fromIdx === toIdx) return;
+      const groups = gpEnsureAssignment(tab);
+      const src = groups[fromIdx];
+      const dst = groups[toIdx];
+      if (!src || !dst) return;
+      const i = src.indexOf(memberId);
+      if (i < 0) return;
+      src.splice(i, 1);
+      dst.push(memberId);
+      _gpDirty = true;
+      gpRenderCards();
+      gpRenderTabs();
+      gpRefreshDirty();
+    }
+
+    function gpAddNewGroup(tab) {
+      const groups = gpEnsureAssignment(tab);
+      groups.push([]);
+      _gpDirty = true;
+      gpRenderCards();
+      gpRenderTabs();
+      gpRefreshDirty();
+    }
+
+    function gpRemoveEmptyGroup(idx, tab) {
+      const groups = gpEnsureAssignment(tab);
+      if (!groups[idx] || groups[idx].length > 0) return;
+      if (groups.length <= 1) return;
+      groups.splice(idx, 1);
+      _gpDirty = true;
+      gpRenderCards();
+      gpRenderTabs();
+      gpRefreshDirty();
+    }
+
+    function gpResetCurrentTab() {
+      const tab = GP_TABS.find(t => t.id === _gpActiveTrack);
+      if (!tab) return;
+      delete _gpAssignments[tab.id];
+      if (tab.kind === 'weekday') {
+        MOCK_MEMBERS.forEach(m => {
+          const t = m.tracks.find(tt => tt.type === 'weekday' && tt.id === tab.id);
+          if (!t) return;
+          const key = m.id + '|' + tab.id;
+          if (key in _gpOriginalLeaders) t.leader = _gpOriginalLeaders[key];
+        });
+      }
+      _gpDirty = Object.keys(_gpAssignments).length > 0;
+      gpRenderCards();
+      gpRenderTabs();
+      gpRefreshDirty();
+    }
+
+    function gpRefreshDirty() {
+      const flag = document.getElementById('gp-dirty-flag');
+      if (flag) flag.classList.toggle('hidden', !_gpDirty);
+    }
+
+    // ============================================================
+    // 조 배정 완료 — Notion + Discord 자동 배정 (모달 3단계)
+    // ⚠️ MOCKUP_MODE = true 인 동안에는 어떠한 외부 API 호출도 발생하지 않습니다.
+    //   진행 단계는 setTimeout 으로 시뮬레이션될 뿐이며, Notion / Discord
+    //   API 호출 코드를 추가할 때는 반드시 이 플래그를 false 로 바꾸고
+    //   실제 백엔드 엔드포인트를 통해 호출해야 합니다.
+    // ============================================================
+    // track-bot Flask 가 같은 origin 에서 API 도 처리.
+    const GP_API_BASE = '';
+    const GP_TEST_MEMBER_DB_ID = '3566400e9268808e9b0ae23a1231e809';
+    // 주의: .env.test 의 GROUP_PREVIEW_TEST_GROUP_DB_ID 와 일치해야 함.
+    const GP_TEST_GROUP_DB_ID = '3586400e926881d4be9ad3b98e879460';
+    const GP_TEST_COHORT_LABEL = COHORT_LABEL;
+    const MOCKUP_MODE = false;
+    const GP_GROUP_DB_NAME_MAP = {
+      sales_real: '세일즈 실전 트랙',
+      self_inquiry: '나 다움 트랙',
+      builder_advanced: '빌더 심화 트랙',
+      builder_basic: '빌더 기초 트랙',
+      ai_agent: 'AI 에이전트 트랙',
+      creator: '크리에이터 트랙',
+      app_dev: '앱 개발 트랙',
+      creator_light: '크리에이터 라이트 트랙',
+      builder_light: '빌더 라이트 트랙',
+    };
+
+    function gpUnique(values) {
+      return [...new Set(values.filter(Boolean))];
+    }
+
+    function gpBuildMemberTrackNames(member) {
+      const names = [];
+      member.tracks.forEach(track => {
+        if (track.type === 'weekday') {
+          if (track.id === 'creator') {
+            names.push('크리에이터 숏폼 트랙');
+            if (track.creatorSub === 'short_long') names.push('크리에이터 롱폼 트랙');
+          } else if (track.id === 'sales_real') {
+            names.push('세일즈 실전 트랙');
+          } else if (track.id === 'self_inquiry') {
+            names.push('나 다움 트랙');
+          } else if (track.id === 'builder_advanced') {
+            names.push('빌더 심화 트랙');
+          } else if (track.id === 'builder_basic') {
+            names.push('빌더 기초 트랙');
+          } else if (track.id === 'ai_agent') {
+            names.push('AI 에이전트 트랙');
+          } else if (track.id === 'app_dev') {
+            names.push('앱 개발 트랙');
+          }
+          return;
+        }
+        if (track.id === 'creator_light_short') names.push('크리에이터 라이트 트랙 (숏폼)');
+        if (track.id === 'creator_light_long') names.push('크리에이터 라이트 트랙 (롱폼)');
+        if (track.id === 'builder_light_basic') names.push('빌더 라이트 트랙 (기초)');
+        if (track.id === 'builder_light_adv') names.push('빌더 라이트 트랙 (심화)');
+      });
+      return gpUnique(names);
+    }
+
+    function gpBuildGroupRowTrackName(tab, entry) {
+      if (tab.id === 'creator') {
+        return entry.creatorSub === 'short_long'
+          ? '크리에이터 숏폼+롱폼'
+          : '크리에이터 숏폼';
+      }
+      if (tab.id === 'creator_light') {
+        const lightTrack = entry.member.tracks.find(t => t.type === 'light' && LIGHT_TAB_MAP.creator_light.includes(t.id));
+        if (lightTrack?.id === 'creator_light_short') return '크리에이터 라이트 트랙 (숏폼)';
+        if (lightTrack?.id === 'creator_light_long') return '크리에이터 라이트 트랙 (롱폼)';
+      }
+      if (tab.id === 'builder_light') {
+        const lightTrack = entry.member.tracks.find(t => t.type === 'light' && LIGHT_TAB_MAP.builder_light.includes(t.id));
+        if (lightTrack?.id === 'builder_light_basic') return '빌더 라이트 트랙 (기초)';
+        if (lightTrack?.id === 'builder_light_adv') return '빌더 라이트 트랙 (심화)';
+      }
+      return GP_GROUP_DB_NAME_MAP[tab.id] || tab.label;
+    }
+
+    function gpBuildCommitPayload() {
+      const members = MOCK_MEMBERS.map(member => ({
+        id: getMemberIdentityKey(member),
+        userId: getMemberIdentityKey(member),
+        name: getMemberDisplayName(member),
+        handle: member.handle,
+        initials: member.initials,
+        avatarUrl: member.avatarUrl || '',
+        edits: member.edits,
+        submitted: member.submitted,
+        submittedAt: member.submittedAt || null,
+        notes: member.notes || '',
+        tracks: Array.isArray(member.tracks) ? member.tracks.map(track => ({ ...track })) : [],
+        trackNames: gpBuildMemberTrackNames(member),
+      }));
+
+      const tracks = GP_TABS.map(tab => {
+        const groupDbName = GP_GROUP_DB_NAME_MAP[tab.id] || tab.label;
+        const groups = gpEnsureAssignment(tab)
+          .map((memberIds, idx) => ({
+            name: `${GP_TEST_COHORT_LABEL} ${idx + 1}조`,
+            members: memberIds
+              .map(memberId => gpResolveEntry(memberId, tab))
+              .filter(Boolean)
+              .map(entry => ({
+                id: getMemberIdentityKey(entry.member),
+                userId: getMemberIdentityKey(entry.member),
+                name: getMemberDisplayName(entry.member),
+                handle: entry.member.handle,
+                leader: !!entry.leader,
+                rowTrackName: gpBuildGroupRowTrackName(tab, entry),
+              })),
+          }))
+          .filter(group => group.members.length > 0);
+
+        return {
+          tabId: tab.id,
+          tabLabel: tab.label,
+          groupDbName,
+          groups,
+        };
+      }).filter(track => track.groups.length > 0);
+
+      return {
+        target: 'notion-test',
+        cohortLabel: GP_TEST_COHORT_LABEL,
+        memberDbId: GP_TEST_MEMBER_DB_ID,
+        groupDbId: GP_TEST_GROUP_DB_ID,
+        members,
+        tracks,
+      };
+    }
+
+    /** 외부 API 호출 진입점 */
+    async function gpCallSyncApi(payload) {
+      if (MOCKUP_MODE) {
+        console.warn('[조 배정 목업] 외부 API 호출 차단됨 — Notion/Discord 에 실제 변경 없음');
+        return { mocked: true };
+      }
+
+      const response = await fetch(`${GP_API_BASE}/api/mockups/group-preview/commit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.status !== 'success') {
+        throw new Error(data.message || '테스트 Notion 반영에 실패했습니다.');
+      }
+      return data;
+    }
+
+    let _gpFinishTimers = [];
+
+    function gpComputeFinishSummary() {
+      let totalGroups = 0, totalMembers = 0, totalLeaders = 0;
+      const trackBreakdown = [];
+      GP_TABS.forEach(tab => {
+        const entries = gpGetTabEntries(tab);
+        if (!entries.length) return;
+        const memberIdGroups = _gpAssignments[tab.id]
+          || gpChunk(entries, 5).map(g => g.map(e => e.member.id));
+        const groupCount = memberIdGroups.filter(g => g.length > 0).length || memberIdGroups.length;
+        totalGroups += groupCount;
+        totalMembers += entries.length;
+        if (tab.kind === 'weekday') totalLeaders += entries.filter(e => e.leader).length;
+        trackBreakdown.push({ tab, groups: memberIdGroups, groupCount });
+      });
+      return { totalGroups, totalMembers, totalLeaders, trackBreakdown };
+    }
+
+    function gpOpenFinishModal() {
+      const sum = gpComputeFinishSummary();
+      if (sum.totalMembers === 0) {
+        alert('아직 배정된 멤버가 없습니다.');
+        return;
+      }
+      document.getElementById('gp-confirm-notion-groups').textContent   = sum.totalGroups;
+      document.getElementById('gp-confirm-notion-members').textContent  = sum.totalMembers;
+      document.getElementById('gp-confirm-discord-channels').textContent = sum.totalGroups + (sum.trackBreakdown.length * 2);
+      document.getElementById('gp-confirm-leaders').textContent         = sum.totalLeaders;
+      document.getElementById('gp-confirm-roles').textContent           = sum.totalMembers;
+      document.getElementById('gp-finish-summary').textContent =
+        `총 ${sum.totalGroups}개 조 · ${sum.totalMembers}명 · 조장 ${sum.totalLeaders}명에 대해 다음 작업이 자동으로 실행됩니다.`;
+
+      // 모든 단계 hidden 초기화 후 confirm만 표시
+      document.getElementById('gp-finish-step-confirm').classList.remove('hidden-view');
+      document.getElementById('gp-finish-step-progress').classList.add('hidden-view');
+      document.getElementById('gp-finish-step-success').classList.add('hidden-view');
+      document.getElementById('gp-finish-modal').classList.remove('hidden-view');
+    }
+
+    function gpCloseFinishModal() {
+      // 진행 중 timer 모두 취소
+      _gpFinishTimers.forEach(t => clearTimeout(t));
+      _gpFinishTimers = [];
+      document.getElementById('gp-finish-modal').classList.add('hidden-view');
+    }
+
+    function gpResetProgressUI() {
+      document.querySelectorAll('#gp-progress-list li').forEach(li => {
+        const icon  = li.querySelector('.gp-step-icon');
+        const label = li.querySelector('.gp-step-label');
+        const det   = li.querySelector('.gp-step-detail');
+        icon.innerHTML = '○';
+        icon.className = 'gp-step-icon w-5 h-5 inline-flex items-center justify-center text-ink-soft';
+        label.className = 'gp-step-label flex-1 text-ink-muted';
+        det.textContent = '대기';
+        det.className = 'gp-step-detail text-[11px] text-ink-soft tabular-nums';
+      });
+    }
+
+    function gpUpdateProgressStep(stepKey, state, detailText) {
+      const li = document.querySelector(`#gp-progress-list li[data-step="${stepKey}"]`);
+      if (!li) return;
+      const icon  = li.querySelector('.gp-step-icon');
+      const label = li.querySelector('.gp-step-label');
+      const det   = li.querySelector('.gp-step-detail');
+      if (state === 'running') {
+        icon.innerHTML = '<span class="gp-spinner"></span>';
+        icon.className = 'gp-step-icon w-5 h-5 inline-flex items-center justify-center';
+        label.className = 'gp-step-label flex-1 text-ink font-semibold';
+        det.textContent = '진행 중...';
+        det.className = 'gp-step-detail text-[11px] text-navy tabular-nums font-semibold';
+      } else if (state === 'done') {
+        icon.innerHTML = '✓';
+        icon.className = 'gp-step-icon w-5 h-5 inline-flex items-center justify-center text-ok font-bold';
+        label.className = 'gp-step-label flex-1 text-ink';
+        det.textContent = detailText || '완료';
+        det.className = 'gp-step-detail text-[11px] text-ok tabular-nums font-semibold';
+      }
+    }
+
+    async function gpStartFinishProcess() {
+      const sum = gpComputeFinishSummary();
+      const payload = gpBuildCommitPayload();
+      gpResetProgressUI();
+      document.getElementById('gp-finish-step-confirm').classList.add('hidden-view');
+      document.getElementById('gp-finish-step-progress').classList.remove('hidden-view');
+
+      try {
+        gpUpdateProgressStep('notion', 'running');
+        const result = await gpCallSyncApi(payload);
+        const summary = result?.summary || {};
+        const discord = summary.discord || {};
+        const createdChannels =
+          (discord.categories_created || 0) +
+          (discord.announcement_channels_created || 0) +
+          (discord.assignment_channels_created || 0) +
+          (discord.group_channels_created || 0);
+
+        gpUpdateProgressStep('notion', 'done', `${summary.group_databases_created || sum.totalGroups}개 조 DB`);
+        gpUpdateProgressStep('roles', 'done', `${discord.roles_created || 0}개 생성 · ${discord.roles_assigned || 0}명 부여`);
+        gpUpdateProgressStep('channels', 'done', `${createdChannels}개 생성`);
+        gpUpdateProgressStep('invite', 'done', `역할 기반 접근 ${discord.roles_assigned || 0}명 반영`);
+
+        gpShowFinishSuccess(sum, result);
+      } catch (err) {
+        console.error('[조 배정] API 호출 실패:', err);
+        alert(`테스트 Notion/Discord 반영 실패: ${err?.message || err}`);
+        gpCloseFinishModal();
+      }
+    }
+
+    function gpShowFinishSuccess(sum, result) {
+      document.getElementById('gp-finish-step-progress').classList.add('hidden-view');
+      document.getElementById('gp-finish-step-success').classList.remove('hidden-view');
+      const apiSummary = result?.summary || {};
+      const discord = apiSummary.discord || {};
+      const successSummary = document.getElementById('gp-success-summary');
+      if (successSummary) {
+        successSummary.textContent = '테스트 Notion DB 반영과 Discord 역할/채널 동기화가 완료되었습니다.';
+      }
+
+      // 통계
+      const stats = document.getElementById('gp-success-stats');
+      if (stats) {
+        stats.innerHTML =
+          `멤버 DB <strong class="text-ink font-semibold">${apiSummary.members_created || 0}</strong>개 생성 · ` +
+          `멤버 DB <strong class="text-ink font-semibold">${apiSummary.members_updated || 0}</strong>개 업데이트 · ` +
+          `조 DB <strong class="text-ink font-semibold">${apiSummary.group_databases_created || sum.totalGroups}</strong>개 생성 · ` +
+          `조원 row <strong class="text-ink font-semibold">${apiSummary.group_rows_created || sum.totalMembers}</strong>개 반영.`;
+      }
+
+      const channelsEl = document.getElementById('gp-success-channels');
+      if (channelsEl) {
+        const tracksProcessed = discord.tracks_processed || 0;
+        const mockSkipped = discord.mock_members_skipped || 0;
+        channelsEl.innerHTML = `
+          <div class="rounded-md border border-border-hair bg-canvas px-3 py-3 text-[12px] text-ink-muted">
+            Discord는 <strong class="text-ink font-semibold">${tracksProcessed}</strong>개 트랙에 대해 동기화되었습니다.
+            새로 생성된 리소스는 카테고리 <strong class="text-ink font-semibold">${discord.categories_created || 0}</strong>개,
+            공지 채널 <strong class="text-ink font-semibold">${discord.announcement_channels_created || 0}</strong>개,
+            과제 채널 <strong class="text-ink font-semibold">${discord.assignment_channels_created || 0}</strong>개,
+            조 채널 <strong class="text-ink font-semibold">${discord.group_channels_created || 0}</strong>개,
+            역할 <strong class="text-ink font-semibold">${discord.roles_created || 0}</strong>개입니다.
+            실제 서버 멤버에게는 <strong class="text-ink font-semibold">${discord.roles_assigned || 0}</strong>건 반영되었고,
+            목업 멤버 <strong class="text-ink font-semibold">${mockSkipped}</strong>명은 시뮬레이션용으로 건너뛰었습니다.
+          </div>
+        `;
+      }
+
+      // 완료 → dirty 해제
+      _gpDirty = false;
+      gpRefreshDirty();
+    }
+
+    /** 아바타 배경색 (initials 기반 해시) */
+    const GP_AVATAR_COLORS = [
+      'bg-rose-100 text-rose-700',
+      'bg-amber-100 text-amber-700',
+      'bg-emerald-100 text-emerald-700',
+      'bg-sky-100 text-sky-700',
+      'bg-violet-100 text-violet-700',
+      'bg-pink-100 text-pink-700',
+      'bg-teal-100 text-teal-700',
+      'bg-indigo-100 text-indigo-700',
+    ];
+    function gpAvatarColor(seed) {
+      let h = 0;
+      for (const c of String(seed)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+      return GP_AVATAR_COLORS[h % GP_AVATAR_COLORS.length];
+    }
+
+    function gpMemberRowHtml(entry, groupIdx, tab) {
+      const m = entry.member;
+      const memberId = getMemberIdentityKey(m);
+      const memberName = getMemberDisplayName(m);
+      const isLeader = entry.leader;
+      const rowBg = isLeader ? 'bg-surface-2' : 'hover:bg-surface';
+      const sub = entry.creatorSub
+        ? (entry.creatorSub === 'short_long' ? ' · 숏+롱' : ' · 숏')
+        : '';
+      const colorCls = gpAvatarColor(m.initials);
+      const leaderBtn = tab.kind === 'weekday'
+        ? (isLeader
+            ? `<button type="button" data-no-drag data-toggle-leader="${escapeAttr(memberId)}" class="inline-flex items-center gap-1 h-6 px-2 rounded-xs bg-navy-soft text-navy text-[11px] font-semibold flex-shrink-0" title="조장 해제">★ 조장</button>`
+            : `<button type="button" data-no-drag data-toggle-leader="${escapeAttr(memberId)}" class="inline-flex items-center justify-center w-6 h-6 rounded-xs text-ink-soft hover:bg-surface-2 hover:text-navy text-[14px] flex-shrink-0" title="조장 지정" aria-label="조장 지정">☆</button>`)
+        : '';
+      return `
+        <div class="gp-member-row flex items-center gap-3 py-2 px-3 -mx-3 rounded-md ${rowBg}"
+             draggable="true"
+             data-member-id="${escapeAttr(memberId)}"
+             data-group-idx="${groupIdx}">
+          <div class="w-8 h-8 rounded-full ${colorCls} text-[11px] font-semibold flex items-center justify-center flex-shrink-0">${m.initials}</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-[13px] font-medium text-ink truncate"><span class="font-semibold">${memberName}</span><span class="text-ink-soft">/${GP_TEST_COHORT_LABEL}${sub}</span></div>
+            <div class="text-[11px] text-ink-soft truncate">${m.handle}</div>
+          </div>
+          ${leaderBtn}
+          <span class="gp-grip" aria-hidden="true">⠿</span>
+        </div>
+      `;
+    }
+
+    function gpRenderTabs() {
+      const ul = document.getElementById('gp-tabs');
+      if (!ul) return;
+      ul.innerHTML = GP_TABS.map(tab => {
+        const groupCount = gpGetGroupCount(tab);
+        const activeCls = tab.id === _gpActiveTrack ? ' is-active' : '';
+        return `
+          <li>
+            <button type="button" class="admin-tab${activeCls}" data-gp-tab="${tab.id}">
+              ${tab.label}
+              <span class="admin-tab-count">${groupCount}</span>
+              <span class="admin-tab-underline" aria-hidden="true"></span>
+            </button>
+          </li>`;
+      }).join('');
+      ul.querySelectorAll('[data-gp-tab]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          _gpActiveTrack = btn.dataset.gpTab;
+          gpRenderTabs();
+          gpRenderCards();
+        });
+      });
+    }
+
+    function gpRenderCards() {
+      const wrap = document.getElementById('gp-cards');
+      if (!wrap) return;
+      const tab = GP_TABS.find(t => t.id === _gpActiveTrack);
+      if (!tab) {
+        wrap.innerHTML = '<p class="col-span-full py-12 text-center text-[13px] text-ink-soft">트랙을 선택해주세요.</p>';
+        return;
+      }
+      const totalEntries = gpGetTabEntries(tab).length;
+      if (totalEntries === 0) {
+        wrap.innerHTML = `<div class="col-span-full py-12 text-center text-[13px] text-ink-soft">아직 ${tab.label} 트랙 신청자가 없습니다.</div>`;
+        return;
+      }
+      gpEnsureLeaderSnapshot(tab);
+      const groupIds = gpEnsureAssignment(tab);
+
+      const extLinkSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>';
+      const peopleSvg  = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+      const trashSvg   = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+
+      const cards = groupIds.map((memberIds, idx) => {
+        const entries = memberIds.map(id => gpResolveEntry(id, tab)).filter(Boolean);
+        const leaderCount = entries.filter(e => e.leader).length;
+        const isEmpty = entries.length === 0;
+        const trashBtn = isEmpty
+          ? `<button type="button" data-delete-group="${idx}" class="text-ink-soft hover:text-bad transition-colors" aria-label="빈 조 삭제" title="빈 조 삭제">${trashSvg}</button>`
+          : `<button type="button" class="text-ink-soft hover:text-ink transition-colors" aria-label="자세히" title="자세히">${extLinkSvg}</button>`;
+        return `
+          <div class="gp-card rounded-lg border border-border-hair bg-canvas" data-group-idx="${idx}">
+            <div class="p-5">
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="text-[16px] font-bold text-ink">${GP_TEST_COHORT_LABEL} ${idx + 1}조</h3>
+                ${trashBtn}
+              </div>
+              <div class="flex items-center justify-between text-[12px] text-ink-soft mb-3 pb-3 border-b border-border-hair">
+                <span class="inline-flex items-center gap-1">${peopleSvg} ${entries.length}명${leaderCount ? ` · 조장 ${leaderCount}` : ''}</span>
+                <span class="tabular-nums"><strong class="text-ink">0</strong>/${entries.length || 5} · 0%</span>
+              </div>
+              ${isEmpty
+                ? '<div class="py-10 text-center text-[12px] text-ink-soft">멤버를 끌어다 놓으세요</div>'
+                : `<div class="space-y-1">${entries.map(e => gpMemberRowHtml(e, idx, tab)).join('')}</div>`}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      wrap.innerHTML = cards;
+      gpAttachDnDHandlers(tab);
+    }
+
+    function gpAttachDnDHandlers(tab) {
+      const wrap = document.getElementById('gp-cards');
+      if (!wrap) return;
+
+      // 멤버 행 — dragstart / dragend
+      wrap.querySelectorAll('.gp-member-row').forEach(row => {
+        row.addEventListener('dragstart', (e) => {
+          if (e.target.closest('[data-no-drag]')) {
+            e.preventDefault();
+            return;
+          }
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', row.dataset.memberId + '|' + row.dataset.groupIdx);
+          row.classList.add('gp-dragging');
+        });
+        row.addEventListener('dragend', () => row.classList.remove('gp-dragging'));
+      });
+
+      // 카드 — dragover / dragleave / drop
+      wrap.querySelectorAll('.gp-card').forEach(card => {
+        card.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          card.classList.add('gp-drag-over');
+        });
+        card.addEventListener('dragleave', (e) => {
+          if (!card.contains(e.relatedTarget)) card.classList.remove('gp-drag-over');
+        });
+        card.addEventListener('drop', (e) => {
+          e.preventDefault();
+          card.classList.remove('gp-drag-over');
+          const data = e.dataTransfer.getData('text/plain');
+          if (!data) return;
+          const [memberId, fromIdxStr] = data.split('|');
+          gpMoveMember(memberId, parseInt(fromIdxStr, 10), parseInt(card.dataset.groupIdx, 10), tab);
+        });
+      });
+
+      // 조장 토글
+      wrap.querySelectorAll('[data-toggle-leader]').forEach(btn => {
+        btn.addEventListener('click', () => gpToggleLeader(btn.dataset.toggleLeader, tab));
+      });
+
+      // 빈 조 삭제
+      wrap.querySelectorAll('[data-delete-group]').forEach(btn => {
+        btn.addEventListener('click', () => gpRemoveEmptyGroup(parseInt(btn.dataset.deleteGroup, 10), tab));
+      });
+    }
+
+    function renderGroupPreview() {
+      // 첫 진입 — 활성 트랙은 신청자가 가장 많은 트랙으로 자동 선택
+      if (!_gpActiveTrack) {
+        let max = -1;
+        let pick = GP_TABS[0].id;
+        GP_TABS.forEach(t => {
+          const n = gpGetTabEntries(t).length;
+          if (n > max) { max = n; pick = t.id; }
+        });
+        _gpActiveTrack = pick;
+      }
+      // 상단 요약: "N개 트랙 · 총 K개 조"
+      const activeTracks = GP_TABS.filter(t => gpGetGroupCount(t) > 0).length;
+      const totalGroups  = GP_TABS.reduce((sum, t) => sum + gpGetGroupCount(t), 0);
+      const summary = document.getElementById('gp-summary');
+      if (summary) summary.textContent = `${activeTracks}개 트랙 · 총 ${totalGroups}개 조`;
+      gpRenderTabs();
+      gpRenderCards();
+      gpRefreshDirty();
+    }
+
+    /** 새 창에서 조 배정 미리보기 페이지를 연다 (같은 HTML + #group-preview 해시) */
+    function openGroupPreviewWindow() {
+      const url = `${window.location.pathname}${window.location.search}#group-preview`;
+      window.open(url, '_blank', 'noopener');
+    }
+
+    /** 같은 창에서 view 전환으로 진입 (back 가능) */
+    function showGroupPreviewView() {
+      const cur = getCurrentStateKey();
+      if (cur && cur !== 'group-preview') _previousState = cur;
+      views.forEach(v => v.classList.add('hidden-view'));
+      document.getElementById('view-group-preview').classList.remove('hidden-view');
+      renderGroupPreview();
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }
+
+    function backFromGroupPreviewView() {
+      // 새 창(#group-preview)으로 진입했다면 창 닫기 시도
+      if (window.location.hash === '#group-preview' && window.opener) {
+        window.close();
+        return;
+      }
+      if (STATES[_previousState]) applyState(_previousState);
+      else applyState('admin');
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }
+
+    document.addEventListener('click', (e) => {
+      const openGpBtn = e.target.closest('[data-open-group-preview]');
+      if (openGpBtn) {
+        e.preventDefault();
+        // 같은 창/iframe 내에서 view 전환. 기존 admin 뷰로 '돌아가기' 버튼으로 복귀.
+        showGroupPreviewView();
+        return;
+      }
+      const backGpBtn = e.target.closest('[data-back-from-group-preview]');
+      if (backGpBtn) { e.preventDefault(); backFromGroupPreviewView(); return; }
+      const addGroupBtn = e.target.closest('#gp-add-group-btn');
+      if (addGroupBtn) {
+        e.preventDefault();
+        const tab = GP_TABS.find(t => t.id === _gpActiveTrack);
+        if (tab) gpAddNewGroup(tab);
+        return;
+      }
+      const resetBtn = e.target.closest('#gp-reset-btn');
+      if (resetBtn) { e.preventDefault(); gpResetCurrentTab(); return; }
+      const finishBtn = e.target.closest('#gp-finish-btn');
+      if (finishBtn) { e.preventDefault(); gpOpenFinishModal(); return; }
+      const startBtn = e.target.closest('[data-gp-finish-start]');
+      if (startBtn) { e.preventDefault(); gpStartFinishProcess(); return; }
+      const closeFinishBtn = e.target.closest('[data-gp-finish-close]');
+      if (closeFinishBtn) { e.preventDefault(); gpCloseFinishModal(); return; }
+    });
+
+    // 새 창 모드 진입 — DOM/데이터 준비된 이 시점에서 hash 확인
+    if (window.location.hash === '#group-preview') {
+      views.forEach(v => v.classList.add('hidden-view'));
+      document.getElementById('view-group-preview').classList.remove('hidden-view');
+      headerTitle.textContent = '조 배정 프리뷰';
+      windowProgress.classList.add('hidden-view');
+      renderHeaderActions(null);
+      stateButtons.forEach(b => b.classList.remove('active'));
+      renderGroupPreview();
+    }
+  </script>
+</body>
+</html>
