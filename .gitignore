@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+.Python
+
+# Env files (contain secrets)
+.env
+.env.prod
+.env.test
+.env.dev
+.env.local
+
+# Runtime state files
+bot_command_queue*.json
+bot_heartbeat*.json
+track_applications_cache_*.json
+track_applications_admin_mock_cache_*.json
+*.log
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# bkit / agent tooling
+.bkit/
+.claude/
+
+# Local backups
+.pre-pull-backup-*/
+*.backup

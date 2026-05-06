@@ -1,0 +1,5 @@
+discord.py>=2.3
+python-dotenv
+requests
+flask
+flask-cors
