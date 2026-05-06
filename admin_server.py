@@ -3408,4 +3408,4 @@ if __name__ == '__main__':
     print("[INFO] Admin Server Starting...")
 
     print("[INFO] Admin Server Running on http://0.0.0.0:8000")
-    app.run(host='0.0.0.0', port=8000, debug=False)
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', '8001')), debug=False)
