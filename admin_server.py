@@ -1383,14 +1383,24 @@ def discord_oauth_callback():
         user_data = user_response.json()
 
         session.permanent = True
-        session['discord_user'] = {
+        discord_user_info = {
             'id': str(user_data.get('id', '')).strip(),
             'username': user_data.get('username', ''),
             'displayName': user_data.get('global_name') or user_data.get('username', ''),
             'globalName': user_data.get('global_name'),
             'avatarUrl': _build_discord_avatar_url(user_data),
         }
-        return redirect(_build_app_redirect_url(next_path, discord_auth='success'))
+        session['discord_user'] = discord_user_info
+        # Standalone /apply (Flask 가 직접 서빙) 에서 viewer 정보를 query param 으로 전달.
+        # Wrapper(React) 가 사라져 /api/auth/me 호출 단계가 없으므로, callback 시 URL 에 박아 보낸다.
+        return redirect(_build_app_redirect_url(
+            next_path,
+            discord_auth='success',
+            discordUserId=discord_user_info['id'],
+            discordDisplayName=discord_user_info['displayName'] or discord_user_info['username'],
+            discordHandle=(f"@{discord_user_info['username']}" if discord_user_info['username'] else ''),
+            discordAvatarUrl=discord_user_info['avatarUrl'] or '',
+        ))
     except requests.RequestException as e:
         print(f"[ERROR] Discord OAuth exchange failed: {e}")
         return redirect(_build_app_redirect_url(next_path, discord_auth='token_error'))
