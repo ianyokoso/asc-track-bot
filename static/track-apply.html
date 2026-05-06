@@ -1737,7 +1737,10 @@
     const VIEWER_HANDLE = (mockupParams.get('discordHandle') || '@시연유저').trim() || '@시연유저';
     const VIEWER_USER_ID = (mockupParams.get('discordUserId') || '').trim();
     const VIEWER_AVATAR_URL = (mockupParams.get('discordAvatarUrl') || '').trim();
-    const LOGIN_URL = (mockupParams.get('loginUrl') || '').trim();
+    // Wrapper(React) 가 사라진 standalone 모드에서는 query param 으로 loginUrl 이 안 들어옴.
+    // /api/auth/discord 가 바로 Discord OAuth 로 redirect 하므로 그쪽으로 보내면 됨.
+    const LOGIN_URL = (mockupParams.get('loginUrl') || '').trim()
+      || `${APPLICATION_API_BASE}/api/auth/discord?next=${encodeURIComponent('/apply')}`;
     const REQUESTED_STATE = (mockupParams.get('state') || '').trim();
     const APPLICATION_START_DATE = (mockupParams.get('applicationStartDate') || '2026-05-20').trim();
     const APPLICATION_END_DATE = (mockupParams.get('applicationEndDate') || '2026-05-24').trim();
