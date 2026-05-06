@@ -3659,9 +3659,51 @@
       return n === 0 ? 0 : Math.ceil(n / 5);
     }
 
+    /**
+     * 캐시된 배정 상태를 현재 MOCK_MEMBERS 와 동기화.
+     * - 트랙에서 빠진 멤버는 모든 조에서 제거
+     * - 새로 신청한 멤버는 마지막 조에 자동 합류
+     * - 같은 멤버가 여러 조에 중복 등장하면 첫 조에만 유지
+     * 변경이 발생하면 localStorage 에도 반영.
+     */
+    function gpReconcileAssignment(tab) {
+      if (!_gpAssignments[tab.id]) return;
+      const validIds = new Set(gpGetTabEntries(tab).map(e => e.member.id));
+      const seen = new Set();
+      let mutated = false;
+      _gpAssignments[tab.id] = _gpAssignments[tab.id].map(group => {
+        const next = group.filter(id => {
+          if (!validIds.has(id)) { mutated = true; return false; }
+          if (seen.has(id))      { mutated = true; return false; }
+          seen.add(id);
+          return true;
+        });
+        return next;
+      });
+      // 새로 신청한 멤버 합류
+      const missing = [];
+      validIds.forEach(id => { if (!seen.has(id)) missing.push(id); });
+      if (missing.length) {
+        if (_gpAssignments[tab.id].length === 0) _gpAssignments[tab.id].push([]);
+        const lastIdx = _gpAssignments[tab.id].length - 1;
+        _gpAssignments[tab.id][lastIdx].push(...missing);
+        mutated = true;
+      }
+      // 최소 1조 보장
+      if (_gpAssignments[tab.id].length === 0) {
+        _gpAssignments[tab.id].push([]);
+        mutated = true;
+      }
+      if (mutated) gpSaveState();
+    }
+
     /** 첫 진입 시 자동 분할 결과를 저장 (이후 drag/drop 으로 변형) */
     function gpEnsureAssignment(tab) {
-      if (_gpAssignments[tab.id]) return _gpAssignments[tab.id];
+      if (_gpAssignments[tab.id]) {
+        // 캐시 사용 전 항상 최신 멤버 목록과 동기화 (admin 에서 트랙 제거/추가 반영)
+        gpReconcileAssignment(tab);
+        return _gpAssignments[tab.id];
+      }
       const entries = gpGetTabEntries(tab);
       const groups = gpChunk(entries, 5);
       _gpAssignments[tab.id] = groups.map(g => g.map(e => e.member.id));
@@ -4269,6 +4311,9 @@
         });
         _gpActiveTrack = pick;
       }
+      // 모든 캐시된 트랙 배정을 현재 MOCK_MEMBERS 와 동기화
+      // (admin 에서 트랙 추가/삭제 후 진입 시 stale 데이터 정리 + 탭 배지 / 요약 카운트 정확도)
+      GP_TABS.forEach(t => { if (_gpAssignments[t.id]) gpReconcileAssignment(t); });
       // 상단 요약: "N개 트랙 · 총 K개 조"
       const activeTracks = GP_TABS.filter(t => gpGetGroupCount(t) > 0).length;
       const totalGroups  = GP_TABS.reduce((sum, t) => sum + gpGetGroupCount(t), 0);
