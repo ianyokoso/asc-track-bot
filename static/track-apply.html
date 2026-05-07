@@ -5089,7 +5089,9 @@
       // 2) 폴링 — 2초 간격, 최대 10분
       const POLL_INTERVAL_MS = 2000;
       const MAX_POLL_TIME_MS = 10 * 60 * 1000;
+      const MAX_404_RETRIES = 3;  // 일시적 race condition / 재시작 직후 보호
       const startTs = Date.now();
+      let consecutive404 = 0;
 
       while (true) {
         if (Date.now() - startTs > MAX_POLL_TIME_MS) {
@@ -5102,6 +5104,17 @@
           { credentials: 'include' }
         );
         const job = await statusResp.json().catch(() => ({}));
+        if (statusResp.status === 404) {
+          // 서버가 막 재시작됐을 수 있음 — disk 에서 jobs 복원 직후 잠깐 race 가능.
+          // 몇 번은 재시도, 그래도 404 면 그제야 실패 처리.
+          consecutive404 += 1;
+          if (consecutive404 < MAX_404_RETRIES) continue;
+          throw new Error(
+            'commit 작업 상태를 찾을 수 없습니다.\n\n' +
+            '서버가 재시작되어 작업이 중단됐을 수 있습니다. 다시 시도해주세요.'
+          );
+        }
+        consecutive404 = 0;
         if (!statusResp.ok) {
           throw new Error(job.message || `상태 조회 실패 (HTTP ${statusResp.status})`);
         }

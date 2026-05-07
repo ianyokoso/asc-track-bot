@@ -3512,9 +3512,52 @@ def get_group_data():
 # ── 비동기 commit job 인프라 ─────────────────────────────────────────
 # Notion 순차 호출 + Discord IPC 가 30s+ 걸려서 Vercel 프록시 timeout 에 걸림.
 # POST 는 즉시 jobId 반환 + 백그라운드 thread 가 작업, 클라이언트 폴링.
+#
+# Resilience: PM2 가 프로세스 재시작하면 in-memory dict 가 날아가서 클라이언트가
+# '404 job not found' 보게 됨. 디스크에 영속화하고, 시작 시 '진행 중' 이던 job 은
+# 'failed (서버 재시작)' 으로 마킹해서 클라가 명확한 메시지 받게 한다.
 _COMMIT_JOBS = {}                       # jobId -> dict (status, phase, ...)
 _COMMIT_JOBS_LOCK = threading.Lock()
 _COMMIT_JOB_TTL_SECONDS = 3600          # 완료된 job 1시간 후 자동 정리
+COMMIT_JOBS_FILE = os.path.join(
+    BASE_DIR,
+    f"commit_jobs_{TRACK_APPLICATION_CACHE_ENV}.json"
+)
+
+
+def _persist_commit_jobs_unlocked():
+    """주의: caller 가 _COMMIT_JOBS_LOCK 보유 상태에서만 호출."""
+    try:
+        with open(COMMIT_JOBS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(_COMMIT_JOBS, f, ensure_ascii=False)
+    except Exception as e:
+        print(f"[WARN] persist commit jobs failed: {e}")
+
+
+def _load_commit_jobs_on_startup():
+    """프로세스 시작 시 호출. 'queued'/'running' 인 job 은 stale 처리."""
+    if not os.path.exists(COMMIT_JOBS_FILE):
+        return
+    try:
+        with open(COMMIT_JOBS_FILE, 'r', encoding='utf-8') as f:
+            loaded = json.load(f)
+        if not isinstance(loaded, dict):
+            return
+        now = time.time()
+        with _COMMIT_JOBS_LOCK:
+            for jid, job in loaded.items():
+                if not isinstance(job, dict):
+                    continue
+                if job.get('status') in (None, 'queued', 'running'):
+                    job['status'] = 'failed'
+                    job['phase'] = 'failed'
+                    job['error'] = '서버가 재시작되어 작업이 중단됐습니다. 다시 시도해주세요.'
+                    job['completedAt'] = now
+                _COMMIT_JOBS[jid] = job
+            stale_count = sum(1 for j in _COMMIT_JOBS.values() if j.get('error') and '재시작' in str(j.get('error') or ''))
+        print(f"[INFO] commit jobs restored from disk: {len(_COMMIT_JOBS)} (in-flight→failed: {stale_count})")
+    except Exception as e:
+        print(f"[WARN] load commit jobs failed: {e}")
 
 
 def _make_commit_job(owner_user_id):
@@ -3534,6 +3577,7 @@ def _make_commit_job(owner_user_id):
     }
     with _COMMIT_JOBS_LOCK:
         _COMMIT_JOBS[job_id] = job
+        _persist_commit_jobs_unlocked()
     return job
 
 
@@ -3543,6 +3587,7 @@ def _update_commit_job(job_id, **fields):
         if job is None:
             return
         job.update(fields)
+        _persist_commit_jobs_unlocked()
 
 
 def _get_commit_job(job_id):
@@ -3563,6 +3608,12 @@ def _cleanup_old_commit_jobs():
                 stale.append(jid)
         for jid in stale:
             del _COMMIT_JOBS[jid]
+        if stale:
+            _persist_commit_jobs_unlocked()
+
+
+# 모듈 로드 시점에 디스크 → 메모리 복원.
+_load_commit_jobs_on_startup()
 
 
 def _run_commit_job_async(job_id, payload):
