@@ -1512,50 +1512,30 @@
   </section>
 
   <!-- ===== 신청 저장 진행 / 완료 모달 (사용자 신청 폼 → 저장하기 클릭 시) ===== -->
-  <!-- gp-finish-modal 의 디자인 톤 (header eyebrow + title + subtitle + body) 을 따름. -->
   <div id="submit-loading-modal" class="admin-modal hidden-view" role="dialog" aria-modal="true" aria-live="polite">
     <div class="admin-modal-backdrop"></div>
-    <div class="admin-modal-panel" style="max-width: 440px;">
+    <div class="admin-modal-panel" style="max-width: 380px;">
       <!-- Loading state -->
       <div id="submit-loading-step-loading">
-        <div class="admin-modal-header">
-          <p class="text-eyebrow">Saving application</p>
-          <div class="admin-modal-title">신청을 저장하고 있습니다</div>
-          <div class="admin-modal-subtitle">Notion 워크스페이스에 동기화 중입니다. 창을 닫지 마세요.</div>
-        </div>
-        <div class="admin-modal-body" style="padding: 28px 24px;">
-          <div class="flex items-center gap-3 text-[13px]">
-            <span class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-navy-soft flex-shrink-0">
-              <span class="gp-spinner" style="width: 18px; height: 18px; border-width: 2px; border-color: #1E2A4A; border-top-color: transparent;"></span>
+        <div class="admin-modal-body" style="padding: 36px 28px; text-align: center;">
+          <div class="flex justify-center mb-4">
+            <span class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-navy-soft">
+              <span class="gp-spinner" style="width: 22px; height: 22px; border-width: 2.5px; border-color: #1E2A4A; border-top-color: transparent;"></span>
             </span>
-            <div class="flex-1 min-w-0">
-              <div class="text-ink font-semibold">신청 정보 처리</div>
-              <div class="text-[11px] text-ink-soft mt-0.5 tabular-nums">Discord 핸들 + 트랙 선택 + 조장 지원 정보를 검증하고 Notion 마스터 DB에 기록합니다.</div>
-            </div>
           </div>
+          <div class="text-ink font-semibold text-[15px] mb-1">신청을 저장하고 있습니다</div>
+          <div class="text-ink-soft text-[12.5px]">잠시만 기다려주세요.</div>
         </div>
       </div>
 
       <!-- Success state -->
       <div id="submit-loading-step-success" class="hidden-view">
-        <div class="admin-modal-header">
-          <p class="text-eyebrow text-ok">Submission complete</p>
-          <div class="admin-modal-title flex items-center gap-2">
-            <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-ok text-white text-[13px]">✓</span>
-            저장이 완료되었습니다
+        <div class="admin-modal-body" style="padding: 36px 28px; text-align: center;">
+          <div class="flex justify-center mb-4">
+            <span class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-navy text-white text-[22px] font-bold">✓</span>
           </div>
-          <div class="admin-modal-subtitle">트랙 신청이 정상적으로 접수되었습니다.</div>
-        </div>
-        <div class="admin-modal-body" style="padding: 22px 24px;">
-          <div class="flex items-center gap-3 text-[13px]">
-            <span class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-[#F0FDF4] flex-shrink-0">
-              <span class="text-ok text-[18px] font-bold leading-none">✓</span>
-            </span>
-            <div class="flex-1 min-w-0">
-              <div class="text-ink font-semibold">제출 완료 페이지로 이동합니다</div>
-              <div class="text-[11px] text-ink-soft mt-0.5">신청 내역 확인 / 수정은 그 화면에서 가능합니다.</div>
-            </div>
-          </div>
+          <div class="text-ink font-semibold text-[15px] mb-1">트랙 신청이 정상적으로 접수되었습니다</div>
+          <div class="text-ink-soft text-[12.5px]">제출 완료 페이지로 이동합니다.</div>
         </div>
       </div>
     </div>
