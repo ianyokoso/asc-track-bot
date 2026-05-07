@@ -2338,9 +2338,10 @@
     async function runAdminFullReset() {
       const confirmed = confirm(
         '🗑️ 전체 초기화\n\n' +
-        '아래를 모두 비우고 페이지를 새로고침합니다:\n' +
-        '  • 서버: 트랙 신청 admin mockup 캐시\n' +
-        '  • 브라우저: 멤버 편집 / 조 배정 상태 (localStorage)\n\n' +
+        '모든 멤버를 "미신청" 상태로 되돌리고 페이지를 새로고침합니다:\n' +
+        '  • 서버: 트랙 신청 admin mockup 캐시 비움\n' +
+        '  • 브라우저: 모든 멤버의 tracks/edits/submitted 초기화\n' +
+        '  • 조 배정 상태(localStorage) 제거\n\n' +
         '※ Discord 채널·역할 / Notion 트랙 페이지는 이 작업이 건드리지 않습니다.\n' +
         '   디스코드 테스트 길드에서 `!테스트초기화` 명령으로 별도 정리하세요.\n\n' +
         '진행할까요?'
@@ -2356,11 +2357,29 @@
           alert(`초기화 실패: ${result.message || response.statusText}`);
           return;
         }
-        // 클라이언트 상태도 wipe
-        try { localStorage.removeItem(ADMIN_STORAGE_KEY); } catch (e) {}
+        // 1) 조 배정 상태 (별도 키) 제거
         try { localStorage.removeItem(GP_STATE_KEY); } catch (e) {}
+        // 2) MOCK_MEMBERS 의 신청 정보 in-place wipe
+        //    하드코딩된 baseline 의 default tracks 가 새로고침 후 부활하지 않도록
+        //    saveState() 로 빈 상태를 ADMIN_STORAGE_KEY 에 영속화.
+        if (Array.isArray(MOCK_MEMBERS)) {
+          MOCK_MEMBERS.forEach(m => {
+            m.tracks = [];
+            m.edits = 0;
+            m.submitted = null;
+            if ('submittedAt' in m) m.submittedAt = null;
+            if ('notes' in m) m.notes = '';
+          });
+        }
+        if (typeof lastSubmittedData !== 'undefined') {
+          lastSubmittedData = null;
+        }
+        if (typeof saveState === 'function') saveState();
+
         alert(
-          `✅ 초기화 완료 (서버 멤버 ${result.clearedMembers || 0}명 제거)\n\n` +
+          `✅ 초기화 완료\n` +
+          `  • 서버 캐시 ${result.clearedMembers || 0}명 제거\n` +
+          `  • 브라우저 멤버 ${MOCK_MEMBERS.length}명 모두 미신청 상태\n\n` +
           `Discord/Notion 정리 필요 시 디스코드에서 \`!테스트초기화\` 실행하세요.`
         );
         location.reload();
