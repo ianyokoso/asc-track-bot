@@ -247,6 +247,11 @@
       border-color: #1E2A4A;
       color: #FFFFFF;
     }
+    /* 모바일 일부 브라우저는 <label> color 가 자식 <span> 으로 상속되지 않아
+       체크 시 텍스트가 안 보이는 현상 — 명시적으로 강제. */
+    .leader-apply.is-checked span:not(.leader-star) {
+      color: #FFFFFF;
+    }
     .leader-apply.is-checked:hover {
       background: #141E3C;
     }
