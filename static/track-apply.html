@@ -951,11 +951,14 @@
   <section class="view hidden-view" id="view-open-new">
     <div class="max-w-3xl mx-auto px-4 md:px-10 py-8 md:py-10">
 
-      <!--
-        Participation/Name 블록은 제거됨.
-        - Name: Discord OAuth 의 username 을 그대로 사용 (헤더 우측 persona chip 에 이미 노출).
-        - 라이트 트랙: 재참여 여부 구분 없이 전 사용자에게 노출, 복수 선택 가능.
-      -->
+      <!-- OAuth viewer 배지: 상단 = Discord 닉네임, 하단 = Discord ID(@handle) -->
+      <div class="border border-border-hair rounded-md bg-surface px-4 py-3 mb-6 flex items-center gap-3 text-[13px]">
+        <div id="banner-avatar" class="viewer-banner-avatar w-9 h-9 rounded-full bg-navy-soft text-navy text-[12px] font-bold flex items-center justify-center flex-shrink-0 overflow-hidden">시</div>
+        <div class="flex-1 min-w-0">
+          <div class="text-ink font-semibold truncate viewer-banner-display" id="banner-display">시연유저</div>
+          <div class="text-[12px] text-ink-soft mt-0.5 truncate viewer-banner-handle" id="banner-handle">@시연유저</div>
+        </div>
+      </div>
 
       <!-- 트랙 상세보기 버튼 (별도 페이지로 이동) -->
       <div class="mb-8 flex items-center justify-between rounded-md border border-border-hair bg-canvas px-4 py-3">
@@ -1309,6 +1312,15 @@
         </span>
       </div>
 
+      <!-- OAuth viewer 배지 -->
+      <div class="border border-border-hair rounded-md bg-surface px-4 py-3 mb-6 flex items-center gap-3 text-[13px]">
+        <div class="viewer-banner-avatar w-9 h-9 rounded-full bg-navy-soft text-navy text-[12px] font-bold flex items-center justify-center flex-shrink-0 overflow-hidden">시</div>
+        <div class="flex-1 min-w-0">
+          <div class="text-ink font-semibold truncate viewer-banner-display">시연유저</div>
+          <div class="text-[12px] text-ink-soft mt-0.5 truncate viewer-banner-handle">@시연유저</div>
+        </div>
+      </div>
+
       <!-- 트랙 상세보기 버튼 -->
       <div class="mb-8 flex items-center justify-between rounded-md border border-border-hair bg-canvas px-4 py-3">
         <div>
@@ -1339,6 +1351,15 @@
       <div class="flex items-center gap-2 mb-6">
         <span class="inline-flex items-center h-6 px-2 rounded-xs text-[11px] font-semibold tracking-wider" style="background:#FEF2F2; color:#DC2626;">마감됨</span>
         <span id="closed-window-label" class="text-[12px] text-ink-muted">· 2026-05-24(일) 23:59 KST 마감</span>
+      </div>
+
+      <!-- OAuth viewer 배지 -->
+      <div class="border border-border-hair rounded-md bg-surface px-4 py-3 mb-6 flex items-center gap-3 text-[13px]">
+        <div class="viewer-banner-avatar w-9 h-9 rounded-full bg-navy-soft text-navy text-[12px] font-bold flex items-center justify-center flex-shrink-0 overflow-hidden">시</div>
+        <div class="flex-1 min-w-0">
+          <div class="text-ink font-semibold truncate viewer-banner-display">시연유저</div>
+          <div class="text-[12px] text-ink-soft mt-0.5 truncate viewer-banner-handle">@시연유저</div>
+        </div>
       </div>
 
       <p class="text-sm text-ink-muted mb-6">신청이 마감되어 수정할 수 없습니다. 조 배정 후 변경이 필요하면 운영진에게 문의해주세요.</p>
@@ -1821,8 +1842,11 @@
 
     function applyViewerIdentity() {
       // 여러 view (open-new / open-edit / closed) 에 동시 노출되는 viewer banner.
-      // ID 가 아니라 class 로 모두 선택해서 갱신.
-      document.querySelectorAll('.viewer-banner-name').forEach(el => {
+      // 상단: Discord 닉네임 (display name), 하단: Discord ID (@handle).
+      document.querySelectorAll('.viewer-banner-display').forEach(el => {
+        el.textContent = VIEWER_DISPLAY_NAME || VIEWER_HANDLE;
+      });
+      document.querySelectorAll('.viewer-banner-handle').forEach(el => {
         el.textContent = VIEWER_HANDLE;
       });
       document.querySelectorAll('.viewer-banner-avatar').forEach(avatarEl => {
@@ -1869,17 +1893,14 @@
       if (kind === 'upcoming') {
         headerActions.innerHTML = `<span class="text-[11px] font-semibold text-warn uppercase tracking-wider">${APPLICATION_OPENS_LABEL}</span>`;
       } else if (kind === 'user') {
+        // viewer 배지는 본문 인라인 배너 (.viewer-banner-display / .viewer-banner-handle) 가 담당.
+        // 헤더에는 관리자 버튼만 (운영진일 때).
         const adminBtn = IS_VIEWER_ADMIN
           ? `<button type="button" id="btn-go-admin" class="btn-ghost text-[12px] h-9 px-3 whitespace-nowrap" title="운영진 전용 — 신청자 관리 / 조 배정">
                🛡️ 관리자 페이지
              </button>`
           : '';
-        headerActions.innerHTML = `
-          ${adminBtn}
-          <div class="inline-flex items-center gap-2 h-9 px-3 rounded-sm border border-border-hair bg-surface">
-            <div class="w-6 h-6 rounded-full bg-navy-soft text-navy text-[10px] font-bold flex items-center justify-center">${getViewerInitial()}</div>
-            <span class="text-[13px] text-ink font-medium">${VIEWER_HANDLE}</span>
-          </div>`;
+        headerActions.innerHTML = adminBtn;
         if (IS_VIEWER_ADMIN) {
           requestAnimationFrame(() => {
             document.getElementById('btn-go-admin')?.addEventListener('click', () => {
