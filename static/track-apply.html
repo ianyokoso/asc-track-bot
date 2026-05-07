@@ -4347,6 +4347,7 @@
 
       const response = await fetch(`${GP_API_BASE}/api/mockups/group-preview/commit`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
