@@ -1884,12 +1884,16 @@
           : '';
         headerActions.innerHTML = `
           ${backToApplyBtn}
+          <button type="button" class="btn-ghost" id="admin-fill-mock" title="하드코딩된 목업 멤버 120명 (기본 트랙 신청 포함) 으로 복원">📋 목업 채우기</button>
           <button type="button" class="btn-ghost text-bad" id="admin-full-reset" title="신청 데이터 초기화 (서버 캐시 + 브라우저). Discord 채널/역할은 봇 !테스트초기화 별도 실행 필요.">🗑️ 전체 초기화</button>
           <button class="btn-ghost" id="admin-track-apply-sync">Full Sync</button>
           <button class="btn-navy" id="admin-track-apply-refresh">Refresh</button>`;
         requestAnimationFrame(() => {
           document.getElementById('btn-back-to-apply')?.addEventListener('click', () => {
             applyState('open-new');
+          });
+          document.getElementById('admin-fill-mock')?.addEventListener('click', () => {
+            void runAdminFillMock();
           });
           document.getElementById('admin-full-reset')?.addEventListener('click', () => {
             void runAdminFullReset();
@@ -2335,6 +2339,27 @@
      * Discord 채널/역할 / Notion 트랙 페이지는 이 함수가 안 건드림.
      * 디스코드 봇에 `!테스트초기화` 입력해서 별도 정리해야 함.
      */
+    /**
+     * [관리자] 목업 멤버 120명 복원.
+     * - localStorage 의 ADMIN_STORAGE_KEY 와 GP_STATE_KEY 삭제
+     * - 새로고침하면 HTML 에 하드코딩된 baseline MOCK_MEMBERS (120명 / default tracks) 복원
+     *
+     * 전체 초기화로 미신청 0 상태 만든 후 데모 시연 다시 시작할 때 사용.
+     */
+    async function runAdminFillMock() {
+      const confirmed = confirm(
+        '📋 목업 멤버 120명 채우기\n\n' +
+        '기본 데모 데이터 (멤버 120명, 신청 약 108건) 로 복원합니다.\n' +
+        '현재 브라우저 편집 사항은 모두 사라집니다.\n\n' +
+        '※ 서버 캐시 / Discord / Notion 은 건드리지 않음.\n\n' +
+        '진행할까요?'
+      );
+      if (!confirmed) return;
+      try { localStorage.removeItem(ADMIN_STORAGE_KEY); } catch (e) {}
+      try { localStorage.removeItem(GP_STATE_KEY); } catch (e) {}
+      location.reload();
+    }
+
     async function runAdminFullReset() {
       const confirmed = confirm(
         '🗑️ 전체 초기화\n\n' +
