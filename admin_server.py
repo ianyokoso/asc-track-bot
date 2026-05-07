@@ -22,7 +22,26 @@ from env_utils import (
 )
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True)  # Enable CORS for cross-origin API consumers (optional)
+
+# 🛡 CORS — wildcard + supports_credentials 는 CSRF 위험.
+#    명시적 화이트리스트만 허용. 추가 도메인은 ALLOWED_ORIGINS env 로 콤마 구분.
+_DEFAULT_ALLOWED_ORIGINS = [
+    'https://asc-track-bot.vercel.app',         # 트랙 신청 폼
+    'https://asc-bot-dashboard.vercel.app',     # 운영 대시보드
+    'http://localhost:3000',                    # 로컬 dev
+    'http://localhost:5173',                    # vite dev
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173',
+]
+_extra_origins = [o.strip() for o in (os.getenv('ALLOWED_ORIGINS', '') or '').split(',') if o.strip()]
+ALLOWED_ORIGINS = _DEFAULT_ALLOWED_ORIGINS + _extra_origins
+CORS(
+    app,
+    origins=ALLOWED_ORIGINS,
+    supports_credentials=True,
+    allow_headers=['Content-Type', 'Authorization'],
+    methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+)
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
 
@@ -64,6 +83,19 @@ app.config['SESSION_COOKIE_NAME'] = 'asc_dashboard_session'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = os.getenv('SESSION_COOKIE_SECURE', '').lower() in {'1', 'true', 'yes'}
+
+
+def _safe_error_message(exc, default='Internal server error.'):
+    """
+    Prod 환경에서는 내부 예외 메시지를 클라이언트로 노출하지 않는다.
+    test/dev 에서는 디버깅을 위해 그대로 노출.
+
+    공격자가 stack/lib 정보로 핑거프린팅 + 디스커버리 하는 걸 막기 위함.
+    """
+    env_name = (os.getenv('ASC_ENV') or os.getenv('RUN_MODE') or '').strip().lower()
+    if env_name in ('test', 'dev', 'development', 'sandbox', 'staging', 'mock', 'local'):
+        return str(exc) if exc else default
+    return default
 
 
 @app.after_request
@@ -569,6 +601,30 @@ def _get_authenticated_discord_user():
     if not user or not user.get('id'):
         return None
     return user
+
+
+def _get_admin_discord_ids():
+    """
+    운영진 Discord ID 집합. ADMIN_DISCORD_IDS (복수, 콤마구분) 우선,
+    없으면 ADMIN_DISCORD_ID (단수) fallback. 매 호출마다 env 재조회 (운영진 추가 즉시 반영).
+    """
+    raw_multi = (os.getenv('ADMIN_DISCORD_IDS', '') or '').strip()
+    raw_single = (os.getenv('ADMIN_DISCORD_ID', '') or '').strip()
+    ids = set()
+    for raw in (raw_multi, raw_single):
+        for part in raw.split(','):
+            part = part.strip()
+            if part:
+                ids.add(part)
+    return ids
+
+
+def _is_admin(discord_user):
+    """주어진 인증된 user 가 운영진인지 확인."""
+    if not discord_user:
+        return False
+    user_id = str(discord_user.get('id', '')).strip()
+    return bool(user_id) and user_id in _get_admin_discord_ids()
 
 
 def _get_current_cohort_label(raw_value=None):
@@ -3111,7 +3167,7 @@ def get_cached_data():
             return jsonify({"status": "success", "data": data})
         return jsonify({"status": "error", "message": "Data file not found. Please sync first."}), 404
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": _safe_error_message(e)}), 500
 
 _sync_status = {"running": False, "last_completed": None}
 
@@ -3185,7 +3241,7 @@ def sync_data():
 
         return jsonify({"status": "success", "data": data})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": _safe_error_message(e)}), 500
 
 @app.route('/api/sync-status', methods=['GET'])
 def sync_status():
@@ -3230,7 +3286,7 @@ def full_sync():
         return jsonify({"status": "success", "data": data})
     except Exception as e:
         print(f"[ERROR] Full sync failed: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": _safe_error_message(e)}), 500
 
 @app.route('/api/status', methods=['GET'])
 def get_bot_status():
@@ -3265,7 +3321,7 @@ def get_bot_status():
             "last_seen_timestamp": last_seen
         })
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": _safe_error_message(e)}), 500
 
 # [NEW] Command Queue for IPC
 COMMAND_QUEUE_FILE = get_bot_command_queue_file(BASE_DIR, explicit=env_info["env_name"])
@@ -3368,7 +3424,7 @@ def run_command_endpoint():
 
     except Exception as e:
         print(f"[ERROR] Run Command Failed: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": _safe_error_message(e)}), 500
 
 @app.route('/api/test-notification', methods=['POST'])
 def trigger_test_notification():
@@ -3395,7 +3451,7 @@ def trigger_test_notification():
         print(f"[INFO] Test command queued: {msg_type} for {target_id}")
         return jsonify({"status": "success", "message": "Test command queued"})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": _safe_error_message(e)}), 500
 
 @app.route('/api/groups', methods=['GET'])
 def get_group_data():
@@ -3450,7 +3506,7 @@ def get_group_data():
         print(f"[ERROR] Failed to fetch group data: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": _safe_error_message(e)}), 500
 
 
 # ── 비동기 commit job 인프라 ─────────────────────────────────────────
@@ -3601,7 +3657,7 @@ def reset_track_applications_mockup():
         })
     except Exception as e:
         print(f"[ERROR] reset-track-applications failed: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": _safe_error_message(e)}), 500
 
 
 @app.route('/api/mockups/group-preview/commit', methods=['POST'])
@@ -3855,7 +3911,7 @@ def get_drop_stats():
         print(f"[ERROR] Drop stats failed: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": _safe_error_message(e)}), 500
 
 def _prefetch_member_info(member_id):
     """Notion 페이지 ID로 멤버 이름/Discord 정보를 조회 (Discord 처리용)"""
@@ -4087,11 +4143,23 @@ def drop_member_from_track():
         print(f"[ERROR] Drop member failed: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": _safe_error_message(e)}), 500
 
 @app.route('/api/member/<user_id>', methods=['GET'])
 def get_member_detail(user_id):
-    """멤버 상세 정보 API (개인정보 + 조 + 제출 내역)"""
+    """멤버 상세 정보 API (개인정보 + 조 + 제출 내역).
+
+    🛡 IDOR 가드: 본인(viewer.id == user_id) 또는 운영진(_is_admin) 만 조회 허용.
+    무인증/타인 조회 차단 — Discord ID enumerate 로 PII 수집되는 사고 방지.
+    """
+    viewer = _get_authenticated_discord_user()
+    if not viewer:
+        return jsonify({"status": "error", "message": "Authentication required."}), 401
+    viewer_id = str(viewer.get('id', '')).strip()
+    target_id = str(user_id or '').strip()
+    if viewer_id != target_id and not _is_admin(viewer):
+        return jsonify({"status": "error", "message": "Forbidden."}), 403
+
     try:
         import notion_api
         import importlib
@@ -4107,7 +4175,7 @@ def get_member_detail(user_id):
         print(f"[ERROR] Member detail failed: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": _safe_error_message(e)}), 500
 
 @app.route('/member/<user_id>')
 def member_detail_page(user_id):
