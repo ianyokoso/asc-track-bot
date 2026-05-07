@@ -2871,6 +2871,10 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
 
 @app.route('/api/settings', methods=['GET'])
 def get_settings():
+    # 🛡 F-1: admin 가드 — env/config 가 노출되지 않도록 운영진만 조회 허용.
+    if not _is_admin_session():
+        return jsonify({"status": "error", "message": "운영진 권한이 필요합니다."}), 403
+
     # 1. Load from .env
     env = load_env_file()
     
@@ -2935,6 +2939,10 @@ def get_notification_preview():
 
 @app.route('/api/settings', methods=['POST'])
 def update_settings():
+    # 🛡 F-1: admin 가드 — .env / bot_config 변경 + deploy.py 트리거를 운영진으로 제한.
+    if not _is_admin_session():
+        return jsonify({"status": "error", "message": "운영진 권한이 필요합니다."}), 403
+
     import copy
     data = request.json
     print(f"[INFO] Received Settings Update: {data}")
@@ -3332,9 +3340,18 @@ def run_command_endpoint():
     Triggers bot commands either via Subprocess (scripts) or IPC (Queue).
     Payload: { "command": "string", "cohort": "string", "force": bool }
     """
-    data = request.json
+    # 🛡 F-3: admin 가드 — subprocess(manual_reassign_groups.py) 실행 + 봇 명령 큐잉을 운영진으로 제한.
+    if not _is_admin_session():
+        return jsonify({"status": "error", "message": "운영진 권한이 필요합니다."}), 403
+
+    # 입력 검증 — cohort 값이 숫자여야 함 (정상 cohort '6', '9' 등). 옵션-look-alike 차단.
+    data = request.json or {}
+    raw_cohort = str(data.get('cohort', '6')).strip()
+    if not re.fullmatch(r'\d+', raw_cohort):
+        return jsonify({"status": "error", "message": "cohort 는 숫자여야 합니다."}), 400
+
     cmd_type = data.get('command')
-    cohort = data.get('cohort', '6')
+    cohort = raw_cohort
     force = data.get('force', False)
     
     print(f"[INFO] Received Run Command: {cmd_type} (Cohort: {cohort}, Force: {force})")
@@ -3428,6 +3445,10 @@ def run_command_endpoint():
 
 @app.route('/api/test-notification', methods=['POST'])
 def trigger_test_notification():
+    # 🛡 F-5: admin 가드 — 봇 이름으로 임의 사용자에게 DM 발송하는 기능을 운영진으로 제한.
+    if not _is_admin_session():
+        return jsonify({"status": "error", "message": "운영진 권한이 필요합니다."}), 403
+
     try:
         data = request.json
         target_id = data.get('targetId')
@@ -4053,6 +4074,10 @@ def drop_member_from_track():
 
     Payload: {"memberId": "...", "trackName": "AI 에이전트 트랙"}
     """
+    # 🛡 F-4: admin 가드 — 멤버 탈락(Notion 변경 + Discord 역할 박탈 + DM 발송)은 운영진 전용.
+    if not _is_admin_session():
+        return jsonify({"status": "error", "message": "운영진 권한이 필요합니다."}), 403
+
     try:
         data = request.json
         member_id = data.get('memberId')
