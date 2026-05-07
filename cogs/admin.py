@@ -336,6 +336,36 @@ class AdminCog(commands.Cog):
                 )
         return overwrites
 
+    def _build_voice_channel_overwrites(
+        self,
+        guild: discord.Guild,
+        allowed_roles: List[discord.Role],
+    ) -> Dict[Any, discord.PermissionOverwrite]:
+        """
+        화상미팅(음성 채널) 전용 overwrite.
+        텍스트 채널과 달리 connect/speak/stream(=비디오, Go Live) 을 명시 부여해야
+        그룹 역할 보유자가 실제로 입장·발언·화상 공유 가능.
+        @everyone 은 view + connect 둘 다 deny — 운영 서버 '비공개 채널' 토글과 동일.
+        """
+        overwrites: Dict[Any, discord.PermissionOverwrite] = {
+            guild.default_role: discord.PermissionOverwrite(
+                view_channel=False,
+                connect=False,
+            ),
+        }
+        for role in allowed_roles:
+            if not role:
+                continue
+            overwrites[role] = discord.PermissionOverwrite(
+                view_channel=True,
+                connect=True,
+                speak=True,
+                stream=True,
+                use_voice_activation=True,
+                read_message_history=True,
+            )
+        return overwrites
+
     async def _ensure_text_channel(
         self,
         guild: discord.Guild,
@@ -821,14 +851,17 @@ class AdminCog(commands.Cog):
                     group_number=group_number,
                 )
 
-                # 조별 화상미팅 (음성 채널) — 같은 조 역할만 view 가능
+                # 조별 화상미팅 (음성 채널) — 같은 조 역할만 입장 가능.
+                # 운영 서버 '비공개 채널' 토글과 동일하게 view + connect 모두 부여,
+                # 비디오/Go Live(stream) 권한도 명시 부여해야 화상미팅 정상 동작.
+                # (운영 서버 패턴: 그룹 역할 1개만 추가, 운영자 등 Administrator 역할은 자동 포함)
                 voice_channel_name = f"{track_short}-{clean_cohort}기-{group_number}조-화상미팅"
                 voice_channel, created = await self._ensure_voice_channel(
                     guild,
                     category,
                     voice_channel_name,
                     reason,
-                    overwrites=self._build_channel_overwrites(guild, [group_role], read_only=False),
+                    overwrites=self._build_voice_channel_overwrites(guild, [group_role]),
                 )
                 if created:
                     summary["voice_channels_created"] += 1

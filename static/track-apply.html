@@ -2284,9 +2284,9 @@
         headerActions.innerHTML = `
           ${backToApplyBtn}
           <button type="button" class="btn-ghost" id="admin-cohort-config" title="기수 / 신청 기간 / Today 오버라이드 설정">⚙️ 기수·기간 설정</button>
-          <button type="button" class="btn-ghost" id="admin-fill-mock" title="하드코딩된 목업 멤버 120명 (기본 트랙 신청 포함) 으로 복원 — deterministic baseline">📋 목업 채우기</button>
-          <button type="button" class="btn-ghost" id="admin-fill-mock-random" title="멤버 120명 풀은 그대로, 트랙·조장·sub-form 을 매번 다른 랜덤 분배로 셔플">🎲 랜덤 채우기</button>
-          <button type="button" class="btn-ghost" id="admin-clear-mock" title="목업 멤버 120명을 리스트에서 완전히 제거 (실 OAuth 사용자만 남김)">🧹 목업 지우기</button>
+          <button type="button" class="btn-ghost" id="admin-fill-mock" title="목업 멤버 N명 (기본 120, 클릭 시 직접 입력) 으로 복원 — N<120 trim, N>120 clone 확장">📋 목업 채우기</button>
+          <button type="button" class="btn-ghost" id="admin-fill-mock-random" title="현재 목업 멤버 풀은 그대로, 트랙·조장·sub-form 을 매번 다른 랜덤 분배로 셔플">🎲 랜덤 채우기</button>
+          <button type="button" class="btn-ghost" id="admin-clear-mock" title="목업 멤버 전부 리스트에서 완전히 제거 (실 OAuth 사용자만 남김)">🧹 목업 지우기</button>
           <button type="button" class="btn-ghost text-bad" id="admin-full-reset" title="신청 데이터 초기화 (서버 캐시 + 브라우저). Discord 채널/역할은 봇 !테스트초기화 별도 실행 필요.">🗑️ 전체 초기화</button>
           <button class="btn-ghost" id="admin-track-apply-sync">Full Sync</button>
           <button class="btn-navy" id="admin-track-apply-refresh">Refresh</button>`;
@@ -2789,14 +2789,50 @@
     }
 
     async function runAdminFillMock() {
+      // 직전에 사용한 인원 수가 있으면 prompt 기본값으로 재사용, 없으면 baseline 120.
+      let prevTarget = null;
+      try {
+        const raw = localStorage.getItem(MOCK_TARGET_COUNT_KEY);
+        if (raw != null) {
+          const n = parseInt(raw, 10);
+          if (Number.isFinite(n) && n > 0) prevTarget = n;
+        }
+      } catch (e) {}
+      const defaultCount = prevTarget != null ? prevTarget : MOCK_BASELINE_COUNT;
+
+      const input = prompt(
+        '📋 목업 채우기 — 인원 수 입력\n\n' +
+        `기본 baseline 은 ${MOCK_BASELINE_COUNT}명입니다.\n` +
+        '원하는 멤버 수를 입력하세요 (1 이상 정수).\n' +
+        `· ${MOCK_BASELINE_COUNT} 미만: 앞에서부터 N명만 사용\n` +
+        `· ${MOCK_BASELINE_COUNT} 초과: 기존 멤버를 복제해 N명까지 확장\n\n` +
+        '취소 시 변경 없음. 빈 값 / 0 / 음수 입력 시도 무시.',
+        String(defaultCount)
+      );
+      if (input == null) return; // 취소
+      const target = parseInt(String(input).trim(), 10);
+      if (!Number.isFinite(target) || target <= 0) {
+        alert('⚠️ 올바른 양의 정수를 입력하세요. 변경되지 않았습니다.');
+        return;
+      }
+
       const confirmed = confirm(
-        '📋 목업 멤버 120명 채우기\n\n' +
-        '기본 데모 데이터 (멤버 120명, 신청 약 108건) 로 복원합니다.\n' +
-        '현재 브라우저 편집 사항은 모두 사라집니다.\n\n' +
+        `📋 목업 멤버 ${target}명 채우기\n\n` +
+        `현재 브라우저 편집 사항은 모두 사라집니다.\n` +
+        `(baseline ${MOCK_BASELINE_COUNT}명 기준 trim/clone 으로 ${target}명 구성)\n\n` +
         '※ 서버 캐시 / Discord / Notion 은 건드리지 않음.\n\n' +
         '진행할까요?'
       );
       if (!confirmed) return;
+
+      try {
+        if (target === MOCK_BASELINE_COUNT) {
+          // baseline 과 같으면 키 제거 (불필요한 처리 회피)
+          localStorage.removeItem(MOCK_TARGET_COUNT_KEY);
+        } else {
+          localStorage.setItem(MOCK_TARGET_COUNT_KEY, String(target));
+        }
+      } catch (e) {}
       try { localStorage.removeItem(ADMIN_STORAGE_KEY); } catch (e) {}
       try { localStorage.removeItem(GP_STATE_KEY); } catch (e) {}
       // '목업 지우기' 플래그도 해제 — baseline 다시 보이도록
@@ -3777,6 +3813,44 @@
       }
     } catch (e) {}
 
+    /**
+     * 목업 채우기 목표 인원 적용.
+     * - 미설정/잘못된 값: baseline 120명 그대로 유지
+     * - target < baseline: 앞에서부터 N명만 남기고 trim (트랙 분포 보존을 위해 slice 사용)
+     * - target > baseline: 기존 멤버를 cloning 해서 N명까지 확장
+     *   · clone 시 id/handle/initials 새로 부여 (식별자 충돌 방지)
+     *   · tracks 는 원본을 deep-copy 해서 분포 비율 유지
+     * '목업 지우기' 가 활성화돼 MOCK_MEMBERS 가 이미 비어있으면 아무것도 안 함.
+     */
+    try {
+      const rawTarget = localStorage.getItem('asc_track_apply_mock_target_count_v1');
+      const target = rawTarget == null ? null : parseInt(rawTarget, 10);
+      if (Number.isFinite(target) && target > 0 && MOCK_MEMBERS.length > 0) {
+        if (target < MOCK_MEMBERS.length) {
+          MOCK_MEMBERS.length = target;
+        } else if (target > MOCK_MEMBERS.length) {
+          const baseline = MOCK_MEMBERS.slice();
+          let cloneIndex = 0;
+          while (MOCK_MEMBERS.length < target) {
+            const src = baseline[cloneIndex % baseline.length];
+            const seq = MOCK_MEMBERS.length + 1; // 1-base 순번
+            const seqStr = String(seq).padStart(4, '0');
+            const cloned = {
+              ...src,
+              id: `clone${seqStr}${Math.random().toString(36).slice(2, 6)}`,
+              handle: `@anon_clone_${seqStr}`,
+              initials: `c${(seq % 100).toString().padStart(2, '0').slice(0, 2)}`,
+              tracks: Array.isArray(src.tracks)
+                ? src.tracks.map(t => ({ ...t }))
+                : [],
+            };
+            MOCK_MEMBERS.push(cloned);
+            cloneIndex += 1;
+          }
+        }
+      }
+    } catch (e) { /* localStorage 접근 실패 시 baseline 그대로 */ }
+
     function isApplied(m) {
       return Array.isArray(m.tracks) && m.tracks.length > 0;
     }
@@ -4011,6 +4085,10 @@
     // 클릭하면 true. 다음 페이지 init 에서 baseline 멤버를 전부 splice 제거.
     // OAuth 로그인한 실 사용자는 server 응답을 통해 별도로 push 됨.
     const MOCK_HIDDEN_KEY = 'asc_track_apply_mock_hidden_v1';
+    // 목업 채우기 목표 인원 — 미설정 시 baseline 그대로 (=하드코딩 120명).
+    // 사용자가 '목업 채우기' 버튼에서 prompt 로 다른 숫자 입력 시 저장됨.
+    const MOCK_TARGET_COUNT_KEY = 'asc_track_apply_mock_target_count_v1';
+    const MOCK_BASELINE_COUNT = 120; // HTML 하드코딩 baseline 인원 — 툴팁/prompt 기본값.
     function saveState() {
       try {
         localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify({
