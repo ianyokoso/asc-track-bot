@@ -2156,21 +2156,62 @@ def _create_group_preview_inline_db(notion_api, track_page_id, title, member_db_
     return response.json()['id']
 
 
-def _find_track_page_in_master_db(notion_api, master_db_id, track_name):
+def _resolve_master_db_schema(notion_api, master_db_id):
     """
-    Legacy `_execute_group_assignment` 와 동일한 검색 로직.
-    master DB 안에서 트랙 페이지를 찾는다.
-    1) '트랙명' multi_select contains track_name
-    2) 못 찾으면 '이름' title contains track_name
-    """
-    payload = {"filter": {"property": "트랙명", "multi_select": {"contains": track_name}}}
-    pages = notion_api.fetch_all_pages(
-        f'https://api.notion.com/v1/databases/{master_db_id}/query', payload
-    )
-    if pages:
-        return pages[0]['id']
+    마스터 DB 의 properties 스키마를 읽어 lookup 에 필요한 키 추출.
+    한 번 읽으면 commit 사이클 동안 reuse — 트랙별로 매번 호출하지 않음.
 
-    payload = {"filter": {"property": "이름", "title": {"contains": track_name}}}
+    Returns:
+      {
+        'title_prop_name': str | None,         # 트랙 이름이 들어있는 title column
+        'has_track_multi_select': bool,        # '트랙명' multi_select 존재 여부
+        'properties': dict (raw schema dict),  # 디버깅용
+      }
+    """
+    db_obj = notion_api.get_database(master_db_id)
+    if not db_obj:
+        raise RuntimeError(f"Cannot read master DB schema: {master_db_id}")
+
+    properties = db_obj.get('properties') or {}
+    title_prop_name = None
+    has_track_multi_select = False
+    for name, info in properties.items():
+        if info.get('type') == 'title' and not title_prop_name:
+            title_prop_name = name
+        if name == '트랙명' and info.get('type') == 'multi_select':
+            has_track_multi_select = True
+
+    return {
+        'title_prop_name': title_prop_name,
+        'has_track_multi_select': has_track_multi_select,
+        'properties': properties,
+    }
+
+
+def _find_track_page_in_master_db(notion_api, master_db_id, track_name, schema=None):
+    """
+    master DB 안에서 트랙 페이지를 찾는다. schema-aware:
+      - schema 의 '트랙명' multi_select 가 있을 때만 1차 쿼리 (없으면 skip — 400 noise 방지)
+      - 항상 title column contains 로 폴백
+
+    schema 가 None 이면 즉석 조회 (legacy 호환).
+    """
+    if schema is None:
+        try:
+            schema = _resolve_master_db_schema(notion_api, master_db_id)
+        except Exception:
+            schema = {'title_prop_name': '이름', 'has_track_multi_select': False}
+
+    if schema.get('has_track_multi_select'):
+        payload = {"filter": {"property": "트랙명", "multi_select": {"contains": track_name}}}
+        pages = notion_api.fetch_all_pages(
+            f'https://api.notion.com/v1/databases/{master_db_id}/query', payload
+        )
+        if pages:
+            return pages[0]['id']
+
+    title_prop = schema.get('title_prop_name') or '이름'
+    payload = {"filter": {"property": title_prop, "title": {"contains": track_name}}}
     pages = notion_api.fetch_all_pages(
         f'https://api.notion.com/v1/databases/{master_db_id}/query', payload
     )
@@ -2179,35 +2220,27 @@ def _find_track_page_in_master_db(notion_api, master_db_id, track_name):
     return None
 
 
-def _get_or_create_track_page_in_master_db(notion_api, master_db_id, track_name):
+def _get_or_create_track_page_in_master_db(notion_api, master_db_id, track_name, schema=None):
     """
     test 워크스페이스 전용 라우트에서, master DB 안에 트랙 페이지가 없으면 자동 생성.
-    schema 를 읽어 title / 트랙명(multi_select) 속성 유무에 맞춰 row 생성.
+    schema 가 주어지면 재조회 안 함 (트랙 N개 처리 시 N번 fetch 방지).
     prod 영향 없음 — 이 함수는 _commit_group_preview_to_notion (test-only) 에서만 호출됨.
     """
-    page_id = _find_track_page_in_master_db(notion_api, master_db_id, track_name)
+    if schema is None:
+        schema = _resolve_master_db_schema(notion_api, master_db_id)
+
+    page_id = _find_track_page_in_master_db(notion_api, master_db_id, track_name, schema=schema)
     if page_id:
         return page_id, False
 
-    db_obj = notion_api.get_database(master_db_id)
-    if not db_obj:
-        raise RuntimeError(f"Cannot read master DB schema: {master_db_id}")
-
-    title_prop_name = None
-    has_track_multi = False
-    for name, info in (db_obj.get('properties') or {}).items():
-        if info.get('type') == 'title' and not title_prop_name:
-            title_prop_name = name
-        if name == '트랙명' and info.get('type') == 'multi_select':
-            has_track_multi = True
-
+    title_prop_name = schema.get('title_prop_name')
     if not title_prop_name:
         raise RuntimeError(f"Master DB({master_db_id}) 에 title 속성이 없습니다.")
 
     properties = {
         title_prop_name: {"title": [{"text": {"content": track_name[:2000]}}]}
     }
-    if has_track_multi:
+    if schema.get('has_track_multi_select'):
         properties['트랙명'] = {"multi_select": [{"name": track_name[:100]}]}
 
     new_page_id = notion_api.add_row_to_database(master_db_id, properties)
@@ -2366,6 +2399,13 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
     touched_tracks = []
     track_name_to_page_id = {}
 
+    # 마스터 DB 스키마 한 번만 조회 — 모든 트랙 lookup 에서 재사용.
+    # (이전엔 트랙별로 '트랙명' 쿼리 → 400 노이즈 + 트랙당 1회 fetch 낭비)
+    try:
+        master_db_schema = _resolve_master_db_schema(notion_api, group_db_id)
+    except Exception as e:
+        raise RuntimeError(f"마스터 DB 스키마 조회 실패: {group_db_id}: {e}")
+
     # 라이트 트랙은 조 배정 없이 부모 트랙의 공지 / 과제-인증 채널만 접근 → Notion 조 inline DB 생성 X.
     LIGHT_TRACK_NAME_KEYWORDS = ('라이트 트랙', '라이트트랙')
 
@@ -2393,7 +2433,7 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
 
         # 1. master DB 에서 트랙 페이지 찾기 — test 워크스페이스에서는 없으면 자동 생성
         track_page_id, _created = _get_or_create_track_page_in_master_db(
-            notion_api, group_db_id, track_name
+            notion_api, group_db_id, track_name, schema=master_db_schema
         )
         track_name_to_page_id[track_name] = track_page_id
 
