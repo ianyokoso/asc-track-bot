@@ -35,3 +35,7 @@ track_applications_admin_mock_cache_*.json
 # Local backups
 .pre-pull-backup-*/
 *.backup
+
+# Local deploy scripts (not version-controlled — different machines need different paths)
+scripts/deploy-oracle.sh
+scripts/push-and-deploy.sh
