@@ -377,19 +377,21 @@ def _get_admin_guild_id():
 
 
 # ── 운영진 역할 ID 캐시 ─────────────────────────────────────
-# Discord 길드의 역할 목록은 자주 안 변하므로 5분 단위 메모리 캐시.
+# Discord 길드의 역할 ID 는 거의 안 바뀌지만 운영진 역할 추가/이름 변경 시
+# 빠르게 반영되어야 하므로 짧은 TTL.
+_ADMIN_ROLE_CACHE_TTL = 30  # seconds — 5분 → 30초로 단축 (운영진 즉시 반영)
 _admin_role_id_cache = {'role_id': None, 'fetched_at': 0.0, 'role_name': None}
 
 
 def _resolve_admin_role_id():
-    """길드의 '운영자' 역할 ID 조회 (bot token 사용, 5분 캐시)."""
+    """길드의 '운영자' 역할 ID 조회 (bot token 사용, 캐시 TTL 30초)."""
     import time
     now = time.time()
     target_name = _get_admin_role_name()
     if (
         _admin_role_id_cache['role_id']
         and _admin_role_id_cache.get('role_name') == target_name
-        and (now - _admin_role_id_cache['fetched_at']) < 300
+        and (now - _admin_role_id_cache['fetched_at']) < _ADMIN_ROLE_CACHE_TTL
     ):
         return _admin_role_id_cache['role_id']
 

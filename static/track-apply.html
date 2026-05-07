@@ -1958,6 +1958,43 @@
       return 'logout';
     })();
     applyState(initialState);
+
+    /**
+     * 페이지 로드 후 서버에서 최신 admin 상태 동기화.
+     *
+     * 배경:
+     *   - 클라이언트 IS_VIEWER_ADMIN 은 OAuth 콜백 시점의 query param `isAdmin=0/1`
+     *     기준으로 결정됨. 그 이후 디스코드에서 운영자 역할이 추가/제거돼도
+     *     쿼리 파라미터 그대로 → UI 가 stale.
+     *   - /api/auth/me 는 매 호출 시 _is_admin_user() 로 라이브 검증.
+     *   - 페이지 로드 직후 1회 호출해서 최신 값 받아서 IS_VIEWER_ADMIN 갱신.
+     *   - 서버 role 캐시 TTL 도 30초로 짧으니 거의 실시간.
+     */
+    async function refreshAdminStateFromServer() {
+      if (!VIEWER_USER_ID) return; // 비로그인 상태
+      try {
+        const resp = await fetch(`${APPLICATION_API_BASE}/api/auth/me?next=/apply`, {
+          credentials: 'include',
+        });
+        if (!resp.ok) return;
+        const data = await resp.json().catch(() => ({}));
+        if (typeof data.isAdmin !== 'boolean') return;
+        if (data.isAdmin === IS_VIEWER_ADMIN) return; // 변화 없음
+
+        IS_VIEWER_ADMIN = data.isAdmin;
+        // 헤더 재렌더 (admin 버튼 노출/숨김 갱신)
+        const currentState = document.querySelector('.view:not(.hidden-view)')?.id || '';
+        const stateKey = currentState.replace(/^view-/, '');
+        const stateDef = STATES[stateKey];
+        if (stateDef && stateDef.action) {
+          renderHeaderActions(stateDef.action);
+        }
+      } catch (e) {
+        // 네트워크 오류 등은 무시 — 다음 새로고침 시 재시도.
+      }
+    }
+    refreshAdminStateFromServer();
+
     document.getElementById('btn-login')?.addEventListener('click', () => {
       const targetWindow = window.top || window;
       if (LOGIN_URL) {
