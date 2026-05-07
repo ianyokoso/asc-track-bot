@@ -3830,23 +3830,15 @@
     /**
      * 자동 조 배정 알고리즘.
      *
-     * 규칙 (사용자 정의 — 우선순위 높음 → 낮음):
-     *   A) 한 조 최소 5명 (4명 이하 조 금지)
-     *   B) 한 조 최대 7명
-     *   C) 신청 인원이 너무 적어 (A,B 동시 만족 불가) split 못 하면 → 1조에 모두 lump
-     *      · N ≤ 5 → 1조 (rule 1, 4~5명 한 조)
-     *      · N = 6,7,8,9 → 1조 (split 시 어떤 조든 5명 미만)
-     *      · N ≥ 10 → 정상 split
-     *   D) 4개 조 이상 나눠도 lopsided (예: 6,6,6,4) 안 되도록 균등 분배
-     *      → 각 조 사이즈 차이 최대 1 (예: 22명/4조 = 6,6,5,5)
-     *   E) 조장은 조마다 1명씩 best-effort 배치
-     *      · 조장 수 < 조 수 → 일부 조는 비조장
-     *      · 조장 수 > 조 수 → 잉여 조장은 일반 멤버 풀에 합류 (조 개수 늘리지 않음 — A 우선)
+     * 규칙 (우선순위 높음 → 낮음):
+     *   1) 한 조 최대 7명 — HARD 제약 (절대 초과 금지)
+     *   2) 신청 4-5명일 때는 1조에 lump
+     *   3) 한 조 최소 5명 — SOFT (가능할 때만; 1번 충돌 시 양보)
+     *      · N=8 → [4,4], N=9 → [5,4] 처럼 max 7 지키려고 4명 조 발생 가능
+     *   4) 균등 분배 — 차이 최대 1 (예: 22명/4조 = 6,6,5,5)
+     *   5) 조장 1조 1명 best-effort (조 개수 늘리지 않음)
      *
      * 라이트 트랙 같은 조장 없는 entries 도 동일 흐름 (leaders=[]).
-     *
-     * @param entries  [{ member, leader, creatorSub }, ...]
-     * @param _size    하위호환 용 인자 (현재는 무시 — 알고리즘이 동적 결정)
      */
     function gpChunk(entries, _size = 5) {
       const total = entries.length;
@@ -3858,17 +3850,19 @@
       // ── 조 개수 결정 ──────────────────────────────────────────
       let numGroups;
       if (total <= 5) {
-        // 규칙 C: N ≤ 5 → 1조 (4-5명 한 조 룰 포함)
+        // 규칙 2: N ≤ 5 → 1조 (4-5명 한 조 룰 포함)
         numGroups = 1;
       } else {
-        // 정상 split 가능 범위: [ceil(N/7), floor(N/5)]
-        const minG = Math.ceil(total / 7);   // 규칙 B
-        const maxG = Math.floor(total / 5);  // 규칙 A
+        // 규칙 1 (최대 7명) 만족하는 최소 조 수
+        const minG = Math.ceil(total / 7);
+        // 규칙 3 (최소 5명) 만족하는 최대 조 수
+        const maxG = Math.floor(total / 5);
         if (maxG < minG) {
-          // 범위 비어있음 (N = 6,7,8,9) → 1조에 lump (규칙 C)
-          numGroups = 1;
+          // 둘 다 만족 불가 (N=8,9 등) → 규칙 1(max 7) 우선 → minG 채택
+          // 결과적으로 [4,4] / [5,4] 처럼 5명 미만 조 발생할 수 있음 (규칙 3 양보).
+          numGroups = minG;
         } else {
-          // round(N/5) 가 가장 자연스러운 조 개수, [minG, maxG] 로 clamp
+          // 둘 다 만족 가능한 범위 [minG, maxG] — round(N/5) 를 clamp
           const target = Math.round(total / 5);
           numGroups = Math.max(minG, Math.min(maxG, target));
         }
@@ -3923,16 +3917,17 @@
     let _gpDirty = false;
 
     // ── 조 배정 상태 localStorage 영속화 (페이지 재방문 시 복원) ─────
-    // v3: 자동 분할 알고리즘 재정의 (min 5 / max 7, 조장 수가 조 개수 안 늘림)
-    const GP_STATE_KEY = 'asc_track_gp_state_v3';
+    // v4: max 7 우선순위 1순위로 격상 (이전 v3 는 min 5 우선이라 N=8,9 가 1조 lump 됨)
+    const GP_STATE_KEY = 'asc_track_gp_state_v4';
     try {
       localStorage.removeItem('asc_track_gp_state_v1');
       localStorage.removeItem('asc_track_gp_state_v2');
+      localStorage.removeItem('asc_track_gp_state_v3');
     } catch (e) {}
     function gpSaveState() {
       try {
         localStorage.setItem(GP_STATE_KEY, JSON.stringify({
-          v: 3,
+          v: 4,
           activeTrack: _gpActiveTrack,
           assignments: _gpAssignments,
           originalLeaders: _gpOriginalLeaders,
@@ -3948,7 +3943,7 @@
         const raw = localStorage.getItem(GP_STATE_KEY);
         if (!raw) return;
         const data = JSON.parse(raw);
-        if (!data || data.v !== 3) return;
+        if (!data || data.v !== 4) return;
         if (data.activeTrack) _gpActiveTrack = data.activeTrack;
         if (data.assignments && typeof data.assignments === 'object') {
           Object.keys(data.assignments).forEach(k => {
