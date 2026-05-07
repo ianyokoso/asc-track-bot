@@ -1884,12 +1884,15 @@
           : '';
         headerActions.innerHTML = `
           ${backToApplyBtn}
+          <button type="button" class="btn-ghost text-bad" id="admin-full-reset" title="신청 데이터 초기화 (서버 캐시 + 브라우저). Discord 채널/역할은 봇 !테스트초기화 별도 실행 필요.">🗑️ 전체 초기화</button>
           <button class="btn-ghost" id="admin-track-apply-sync">Full Sync</button>
           <button class="btn-navy" id="admin-track-apply-refresh">Refresh</button>`;
         requestAnimationFrame(() => {
           document.getElementById('btn-back-to-apply')?.addEventListener('click', () => {
-            // 신청 상태에 따라 open-new / open-edit / closed 자동 판정 (간단히 open-new)
             applyState('open-new');
+          });
+          document.getElementById('admin-full-reset')?.addEventListener('click', () => {
+            void runAdminFullReset();
           });
           document.getElementById('admin-track-apply-sync')?.addEventListener('click', () => {
             void syncAdminMembersToServer();
@@ -2284,6 +2287,49 @@
       refreshAdminViews(getActiveAdminTrackId());
       await loadTrackApplications();
       return result;
+    }
+
+    /**
+     * [관리자] 전체 초기화.
+     * - 서버 admin track-application mockup 캐시 삭제
+     * - 브라우저 localStorage (mock 멤버 편집 + 조 배정 상태) 삭제
+     * - 새로고침
+     *
+     * Discord 채널/역할 / Notion 트랙 페이지는 이 함수가 안 건드림.
+     * 디스코드 봇에 `!테스트초기화` 입력해서 별도 정리해야 함.
+     */
+    async function runAdminFullReset() {
+      const confirmed = confirm(
+        '🗑️ 전체 초기화\n\n' +
+        '아래를 모두 비우고 페이지를 새로고침합니다:\n' +
+        '  • 서버: 트랙 신청 admin mockup 캐시\n' +
+        '  • 브라우저: 멤버 편집 / 조 배정 상태 (localStorage)\n\n' +
+        '※ Discord 채널·역할 / Notion 트랙 페이지는 이 작업이 건드리지 않습니다.\n' +
+        '   디스코드 테스트 길드에서 `!테스트초기화` 명령으로 별도 정리하세요.\n\n' +
+        '진행할까요?'
+      );
+      if (!confirmed) return;
+      try {
+        const response = await fetch('/api/admin/reset-track-applications', {
+          method: 'POST',
+          credentials: 'include',
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || result.status !== 'success') {
+          alert(`초기화 실패: ${result.message || response.statusText}`);
+          return;
+        }
+        // 클라이언트 상태도 wipe
+        try { localStorage.removeItem(ADMIN_STORAGE_KEY); } catch (e) {}
+        try { localStorage.removeItem(GP_STATE_KEY); } catch (e) {}
+        alert(
+          `✅ 초기화 완료 (서버 멤버 ${result.clearedMembers || 0}명 제거)\n\n` +
+          `Discord/Notion 정리 필요 시 디스코드에서 \`!테스트초기화\` 실행하세요.`
+        );
+        location.reload();
+      } catch (e) {
+        alert(`네트워크 오류: ${e.message || e}`);
+      }
     }
 
     function syncViewerSubmissionState(member) {

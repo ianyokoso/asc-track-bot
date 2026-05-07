@@ -3091,6 +3091,40 @@ def get_group_data():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+@app.route('/api/admin/reset-track-applications', methods=['POST'])
+def reset_track_applications_mockup():
+    """
+    [관리자 전용] track-application admin mockup 캐시를 비웁니다.
+    데모 시연 / 테스트 반복 시 '처음부터 다시' 용도.
+
+    ⚠️ Discord 채널·역할 / Notion 페이지는 이 endpoint 가 건드리지 않습니다.
+       그쪽 정리는 디스코드 테스트 길드에서 `!테스트초기화` 봇 명령으로 별도 실행.
+    """
+    if not _is_admin_session():
+        return jsonify({
+            "status": "error",
+            "message": "운영진 권한이 필요합니다. 관리자 디스코드 계정으로 로그인하세요."
+        }), 403
+
+    try:
+        cleared_count = 0
+        existing = _read_track_application_admin_mock_cache() or {}
+        cohorts = existing.get('cohorts') or {}
+        for cohort_label, bucket in (cohorts.items() if isinstance(cohorts, dict) else []):
+            members = (bucket or {}).get('members') or []
+            cleared_count += len(members) if isinstance(members, list) else 0
+        _write_track_application_admin_mock_cache({'cohorts': {}})
+        return jsonify({
+            "status": "success",
+            "message": "track-application admin mockup 캐시 초기화 완료",
+            "clearedMembers": cleared_count,
+            "note": "Discord 채널/역할 + Notion 트랙 페이지는 디스코드에서 `!테스트초기화` 명령으로 별도 정리하세요.",
+        })
+    except Exception as e:
+        print(f"[ERROR] reset-track-applications failed: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @app.route('/api/mockups/group-preview/commit', methods=['POST'])
 def commit_group_preview_mockup():
     # 운영진(관리자)만 commit 가능 — 클라이언트가 강제로 admin view 진입해도 서버에서 차단.
