@@ -1182,12 +1182,22 @@ TRACK_APPLICATION_CREATOR_SUB_MAP = {
 
 # Notion '트랙' / '트랙명' multi_select 에 들어가야 할 정식 트랙명 화이트리스트.
 # 그 외는 legacy/orphan 으로 간주하고 prune 대상.
+#
+# '크리에이터 트랙' 은 parent (조 배정 / Discord 역할 단위), 그 안에 숏폼·롱폼 sub-track 이 존재.
+# 멤버 마스터 DB '트랙' 옵션에는 sub-track 도 별개 옵션으로 남아있어야 한다 (멤버별 어느 폼인지 표기).
+TRACK_APPLICATION_CREATOR_SUB_TRACK_LABELS = {
+    '크리에이터 숏폼 트랙',
+    '크리에이터 롱폼 트랙',
+}
+
+
 def _canonical_track_names():
     names = set()
     for _, label in TRACK_APPLICATION_WEEKDAY_TRACK_MAP.values():
         names.add(label)
     for label in TRACK_APPLICATION_LIGHT_TRACK_MAP.values():
         names.add(label)
+    names |= TRACK_APPLICATION_CREATOR_SUB_TRACK_LABELS
     return names
 
 
