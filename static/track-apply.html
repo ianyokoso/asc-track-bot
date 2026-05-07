@@ -4338,24 +4338,73 @@
       };
     }
 
-    /** 외부 API 호출 진입점 */
-    async function gpCallSyncApi(payload) {
+    /**
+     * 외부 API 호출 진입점.
+     *
+     * 비동기 패턴 (2026-05-07):
+     *   1) POST /api/mockups/group-preview/commit
+     *      → 즉시 202 + jobId 반환 (백그라운드 thread 가 작업)
+     *   2) GET /api/mockups/group-preview/commit/status?jobId=X 를 2초마다 폴링
+     *      → status: queued/running/completed/failed
+     *      → phase: notion_members / notion_groups / discord_sync / done
+     *   3) completed → result 반환, failed → error 던짐
+     *
+     * Vercel 프록시 30s timeout 우회 — 폴링 1회는 즉시 응답이라 timeout 없음.
+     *
+     * onProgress(phase, detail, extra) — modal step 갱신 콜백 (선택).
+     */
+    async function gpCallSyncApi(payload, onProgress) {
       if (MOCKUP_MODE) {
         console.warn('[조 배정 목업] 외부 API 호출 차단됨 — Notion/Discord 에 실제 변경 없음');
         return { mocked: true };
       }
 
-      const response = await fetch(`${GP_API_BASE}/api/mockups/group-preview/commit`, {
+      // 1) 작업 시작 — 즉시 jobId 받음
+      const startResp = await fetch(`${GP_API_BASE}/api/mockups/group-preview/commit`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || data.status !== 'success') {
-        throw new Error(data.message || '테스트 Notion 반영에 실패했습니다.');
+      const startData = await startResp.json().catch(() => ({}));
+      if (startResp.status !== 202 || !startData.jobId) {
+        throw new Error(startData.message || `commit 시작 실패 (HTTP ${startResp.status})`);
       }
-      return data;
+      const jobId = startData.jobId;
+
+      // 2) 폴링 — 2초 간격, 최대 10분
+      const POLL_INTERVAL_MS = 2000;
+      const MAX_POLL_TIME_MS = 10 * 60 * 1000;
+      const startTs = Date.now();
+
+      while (true) {
+        if (Date.now() - startTs > MAX_POLL_TIME_MS) {
+          throw new Error('commit 작업이 10분 안에 끝나지 않았습니다. 서버 로그를 확인해주세요.');
+        }
+        await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+
+        const statusResp = await fetch(
+          `${GP_API_BASE}/api/mockups/group-preview/commit/status?jobId=${encodeURIComponent(jobId)}`,
+          { credentials: 'include' }
+        );
+        const job = await statusResp.json().catch(() => ({}));
+        if (!statusResp.ok) {
+          throw new Error(job.message || `상태 조회 실패 (HTTP ${statusResp.status})`);
+        }
+
+        if (typeof onProgress === 'function') {
+          try { onProgress(job.phase, job.phaseDetail, job); } catch (e) { /* noop */ }
+        }
+
+        if (job.status === 'completed') {
+          // 완료 — result 는 commit 함수의 원래 반환값과 동일 구조
+          return job.result || { status: 'success' };
+        }
+        if (job.status === 'failed') {
+          throw new Error(job.error || '서버에서 commit 작업이 실패했습니다.');
+        }
+        // status === 'queued' or 'running' — 계속 폴링
+      }
     }
 
     let _gpFinishTimers = [];
@@ -4448,7 +4497,24 @@
 
       try {
         gpUpdateProgressStep('notion', 'running');
-        const result = await gpCallSyncApi(payload);
+        // 비동기 commit 폴링 — phase 변화에 따라 modal step 갱신.
+        const onProgress = (phase, detail, job) => {
+          if (phase === 'notion_members' || phase === 'notion_groups') {
+            const text = detail || (job?.tracksTotal
+              ? `진행 중... (${job.tracksProcessed || 0}/${job.tracksTotal})`
+              : '진행 중...');
+            const li = document.querySelector('#gp-progress-list li[data-step="notion"]');
+            const det = li?.querySelector('.gp-step-detail');
+            if (det) det.textContent = text;
+          } else if (phase === 'discord_sync') {
+            // Notion 단계 완료 처리 + Discord 단계 시작
+            gpUpdateProgressStep('notion', 'done', `${sum.totalGroups}개 조 DB`);
+            gpUpdateProgressStep('roles', 'running');
+            gpUpdateProgressStep('channels', 'running');
+            gpUpdateProgressStep('invite', 'running');
+          }
+        };
+        const result = await gpCallSyncApi(payload, onProgress);
         const summary = result?.summary || {};
         const discord = summary.discord || {};
         const createdChannels =

@@ -9,6 +9,7 @@ import subprocess
 import threading
 import sys
 import time
+import uuid
 from urllib.parse import urlencode
 
 from env_utils import (
@@ -2282,7 +2283,22 @@ def _seed_group_preview_inline_db_options(notion_api, inline_db_id, cohort_label
     notion_api.update_database_schema(inline_db_id, properties)
 
 
-def _commit_group_preview_to_notion(payload):
+def _commit_group_preview_to_notion(payload, progress_callback=None):
+    """
+    Notion + Discord 동기화. 비동기 job 으로 실행 시 progress_callback 으로
+    각 단계 진행상황을 전달.
+
+    progress_callback(phase: str, detail: str = '', extra: dict = None)
+      phase: 'notion_members' | 'notion_groups' | 'discord_sync' | 'done'
+    """
+    def _progress(phase, detail='', extra=None):
+        if not progress_callback:
+            return
+        try:
+            progress_callback(phase, detail, extra or {})
+        except Exception as e:
+            print(f"[WARN] progress_callback raised: {e}")
+
     if payload.get('target') != 'notion-test':
         raise ValueError('Only the test Notion target is allowed for this route.')
 
@@ -2329,6 +2345,8 @@ def _commit_group_preview_to_notion(payload):
     notion_api = _load_notion_api(notion_token_override=notion_token_to_use)
     member_db_id = _resolve_database_target_id(notion_api, member_db_id)
     member_group_labels = _collect_member_group_labels(tracks)
+
+    _progress('notion_members', f'멤버 마스터 DB 갱신 중 ({len(members)}명)')
     member_page_ids, member_summary = _upsert_group_preview_members(
         notion_api,
         member_db_id,
@@ -2351,18 +2369,25 @@ def _commit_group_preview_to_notion(payload):
     # 라이트 트랙은 조 배정 없이 부모 트랙의 공지 / 과제-인증 채널만 접근 → Notion 조 inline DB 생성 X.
     LIGHT_TRACK_NAME_KEYWORDS = ('라이트 트랙', '라이트트랙')
 
+    eligible_tracks = []
     for track in tracks:
         groups = [group for group in track.get('groups', []) if group.get('members')]
         if not groups:
             continue
-
         track_name = (track.get('groupDbName') or track.get('tabLabel') or track.get('tabId') or '').strip()
         if not track_name:
             continue
-
-        # 라이트 트랙 스킵 — 조 inline DB 생성 안 함.
         if any(kw in track_name for kw in LIGHT_TRACK_NAME_KEYWORDS):
             continue
+        eligible_tracks.append((track, groups, track_name))
+
+    total_eligible = len(eligible_tracks)
+    for idx, (track, groups, track_name) in enumerate(eligible_tracks, start=1):
+        _progress(
+            'notion_groups',
+            f'{track_name} ({idx}/{total_eligible})',
+            {'tracksProcessed': idx - 1, 'tracksTotal': total_eligible},
+        )
 
         touched_tracks.append(track_name)
 
@@ -2422,6 +2447,7 @@ def _commit_group_preview_to_notion(payload):
                     # 멤버 페이지에 '소속 조' 속성이 없을 수도 있어 실패는 경고 처리
                     print(f"[WARN] assign_member_to_group failed for {member_id}: {e}")
 
+    _progress('discord_sync', '봇이 채널·역할을 만드는 중')
     try:
         discord_summary = _run_bot_command_and_wait(
             'group_preview_sync_discord',
@@ -2434,6 +2460,7 @@ def _commit_group_preview_to_notion(payload):
     except Exception as e:
         raise RuntimeError(f'Notion commit completed, but Discord sync failed: {e}') from e
 
+    _progress('done', '완료')
     return {
         "status": "success",
         "message": "Mock group preview was committed to the test Notion databases and synced to Discord.",
@@ -3091,6 +3118,105 @@ def get_group_data():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+# ── 비동기 commit job 인프라 ─────────────────────────────────────────
+# Notion 순차 호출 + Discord IPC 가 30s+ 걸려서 Vercel 프록시 timeout 에 걸림.
+# POST 는 즉시 jobId 반환 + 백그라운드 thread 가 작업, 클라이언트 폴링.
+_COMMIT_JOBS = {}                       # jobId -> dict (status, phase, ...)
+_COMMIT_JOBS_LOCK = threading.Lock()
+_COMMIT_JOB_TTL_SECONDS = 3600          # 완료된 job 1시간 후 자동 정리
+
+
+def _make_commit_job(owner_user_id):
+    job_id = str(uuid.uuid4())
+    job = {
+        'jobId': job_id,
+        'status': 'queued',          # queued | running | completed | failed
+        'phase': 'queued',           # notion_members | notion_groups | discord_sync | done
+        'phaseDetail': '',
+        'tracksProcessed': 0,
+        'tracksTotal': 0,
+        'startedAt': time.time(),
+        'completedAt': None,
+        'result': None,
+        'error': None,
+        'ownerUserId': str(owner_user_id or '').strip(),
+    }
+    with _COMMIT_JOBS_LOCK:
+        _COMMIT_JOBS[job_id] = job
+    return job
+
+
+def _update_commit_job(job_id, **fields):
+    with _COMMIT_JOBS_LOCK:
+        job = _COMMIT_JOBS.get(job_id)
+        if job is None:
+            return
+        job.update(fields)
+
+
+def _get_commit_job(job_id):
+    with _COMMIT_JOBS_LOCK:
+        job = _COMMIT_JOBS.get(job_id)
+        if job is None:
+            return None
+        return dict(job)
+
+
+def _cleanup_old_commit_jobs():
+    now = time.time()
+    with _COMMIT_JOBS_LOCK:
+        stale = []
+        for jid, j in _COMMIT_JOBS.items():
+            ended = j.get('completedAt')
+            if ended and (now - ended) > _COMMIT_JOB_TTL_SECONDS:
+                stale.append(jid)
+        for jid in stale:
+            del _COMMIT_JOBS[jid]
+
+
+def _run_commit_job_async(job_id, payload):
+    """백그라운드 thread 진입점 — 진행상황을 _COMMIT_JOBS 에 기록."""
+    def _on_progress(phase, detail, extra):
+        update = {'phase': phase, 'phaseDetail': detail or ''}
+        if isinstance(extra, dict):
+            if 'tracksProcessed' in extra:
+                update['tracksProcessed'] = int(extra['tracksProcessed'])
+            if 'tracksTotal' in extra:
+                update['tracksTotal'] = int(extra['tracksTotal'])
+        _update_commit_job(job_id, **update)
+
+    _update_commit_job(job_id, status='running', phase='notion_members',
+                       phaseDetail='Notion 처리 시작')
+    try:
+        result = _commit_group_preview_to_notion(payload, progress_callback=_on_progress)
+        _update_commit_job(
+            job_id,
+            status='completed',
+            phase='done',
+            phaseDetail='완료',
+            result=result,
+            completedAt=time.time(),
+        )
+    except ValueError as e:
+        _update_commit_job(
+            job_id,
+            status='failed',
+            error=str(e),
+            errorKind='validation',
+            completedAt=time.time(),
+        )
+        print(f"[ERROR] Commit job {job_id} validation failed: {e}")
+    except Exception as e:
+        _update_commit_job(
+            job_id,
+            status='failed',
+            error=str(e),
+            errorKind='internal',
+            completedAt=time.time(),
+        )
+        print(f"[ERROR] Commit job {job_id} failed: {e}")
+
+
 @app.route('/api/admin/reset-track-applications', methods=['POST'])
 def reset_track_applications_mockup():
     """
@@ -3127,7 +3253,12 @@ def reset_track_applications_mockup():
 
 @app.route('/api/mockups/group-preview/commit', methods=['POST'])
 def commit_group_preview_mockup():
-    # 운영진(관리자)만 commit 가능 — 클라이언트가 강제로 admin view 진입해도 서버에서 차단.
+    """
+    조 배정 commit — 비동기 패턴.
+    실제 Notion + Discord 작업은 백그라운드 thread 에서 실행되고, 즉시 jobId 만 반환.
+    Vercel 프록시 30s timeout 회피 + 진행상황 폴링 가능.
+    클라이언트는 GET /api/mockups/group-preview/commit/status?jobId=X 로 폴링.
+    """
     if not _is_admin_session():
         return jsonify({
             "status": "error",
@@ -3136,14 +3267,52 @@ def commit_group_preview_mockup():
 
     payload = request.get_json(silent=True) or {}
 
-    try:
-        result = _commit_group_preview_to_notion(payload)
-        return jsonify(result)
-    except ValueError as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
-    except Exception as e:
-        print(f"[ERROR] group-preview commit failed: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+    # 빠른 입력 검증 — 잘못된 payload 면 thread 띄우기 전에 4xx
+    if payload.get('target') != 'notion-test':
+        return jsonify({"status": "error", "message": "Only the test Notion target is allowed."}), 400
+    if not (payload.get('members') or []):
+        return jsonify({"status": "error", "message": "No mock members were provided."}), 400
+    if not (payload.get('tracks') or []):
+        return jsonify({"status": "error", "message": "No group assignment payload was provided."}), 400
+
+    _cleanup_old_commit_jobs()
+
+    user = session.get('discord_user') or {}
+    job = _make_commit_job(owner_user_id=user.get('id'))
+
+    thread = threading.Thread(
+        target=_run_commit_job_async,
+        args=(job['jobId'], payload),
+        daemon=True,
+        name=f"commit-job-{job['jobId'][:8]}",
+    )
+    thread.start()
+
+    return jsonify({
+        "status": "accepted",
+        "jobId": job['jobId'],
+        "message": "조 배정 commit 시작 — 진행상황은 status endpoint 로 폴링하세요.",
+    }), 202
+
+
+@app.route('/api/mockups/group-preview/commit/status', methods=['GET'])
+def commit_group_preview_status():
+    """비동기 commit job 의 현재 상태."""
+    if not _is_admin_session():
+        return jsonify({
+            "status": "error",
+            "message": "운영진 권한이 필요합니다."
+        }), 403
+
+    job_id = (request.args.get('jobId') or '').strip()
+    if not job_id:
+        return jsonify({"status": "error", "message": "jobId 파라미터 필요"}), 400
+
+    job = _get_commit_job(job_id)
+    if job is None:
+        return jsonify({"status": "error", "message": "job not found (만료됐거나 잘못된 jobId)"}), 404
+
+    return jsonify(job)
 
 @app.route('/api/drop-stats', methods=['GET'])
 def get_drop_stats():
