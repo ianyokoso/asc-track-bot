@@ -898,14 +898,14 @@
         </span>
       </div>
       <div class="relative h-1.5 bg-surface rounded-full">
-        <div class="absolute inset-y-0 left-0 bg-navy rounded-full" style="width: 42%"></div>
-        <div class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style="left: 42%">
+        <div id="window-progress-bar" class="absolute inset-y-0 left-0 bg-navy rounded-full" style="width: 0%"></div>
+        <div id="window-progress-dot" class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2" style="left: 0%">
           <div class="w-2.5 h-2.5 rounded-full bg-navy ring-4 ring-canvas"></div>
         </div>
       </div>
       <div class="mt-2 flex justify-end">
         <span class="text-[11px] font-medium text-ink-soft tabular-nums">
-          Today <span class="text-ink">05.21</span>
+          Today <span class="text-ink" id="window-today-label">--.--</span>
         </span>
       </div>
     </div>
@@ -1658,6 +1658,46 @@
     </div>
   </div>
 
+  <!-- ===== 기수·기간 설정 모달 (관리자 전용) ===== -->
+  <div id="cohort-config-modal" class="admin-modal hidden-view" role="dialog" aria-modal="true" aria-labelledby="cohort-config-modal-title">
+    <div class="admin-modal-backdrop" data-cohort-config-close></div>
+    <div class="admin-modal-panel" style="max-width: 480px;">
+      <button type="button" class="admin-modal-close" data-cohort-config-close aria-label="닫기">✕</button>
+      <div class="admin-modal-header">
+        <p class="text-eyebrow">관리자 · 페이지 설정</p>
+        <div class="admin-modal-title" id="cohort-config-modal-title">기수 · 신청 기간</div>
+        <div class="admin-modal-subtitle">/apply 페이지에 표시되는 기수 라벨, 신청 기간, Today 위치를 변경합니다.</div>
+      </div>
+      <div class="admin-modal-body" style="padding: 20px 24px;">
+        <div class="mb-4">
+          <label class="text-eyebrow block mb-1.5">기수</label>
+          <input type="text" id="cohort-config-label" class="w-full h-10 px-3 rounded-md border border-border-hair bg-canvas text-ink text-[13px]" placeholder="예: 9기" />
+          <p class="text-[11px] text-ink-soft mt-1">'9' 또는 '9기' 모두 OK. 트랙 신청 / 조 배정 / 미리보기 타이틀에 자동 반영.</p>
+        </div>
+        <div class="mb-4 grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-eyebrow block mb-1.5">신청 시작일</label>
+            <input type="date" id="cohort-config-start" class="w-full h-10 px-3 rounded-md border border-border-hair bg-canvas text-ink text-[13px]" />
+          </div>
+          <div>
+            <label class="text-eyebrow block mb-1.5">신청 종료일</label>
+            <input type="date" id="cohort-config-end" class="w-full h-10 px-3 rounded-md border border-border-hair bg-canvas text-ink text-[13px]" />
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="text-eyebrow block mb-1.5">Today 오버라이드 (선택)</label>
+          <input type="date" id="cohort-config-today" class="w-full h-10 px-3 rounded-md border border-border-hair bg-canvas text-ink text-[13px]" />
+          <p class="text-[11px] text-ink-soft mt-1">진행바 위치를 임의 날짜로 고정 (데모용). 비우면 실제 KST 오늘 사용.</p>
+          <button type="button" id="cohort-config-today-clear" class="text-[11px] text-navy underline mt-1">오늘 오버라이드 해제</button>
+        </div>
+      </div>
+      <div class="admin-modal-footer">
+        <button type="button" class="btn-ghost" data-cohort-config-close>취소</button>
+        <button type="button" class="btn-navy" id="cohort-config-save">저장</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== 트랙 편집 모달 (관리자 전용) ===== -->
   <div id="admin-edit-modal" class="admin-modal hidden-view" role="dialog" aria-modal="true" aria-labelledby="admin-edit-modal-title">
     <div class="admin-modal-backdrop" data-close-modal></div>
@@ -1782,7 +1822,7 @@
     }
     const DEFAULT_COHORT_LABEL = '9기';
     const rawCohortLabel = (mockupParams.get('cohortName') || DEFAULT_COHORT_LABEL).trim();
-    const COHORT_LABEL = rawCohortLabel || DEFAULT_COHORT_LABEL;
+    let COHORT_LABEL = rawCohortLabel || DEFAULT_COHORT_LABEL;
     // track-bot Flask 가 이 HTML 을 직접 서빙 → API 도 같은 origin.
     const APPLICATION_API_BASE = '';
     const VIEWER_DISPLAY_NAME = (mockupParams.get('discordDisplayName') || '시연유저').trim() || '시연유저';
@@ -1797,23 +1837,24 @@
     const LOGIN_URL = (mockupParams.get('loginUrl') || '').trim()
       || `${APPLICATION_API_BASE}/api/auth/discord?next=${encodeURIComponent('/apply')}`;
     const REQUESTED_STATE = (mockupParams.get('state') || '').trim();
-    const APPLICATION_START_DATE = (mockupParams.get('applicationStartDate') || '2026-05-20').trim();
-    const APPLICATION_END_DATE = (mockupParams.get('applicationEndDate') || '2026-05-24').trim();
-    const APPLICATION_OPEN_AT = (mockupParams.get('applicationOpenAt') || '2026-05-20T00:00:00+09:00').trim();
-    const APPLICATION_CLOSE_AT = (mockupParams.get('applicationCloseAt') || '2026-05-24T23:59:59+09:00').trim();
-    const APPLICATION_START_DISPLAY = (mockupParams.get('applicationStartDisplay') || '05.20').trim();
-    const APPLICATION_END_DISPLAY = (mockupParams.get('applicationEndDisplay') || '05.24').trim();
-    const APPLICATION_WINDOW_LABEL = (mockupParams.get('applicationWindowLabel') || '05.20(수) 00:00 ~ 05.24(일) 23:59 KST').trim();
-    const APPLICATION_UPCOMING_LABEL = (mockupParams.get('applicationUpcomingLabel') || '2026-05-20(수) 00:00 KST 오픈 · 2026-05-24(일) 23:59 KST 마감').trim();
-    const APPLICATION_CLOSED_LABEL = (mockupParams.get('applicationClosedLabel') || '2026-05-24(일) 23:59 KST 마감').trim();
-    const APPLICATION_OPENS_LABEL = (mockupParams.get('applicationOpensLabel') || 'Opens 05.20 Wed').trim();
+    let APPLICATION_START_DATE = (mockupParams.get('applicationStartDate') || '2026-05-20').trim();
+    let APPLICATION_END_DATE = (mockupParams.get('applicationEndDate') || '2026-05-24').trim();
+    let APPLICATION_OPEN_AT = (mockupParams.get('applicationOpenAt') || '2026-05-20T00:00:00+09:00').trim();
+    let APPLICATION_CLOSE_AT = (mockupParams.get('applicationCloseAt') || '2026-05-24T23:59:59+09:00').trim();
+    let APPLICATION_START_DISPLAY = (mockupParams.get('applicationStartDisplay') || '05.20').trim();
+    let APPLICATION_END_DISPLAY = (mockupParams.get('applicationEndDisplay') || '05.24').trim();
+    let APPLICATION_WINDOW_LABEL = (mockupParams.get('applicationWindowLabel') || '05.20(수) 00:00 ~ 05.24(일) 23:59 KST').trim();
+    let APPLICATION_UPCOMING_LABEL = (mockupParams.get('applicationUpcomingLabel') || '2026-05-20(수) 00:00 KST 오픈 · 2026-05-24(일) 23:59 KST 마감').trim();
+    let APPLICATION_CLOSED_LABEL = (mockupParams.get('applicationClosedLabel') || '2026-05-24(일) 23:59 KST 마감').trim();
+    let APPLICATION_OPENS_LABEL = (mockupParams.get('applicationOpensLabel') || 'Opens 05.20 Wed').trim();
+    let TODAY_OVERRIDE_DATE = (mockupParams.get('todayOverride') || '').trim();
     const IS_GROUP_PREVIEW_DIRECT = window.location.hash === '#group-preview';
     const IS_ADMIN_MOCK = REQUESTED_STATE === 'admin' || REQUESTED_STATE === 'admin-preview';
     const IS_APPLY_WRAPPER = mockupParams.get('source') === 'apply';
-    const TRACK_APPLY_TITLE = `${COHORT_LABEL} 트랙 신청`;
-    const TRACK_APPLY_STATUS_TITLE = `${COHORT_LABEL} 트랙 신청 프리뷰`;
-    const TRACK_PREVIEW_TITLE = `${COHORT_LABEL} 트랙 미리보기`;
-    const GROUP_ASSIGNMENT_TITLE = `${COHORT_LABEL} 조 배정`;
+    let TRACK_APPLY_TITLE = `${COHORT_LABEL} 트랙 신청`;
+    let TRACK_APPLY_STATUS_TITLE = `${COHORT_LABEL} 트랙 신청 프리뷰`;
+    let TRACK_PREVIEW_TITLE = `${COHORT_LABEL} 트랙 미리보기`;
+    let GROUP_ASSIGNMENT_TITLE = `${COHORT_LABEL} 조 배정`;
 
     // 과거(asc-bot-admin-dashboard 시절): 이 HTML 은 /mockups/track-apply.html 에 있었고
     // /apply 는 React wrapper 였다. wrapper 없이 mockup 을 직접 열면 /apply 로 보내는 가드 였음.
@@ -1868,9 +1909,253 @@
       setText('closed-window-label', `· ${APPLICATION_CLOSED_LABEL}`);
     }
 
+    // ===== 기수·기간 동적 설정 (서버 /api/cohort-config 와 동기) =====
+    const KOR_WEEKDAY = ['일', '월', '화', '수', '목', '금', '토'];
+
+    function _parseISODate(iso) {
+      // 'YYYY-MM-DD' → Date (KST 자정). 잘못된 입력은 null.
+      if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+      const [y, m, d] = iso.split('-').map(Number);
+      return new Date(Date.UTC(y, m - 1, d, -9, 0, 0)); // KST midnight
+    }
+
+    function _formatMD(iso) {
+      // 'YYYY-MM-DD' → 'MM.DD'
+      if (!iso) return '';
+      return iso.slice(5).replace('-', '.');
+    }
+
+    function _formatMDW(iso) {
+      // 'YYYY-MM-DD' → 'MM.DD(요일)'
+      const d = _parseISODate(iso);
+      if (!d) return '';
+      const md = _formatMD(iso);
+      const w = KOR_WEEKDAY[(d.getUTCDay() + 1) % 7]; // KST 자정 기준이라 보정 불필요한 케이스도 있음
+      // 위 식이 KST 요일과 다를 수 있어 안전한 방식 사용:
+      const kstDay = new Date(d.getTime() + 9 * 3600 * 1000).getUTCDay();
+      return `${md}(${KOR_WEEKDAY[kstDay]})`;
+    }
+
+    function _formatLongLabel(iso) {
+      // 'YYYY-MM-DD' → 'YYYY-MM-DD(요일)'
+      const d = _parseISODate(iso);
+      if (!d) return iso || '';
+      const kstDay = new Date(d.getTime() + 9 * 3600 * 1000).getUTCDay();
+      return `${iso}(${KOR_WEEKDAY[kstDay]})`;
+    }
+
+    function applyCohortConfigFromServer(cfg) {
+      if (!cfg || typeof cfg !== 'object') return;
+
+      // URL param 으로 명시 override 한 경우는 그대로 둔다 (개발/테스트 우선).
+      const cohortFromUrl = (mockupParams.get('cohortName') || '').trim();
+      const startFromUrl = (mockupParams.get('applicationStartDate') || '').trim();
+      const endFromUrl = (mockupParams.get('applicationEndDate') || '').trim();
+      const todayFromUrl = (mockupParams.get('todayOverride') || '').trim();
+
+      if (!cohortFromUrl && cfg.cohortLabel) {
+        const next = String(cfg.cohortLabel).trim();
+        if (next) {
+          COHORT_LABEL = next.endsWith('기') ? next : `${next}기`;
+          GP_TEST_COHORT_LABEL = COHORT_LABEL;
+        }
+      }
+      if (!startFromUrl && cfg.applicationStartDate) {
+        APPLICATION_START_DATE = String(cfg.applicationStartDate).trim();
+        APPLICATION_OPEN_AT = `${APPLICATION_START_DATE}T00:00:00+09:00`;
+        APPLICATION_START_DISPLAY = _formatMD(APPLICATION_START_DATE);
+      }
+      if (!endFromUrl && cfg.applicationEndDate) {
+        APPLICATION_END_DATE = String(cfg.applicationEndDate).trim();
+        APPLICATION_CLOSE_AT = `${APPLICATION_END_DATE}T23:59:59+09:00`;
+        APPLICATION_END_DISPLAY = _formatMD(APPLICATION_END_DATE);
+      }
+      if (!todayFromUrl) {
+        TODAY_OVERRIDE_DATE = cfg.todayOverride ? String(cfg.todayOverride).trim() : '';
+      }
+
+      // 파생 라벨 재계산.
+      TRACK_APPLY_TITLE = `${COHORT_LABEL} 트랙 신청`;
+      TRACK_APPLY_STATUS_TITLE = `${COHORT_LABEL} 트랙 신청 프리뷰`;
+      TRACK_PREVIEW_TITLE = `${COHORT_LABEL} 트랙 미리보기`;
+      GROUP_ASSIGNMENT_TITLE = `${COHORT_LABEL} 조 배정`;
+
+      const startMDW = _formatMDW(APPLICATION_START_DATE);
+      const endMDW = _formatMDW(APPLICATION_END_DATE);
+      const startLong = _formatLongLabel(APPLICATION_START_DATE);
+      const endLong = _formatLongLabel(APPLICATION_END_DATE);
+      APPLICATION_WINDOW_LABEL = `${startMDW} 00:00 ~ ${endMDW} 23:59 KST`;
+      APPLICATION_UPCOMING_LABEL = `${startLong} 00:00 KST 오픈 · ${endLong} 23:59 KST 마감`;
+      APPLICATION_CLOSED_LABEL = `${endLong} 23:59 KST 마감`;
+      const startDate = _parseISODate(APPLICATION_START_DATE);
+      if (startDate) {
+        const kstDay = new Date(startDate.getTime() + 9 * 3600 * 1000).getUTCDay();
+        const enWeekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        APPLICATION_OPENS_LABEL = `Opens ${APPLICATION_START_DISPLAY} ${enWeekdays[kstDay]}`;
+      }
+
+      // UI 재렌더.
+      applyCohortLabels();
+      applyWindowLabels();
+      updateTodayProgress();
+
+      // 헤더 타이틀 / 액션 영역도 갱신 (현재 active state 기준).
+      const activeBtn = document.querySelector('.state-btn.active');
+      const activeKey = activeBtn ? activeBtn.dataset.state : null;
+      if (activeKey && STATES[activeKey] && headerTitle) {
+        headerTitle.textContent = STATES[activeKey].title;
+      }
+    }
+
+    function updateTodayProgress() {
+      // Application Window 진행바 + 'Today MM.DD' 위치를 현재 날짜 기준으로 계산.
+      const start = _parseISODate(APPLICATION_START_DATE);
+      const end = _parseISODate(APPLICATION_END_DATE);
+      if (!start || !end) return;
+
+      // KST today (또는 override).
+      let todayDate;
+      if (TODAY_OVERRIDE_DATE && /^\d{4}-\d{2}-\d{2}$/.test(TODAY_OVERRIDE_DATE)) {
+        todayDate = _parseISODate(TODAY_OVERRIDE_DATE);
+      } else {
+        const now = new Date();
+        const kstNow = new Date(now.getTime() + (now.getTimezoneOffset() + 540) * 60000);
+        const isoToday = `${kstNow.getFullYear()}-${String(kstNow.getMonth() + 1).padStart(2, '0')}-${String(kstNow.getDate()).padStart(2, '0')}`;
+        todayDate = _parseISODate(isoToday);
+      }
+      if (!todayDate) return;
+
+      // 진행 비율: end - start 기간 내 today 위치, [0, 100] clamp.
+      const total = end.getTime() - start.getTime();
+      let pct = 0;
+      if (total > 0) {
+        pct = Math.max(0, Math.min(100, ((todayDate.getTime() - start.getTime()) / total) * 100));
+      } else {
+        pct = todayDate.getTime() >= start.getTime() ? 100 : 0;
+      }
+
+      const progressBar = document.getElementById('window-progress-bar');
+      const progressDot = document.getElementById('window-progress-dot');
+      if (progressBar) progressBar.style.width = `${pct.toFixed(2)}%`;
+      if (progressDot) progressDot.style.left = `${pct.toFixed(2)}%`;
+
+      // 'Today MM.DD' 라벨.
+      const todayLabel = document.getElementById('window-today-label');
+      if (todayLabel) {
+        const isoToday = TODAY_OVERRIDE_DATE && /^\d{4}-\d{2}-\d{2}$/.test(TODAY_OVERRIDE_DATE)
+          ? TODAY_OVERRIDE_DATE
+          : (() => {
+              const now = new Date();
+              const kstNow = new Date(now.getTime() + (now.getTimezoneOffset() + 540) * 60000);
+              return `${kstNow.getFullYear()}-${String(kstNow.getMonth() + 1).padStart(2, '0')}-${String(kstNow.getDate()).padStart(2, '0')}`;
+            })();
+        todayLabel.textContent = _formatMD(isoToday);
+      }
+    }
+
+    async function fetchAndApplyCohortConfig() {
+      try {
+        const res = await fetch(`${APPLICATION_API_BASE}/api/cohort-config`, { credentials: 'include' });
+        if (!res.ok) return;
+        const cfg = await res.json();
+        applyCohortConfigFromServer(cfg);
+      } catch (err) {
+        console.warn('[cohort-config] fetch failed:', err);
+      }
+    }
+
+    function _normalizeCohortInput(value) {
+      const raw = String(value || '').trim();
+      if (!raw) return '';
+      return raw.endsWith('기') ? raw : `${raw}기`;
+    }
+
+    async function openCohortConfigModal() {
+      const modal = document.getElementById('cohort-config-modal');
+      if (!modal) return;
+
+      // 최신 서버 값 한 번 더 fetch (다른 운영자가 동시 변경했을 수 있어).
+      let cfg = null;
+      try {
+        const res = await fetch(`${APPLICATION_API_BASE}/api/cohort-config`, { credentials: 'include' });
+        if (res.ok) cfg = await res.json();
+      } catch (err) { /* fallback to local */ }
+
+      const labelEl = document.getElementById('cohort-config-label');
+      const startEl = document.getElementById('cohort-config-start');
+      const endEl = document.getElementById('cohort-config-end');
+      const todayEl = document.getElementById('cohort-config-today');
+
+      labelEl.value = (cfg && cfg.cohortLabel) || COHORT_LABEL || '';
+      startEl.value = (cfg && cfg.applicationStartDate) || APPLICATION_START_DATE || '';
+      endEl.value = (cfg && cfg.applicationEndDate) || APPLICATION_END_DATE || '';
+      todayEl.value = (cfg && cfg.todayOverride) || TODAY_OVERRIDE_DATE || '';
+
+      modal.classList.remove('hidden-view');
+    }
+
+    function closeCohortConfigModal() {
+      document.getElementById('cohort-config-modal')?.classList.add('hidden-view');
+    }
+
+    async function saveCohortConfig() {
+      const labelEl = document.getElementById('cohort-config-label');
+      const startEl = document.getElementById('cohort-config-start');
+      const endEl = document.getElementById('cohort-config-end');
+      const todayEl = document.getElementById('cohort-config-today');
+      const saveBtn = document.getElementById('cohort-config-save');
+
+      const cohortLabel = _normalizeCohortInput(labelEl.value);
+      const applicationStartDate = String(startEl.value || '').trim();
+      const applicationEndDate = String(endEl.value || '').trim();
+      const todayOverride = String(todayEl.value || '').trim() || null;
+
+      if (!cohortLabel) { alert('기수를 입력하세요.'); return; }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(applicationStartDate)) { alert('신청 시작일이 올바르지 않습니다 (YYYY-MM-DD).'); return; }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(applicationEndDate)) { alert('신청 종료일이 올바르지 않습니다 (YYYY-MM-DD).'); return; }
+      if (applicationStartDate > applicationEndDate) { alert('시작일이 종료일보다 늦을 수 없습니다.'); return; }
+      if (todayOverride && !/^\d{4}-\d{2}-\d{2}$/.test(todayOverride)) { alert('Today 오버라이드가 올바르지 않습니다.'); return; }
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = '저장 중...';
+      try {
+        const res = await fetch(`${APPLICATION_API_BASE}/api/cohort-config`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ cohortLabel, applicationStartDate, applicationEndDate, todayOverride }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          alert(`저장 실패: ${data.message || res.status}`);
+          return;
+        }
+        applyCohortConfigFromServer(data);
+        closeCohortConfigModal();
+      } catch (err) {
+        alert(`저장 실패: ${err.message || err}`);
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '저장';
+      }
+    }
+
+    document.addEventListener('click', (e) => {
+      if (e.target.matches('[data-cohort-config-close]')) {
+        closeCohortConfigModal();
+      }
+    });
+    document.getElementById('cohort-config-save')?.addEventListener('click', () => { void saveCohortConfig(); });
+    document.getElementById('cohort-config-today-clear')?.addEventListener('click', () => {
+      const todayEl = document.getElementById('cohort-config-today');
+      if (todayEl) todayEl.value = '';
+    });
+
     applyCohortLabels();
     applyViewerIdentity();
     applyWindowLabels();
+    updateTodayProgress();
+    void fetchAndApplyCohortConfig();
     if (!IS_ADMIN_MOCK) {
       document.getElementById('admin-preview-banner')?.classList.add('hidden-view');
     }
@@ -1880,13 +2165,14 @@
       document.querySelector('.mockup-devtools')?.classList.remove('hidden-view');
     }
 
+    // title 은 cohort 변경 시 따라가도록 getter 로 lazy 평가.
     const STATES = {
-      logout:      { title: TRACK_APPLY_TITLE, showProgress: false, action: null },
-      upcoming:    { title: TRACK_APPLY_TITLE, showProgress: false, action: 'upcoming' },
-      'open-new':  { title: TRACK_APPLY_TITLE, showProgress: true,  action: 'user' },
-      'open-edit': { title: TRACK_APPLY_TITLE, showProgress: true,  action: 'user' },
-      closed:      { title: TRACK_APPLY_TITLE, showProgress: false, action: 'user' },
-      admin:       { title: TRACK_APPLY_STATUS_TITLE, showProgress: true,  action: 'admin' },
+      logout:      { get title() { return TRACK_APPLY_TITLE; },        showProgress: false, action: null },
+      upcoming:    { get title() { return TRACK_APPLY_TITLE; },        showProgress: false, action: 'upcoming' },
+      'open-new':  { get title() { return TRACK_APPLY_TITLE; },        showProgress: true,  action: 'user' },
+      'open-edit': { get title() { return TRACK_APPLY_TITLE; },        showProgress: true,  action: 'user' },
+      closed:      { get title() { return TRACK_APPLY_TITLE; },        showProgress: false, action: 'user' },
+      admin:       { get title() { return TRACK_APPLY_STATUS_TITLE; }, showProgress: true,  action: 'admin' },
     };
 
     function renderHeaderActions(kind) {
@@ -1916,6 +2202,7 @@
           : '';
         headerActions.innerHTML = `
           ${backToApplyBtn}
+          <button type="button" class="btn-ghost" id="admin-cohort-config" title="기수 / 신청 기간 / Today 오버라이드 설정">⚙️ 기수·기간 설정</button>
           <button type="button" class="btn-ghost" id="admin-fill-mock" title="하드코딩된 목업 멤버 120명 (기본 트랙 신청 포함) 으로 복원">📋 목업 채우기</button>
           <button type="button" class="btn-ghost" id="admin-clear-mock" title="목업 멤버 120명을 리스트에서 완전히 제거 (실 OAuth 사용자만 남김)">🧹 목업 지우기</button>
           <button type="button" class="btn-ghost text-bad" id="admin-full-reset" title="신청 데이터 초기화 (서버 캐시 + 브라우저). Discord 채널/역할은 봇 !테스트초기화 별도 실행 필요.">🗑️ 전체 초기화</button>
@@ -1924,6 +2211,9 @@
         requestAnimationFrame(() => {
           document.getElementById('btn-back-to-apply')?.addEventListener('click', () => {
             applyState('open-new');
+          });
+          document.getElementById('admin-cohort-config')?.addEventListener('click', () => {
+            openCohortConfigModal();
           });
           document.getElementById('admin-fill-mock')?.addEventListener('click', () => {
             void runAdminFillMock();
@@ -4458,7 +4748,7 @@
     // 주의: .env.test 의 GROUP_PREVIEW_TEST_GROUP_DB_ID 와 일치해야 함.
     // 이 ID 는 prod 의 `트랙/조 DB` 에 대응하는 test 워크스페이스 DB.
     const GP_TEST_GROUP_DB_ID = '3586400e926880268f6ee51a03ad6638';
-    const GP_TEST_COHORT_LABEL = COHORT_LABEL;
+    let GP_TEST_COHORT_LABEL = COHORT_LABEL;
     const MOCKUP_MODE = false;
     const GP_GROUP_DB_NAME_MAP = {
       sales_real: '세일즈 실전 트랙',

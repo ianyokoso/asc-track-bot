@@ -3,6 +3,7 @@ from flask_cors import CORS
 from datetime import timedelta, datetime, timezone
 import json
 import os
+import re
 import requests
 import secrets
 import subprocess
@@ -99,6 +100,10 @@ TRACK_APPLICATION_CACHE_FILE = os.path.join(
 TRACK_APPLICATION_ADMIN_MOCK_CACHE_FILE = os.path.join(
     BASE_DIR,
     f"track_applications_admin_mock_cache_{TRACK_APPLICATION_CACHE_ENV}.json"
+)
+COHORT_CONFIG_FILE = os.path.join(
+    BASE_DIR,
+    f"cohort_config_{TRACK_APPLICATION_CACHE_ENV}.json"
 )
 
 def load_env_file():
@@ -579,6 +584,121 @@ def _get_kst_now():
 
 def _format_track_application_timestamp(dt=None):
     return (dt or _get_kst_now()).strftime('%m-%d %H:%M')
+
+
+# ========== Cohort Config (기수·신청 기간·Today override) ==========
+# /apply 페이지가 표시하는 기수 라벨, 신청 윈도우 시작/종료 날짜, Today 오버라이드 (데모용).
+# 변경 시 즉시 반영, 클라이언트가 페이지 로드 시 GET 으로 가져옴.
+
+_COHORT_CONFIG_LOCK = threading.Lock()
+_COHORT_CONFIG_DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+
+
+def _default_cohort_config():
+    return {
+        'cohortLabel': _get_current_cohort_label(),
+        'applicationStartDate': '2026-05-20',
+        'applicationEndDate': '2026-05-24',
+        'todayOverride': None,  # null = 실제 KST today 사용
+        'updatedAt': None,
+    }
+
+
+def _normalize_cohort_label(value):
+    raw = str(value or '').strip()
+    if not raw:
+        return _get_current_cohort_label()
+    return raw if raw.endswith('기') else f'{raw}기'
+
+
+def _validate_iso_date(value):
+    raw = str(value or '').strip()
+    if not raw or not _COHORT_CONFIG_DATE_RE.match(raw):
+        return None
+    try:
+        datetime.strptime(raw, '%Y-%m-%d')
+        return raw
+    except ValueError:
+        return None
+
+
+def _read_cohort_config():
+    with _COHORT_CONFIG_LOCK:
+        if not os.path.exists(COHORT_CONFIG_FILE):
+            return _default_cohort_config()
+        try:
+            with open(COHORT_CONFIG_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                return _default_cohort_config()
+            base = _default_cohort_config()
+            base.update({k: v for k, v in data.items() if k in base})
+            base['cohortLabel'] = _normalize_cohort_label(base.get('cohortLabel'))
+            return base
+        except Exception as e:
+            print(f"[WARN] Failed to read cohort config: {e}")
+            return _default_cohort_config()
+
+
+def _write_cohort_config(data):
+    with _COHORT_CONFIG_LOCK:
+        payload = _default_cohort_config()
+        payload.update(data or {})
+        payload['cohortLabel'] = _normalize_cohort_label(payload.get('cohortLabel'))
+        payload['updatedAt'] = _get_kst_now().isoformat()
+        try:
+            with open(COHORT_CONFIG_FILE, 'w', encoding='utf-8') as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+            return payload
+        except Exception as e:
+            print(f"[ERROR] Failed to write cohort config: {e}")
+            return None
+
+
+@app.route('/api/cohort-config', methods=['GET'])
+def get_cohort_config_route():
+    return jsonify(_read_cohort_config()), 200
+
+
+@app.route('/api/cohort-config', methods=['PUT'])
+def put_cohort_config_route():
+    user = _get_authenticated_discord_user()
+    if not user or not _is_admin_user(user.get('id')):
+        return jsonify({'status': 'error', 'message': 'admin only'}), 403
+
+    body = request.get_json(silent=True) or {}
+    current = _read_cohort_config()
+
+    new_label = _normalize_cohort_label(body.get('cohortLabel') or current['cohortLabel'])
+
+    new_start = _validate_iso_date(body.get('applicationStartDate'))
+    new_end = _validate_iso_date(body.get('applicationEndDate'))
+    if body.get('applicationStartDate') is not None and not new_start:
+        return jsonify({'status': 'error', 'message': 'invalid applicationStartDate (YYYY-MM-DD)'}), 400
+    if body.get('applicationEndDate') is not None and not new_end:
+        return jsonify({'status': 'error', 'message': 'invalid applicationEndDate (YYYY-MM-DD)'}), 400
+    new_start = new_start or current['applicationStartDate']
+    new_end = new_end or current['applicationEndDate']
+    if new_start > new_end:
+        return jsonify({'status': 'error', 'message': 'applicationStartDate must be <= applicationEndDate'}), 400
+
+    today_raw = body.get('todayOverride', current.get('todayOverride'))
+    if today_raw in (None, '', 'null'):
+        today_override = None
+    else:
+        today_override = _validate_iso_date(today_raw)
+        if not today_override:
+            return jsonify({'status': 'error', 'message': 'invalid todayOverride (YYYY-MM-DD or null)'}), 400
+
+    saved = _write_cohort_config({
+        'cohortLabel': new_label,
+        'applicationStartDate': new_start,
+        'applicationEndDate': new_end,
+        'todayOverride': today_override,
+    })
+    if not saved:
+        return jsonify({'status': 'error', 'message': 'persist failed'}), 500
+    return jsonify(saved), 200
 
 
 def _default_track_application_cache():
