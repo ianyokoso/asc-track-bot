@@ -58,6 +58,13 @@ _LIGHT_TRACK_ROLE_PREFIX = {
     "빌더 라이트 트랙 (심화)": "빌더-심화",
 }
 
+# 크리에이터 라이트는 sub-form (숏폼/롱폼) 별로 독립 역할 + 채널 분리.
+# 빌더 라이트는 (기초/심화) 가 이미 별도 부모 트랙으로 분리되어 있어 sub_form 불필요.
+_LIGHT_TRACK_SUB_FORM = {
+    "크리에이터 라이트 트랙 (숏폼)": "숏폼",
+    "크리에이터 라이트 트랙 (롱폼)": "롱폼",
+}
+
 def _track_short_name(track_name: str) -> str:
     return _TRACK_DISCORD_PREFIX.get(track_name, track_name.replace(" 트랙", "").replace(" ", "-"))
 
@@ -499,7 +506,12 @@ class AdminCog(commands.Cog):
             if normalized_track_name == "빌더 라이트 트랙":
                 effective_track_name = member_track_name
             elif normalized_track_name == "크리에이터 라이트 트랙":
-                effective_track_name = "크리에이터 라이트 트랙"
+                # rowTrackName 이 (숏폼)/(롱폼) 으로 표기돼 있으면 sub-form 별로 bucket 분리.
+                # 없으면 부모 라이트 트랙으로 fallback (legacy payload 호환).
+                if member_track_name in _LIGHT_TRACK_SUB_FORM:
+                    effective_track_name = member_track_name
+                else:
+                    effective_track_name = "크리에이터 라이트 트랙"
 
             bucket = _ensure_bucket(effective_track_name)
             if not bucket:
@@ -876,8 +888,14 @@ class AdminCog(commands.Cog):
 
                 summary["tracks_processed"] += 1
                 reason = f"{reason_label} ({cohort_display})"
-                track_short = f"{role_prefix}-라이트"
-                light_role_name = f"{role_prefix}-{clean_cohort}기-라이트"
+                # sub_form: 크리에이터 라이트일 때만 '숏폼'/'롱폼' (빌더 라이트는 None).
+                sub_form = _LIGHT_TRACK_SUB_FORM.get(effective_track_name)
+                if sub_form:
+                    track_short = f"{role_prefix}-라이트-{sub_form}"
+                    light_role_name = f"{role_prefix}-{clean_cohort}기-라이트-{sub_form}"
+                else:
+                    track_short = f"{role_prefix}-라이트"
+                    light_role_name = f"{role_prefix}-{clean_cohort}기-라이트"
 
                 light_role, created = await self._ensure_role(guild, light_role_name, reason)
                 if created:
@@ -963,25 +981,40 @@ class AdminCog(commands.Cog):
                         announcement_channel,
                     )
 
-                # 부모 트랙의 *모든* 과제-인증 채널에 라이트 역할 권한 부여.
-                # 크리에이터 트랙은 숏폼/롱폼 두 채널이 있으므로 둘 다 매칭되어 둘 다 접근 가능.
-                # 부모 카테고리 안에서 `{parent_short}-{cohort}기-...과제-인증` 패턴 채널 모두 찾기.
+                # 라이트 트랙의 과제-인증 채널 매칭.
+                # - sub_form 있음 (크리에이터 숏폼/롱폼): 해당 sub-form 채널 1개만 매칭
+                #   예) sub_form='숏폼' → '크리에이터-9기-숏폼-과제-인증' 만 매칭
+                # - sub_form 없음 (빌더 라이트, legacy 크리에이터 라이트): 부모 카테고리 안의
+                #   '{parent_short}-{cohort}기-...과제-인증' 모두 매칭 (기존 동작)
                 parent_cohort_prefix = f"{parent_track_short}-{clean_cohort}기-"
-                assignment_channels = [
-                    ch for ch in (category.text_channels if category else [])
-                    if ch.name.startswith(parent_cohort_prefix) and ch.name.endswith("-과제-인증")
-                ]
+                if sub_form:
+                    target_channel_name = f"{parent_track_short}-{clean_cohort}기-{sub_form}-과제-인증"
+                    assignment_channels = [
+                        ch for ch in (category.text_channels if category else [])
+                        if ch.name == target_channel_name
+                    ]
+                else:
+                    assignment_channels = [
+                        ch for ch in (category.text_channels if category else [])
+                        if ch.name.startswith(parent_cohort_prefix) and ch.name.endswith("-과제-인증")
+                    ]
 
-                # 매칭된 채널이 하나도 없으면 단일 과제-인증 채널을 새로 생성 (운영 형식)
+                # 매칭된 채널이 하나도 없으면 새로 생성.
+                # sub_form 있으면 sub-form 전용 채널, 없으면 단일 과제-인증 채널.
                 if not assignment_channels:
-                    assignment_name = f"{parent_track_short}-{clean_cohort}기-과제-인증"
+                    if sub_form:
+                        assignment_name = f"{parent_track_short}-{clean_cohort}기-{sub_form}-과제-인증"
+                        topic = f"{cohort_display} {parent_track_name} {sub_form} 과제 인증 채널"
+                    else:
+                        assignment_name = f"{parent_track_short}-{clean_cohort}기-과제-인증"
+                        topic = f"{cohort_display} {parent_track_name} 과제 인증 채널"
                     new_channel, created = await self._ensure_text_channel(
                         guild,
                         category,
                         assignment_name,
                         reason,
                         overwrites=self._build_channel_overwrites(guild, allowed_roles, read_only=False),
-                        topic=f"{cohort_display} {parent_track_name} 과제 인증 채널",
+                        topic=topic,
                     )
                     if created:
                         summary["assignment_channels_created"] += 1
