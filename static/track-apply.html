@@ -1690,6 +1690,18 @@
           <p class="text-[11px] text-ink-soft mt-1">진행바 위치를 임의 날짜로 고정 (데모용). 비우면 실제 KST 오늘 사용.</p>
           <button type="button" id="cohort-config-today-clear" class="text-[11px] text-navy underline mt-1">오늘 오버라이드 해제</button>
         </div>
+
+        <hr class="my-4 border-border-hair" />
+
+        <div class="mb-2">
+          <label class="text-eyebrow block mb-1.5">Notion 트랙 옵션 정리</label>
+          <p class="text-[11px] text-ink-soft mb-2">멤버/트랙 마스터 DB 의 multi_select 에 누적된 legacy 옵션을 화이트리스트만 남기고 정리. 기존 페이지에 이미 적힌 값은 보존.</p>
+          <div class="flex items-center gap-2 mb-2">
+            <button type="button" id="cohort-config-track-preview" class="btn-ghost text-[12px] h-8 px-3">미리보기</button>
+            <button type="button" id="cohort-config-track-prune" class="btn-ghost text-bad text-[12px] h-8 px-3">옵션 정리 실행</button>
+          </div>
+          <div id="cohort-config-track-report" class="text-[11.5px] text-ink-muted hidden-view bg-surface rounded-md border border-border-hair p-3 max-h-48 overflow-y-auto"></div>
+        </div>
       </div>
       <div class="admin-modal-footer">
         <button type="button" class="btn-ghost" data-cohort-config-close>취소</button>
@@ -2150,6 +2162,70 @@
       const todayEl = document.getElementById('cohort-config-today');
       if (todayEl) todayEl.value = '';
     });
+
+    function _renderTrackOptionsReport(targets, canonical, mode) {
+      const reportEl = document.getElementById('cohort-config-track-report');
+      if (!reportEl) return;
+      reportEl.classList.remove('hidden-view');
+
+      const headerLabel = mode === 'pruned' ? '정리 완료' : '미리보기';
+      const lines = [];
+      lines.push(`<div class="text-ink font-semibold mb-2">${headerLabel}</div>`);
+      lines.push(`<div class="mb-2 text-ink-soft">화이트리스트 (${canonical.length}): ${canonical.join(', ')}</div>`);
+      targets.forEach(t => {
+        lines.push('<div class="border-t border-border-hair pt-2 mt-2">');
+        lines.push(`<div class="text-ink font-semibold mb-1">${t.label}</div>`);
+        if (t.error) {
+          lines.push(`<div class="text-bad">에러: ${t.error}</div>`);
+        } else {
+          const extras = mode === 'pruned' ? (t.removed || []) : (t.extras || []);
+          const extrasLabel = mode === 'pruned' ? '제거됨' : '제거 예정';
+          lines.push(`<div>유지 (${(t.kept || []).length}): ${(t.kept || []).join(', ') || '<span class="text-ink-soft">(없음)</span>'}</div>`);
+          lines.push(`<div class="text-bad">${extrasLabel} (${extras.length}): ${extras.join(', ') || '<span class="text-ink-soft">(없음)</span>'}</div>`);
+        }
+        lines.push('</div>');
+      });
+      reportEl.innerHTML = lines.join('');
+    }
+
+    async function previewNotionTrackOptions() {
+      const btn = document.getElementById('cohort-config-track-preview');
+      btn.disabled = true; btn.textContent = '조회 중...';
+      try {
+        const res = await fetch(`${APPLICATION_API_BASE}/api/admin/notion/track-options`, { credentials: 'include' });
+        const data = await res.json();
+        if (!res.ok) { alert(`조회 실패: ${data.message || res.status}`); return; }
+        _renderTrackOptionsReport(data.targets || [], data.canonical || [], 'preview');
+      } catch (err) {
+        alert(`조회 실패: ${err.message || err}`);
+      } finally {
+        btn.disabled = false; btn.textContent = '미리보기';
+      }
+    }
+
+    async function pruneNotionTrackOptions() {
+      if (!confirm('Notion 트랙 옵션을 화이트리스트만 남기고 정리합니다.\n\n• schema 에서 옵션은 제거되지만, 그 옵션이 이미 적용된 페이지는 값이 보존됩니다.\n• 진행하시겠습니까?')) return;
+      const btn = document.getElementById('cohort-config-track-prune');
+      btn.disabled = true; btn.textContent = '정리 중...';
+      try {
+        const res = await fetch(`${APPLICATION_API_BASE}/api/admin/notion/prune-track-options`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(`정리 실패: ${data.message || res.status}`); return; }
+        _renderTrackOptionsReport(data.results || [], data.canonical || [], 'pruned');
+      } catch (err) {
+        alert(`정리 실패: ${err.message || err}`);
+      } finally {
+        btn.disabled = false; btn.textContent = '옵션 정리 실행';
+      }
+    }
+
+    document.getElementById('cohort-config-track-preview')?.addEventListener('click', () => { void previewNotionTrackOptions(); });
+    document.getElementById('cohort-config-track-prune')?.addEventListener('click', () => { void pruneNotionTrackOptions(); });
 
     applyCohortLabels();
     applyViewerIdentity();

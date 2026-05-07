@@ -660,6 +660,158 @@ def get_cohort_config_route():
     return jsonify(_read_cohort_config()), 200
 
 
+def _prune_multi_select_options(notion_api, db_id, prop_name, canonical_names):
+    """
+    Notion DB 의 multi_select 속성 옵션을 canonical_names 만 남기고 정리.
+    반환: { 'kept': [...], 'removed': [...], 'missing': True/False, 'error': str|None }
+    """
+    if not db_id or not prop_name:
+        return {'kept': [], 'removed': [], 'missing': True, 'error': 'db_id or prop_name missing'}
+    try:
+        db = notion_api.get_database(db_id)
+    except Exception as e:
+        return {'kept': [], 'removed': [], 'missing': False, 'error': f'get_database failed: {e}'}
+    if not db:
+        return {'kept': [], 'removed': [], 'missing': True, 'error': 'database not found'}
+
+    prop = (db.get('properties') or {}).get(prop_name)
+    if not prop or prop.get('type') != 'multi_select':
+        return {'kept': [], 'removed': [], 'missing': True, 'error': f"property '{prop_name}' not multi_select"}
+
+    options = prop.get('multi_select', {}).get('options', []) or []
+    kept = [opt for opt in options if opt.get('name') in canonical_names]
+    removed = [opt for opt in options if opt.get('name') not in canonical_names]
+
+    if not removed:
+        return {
+            'kept': [opt.get('name') for opt in kept],
+            'removed': [],
+            'missing': False,
+            'error': None,
+        }
+
+    # PATCH database with reduced options list. Notion 은 제거된 옵션을 schema 에서 삭제하지만
+    # 이미 그 옵션을 갖고 있던 page 의 값은 그대로 유지된다.
+    import requests as _requests
+    url = f"https://api.notion.com/v1/databases/{db_id}"
+    headers = notion_api.get_headers() if hasattr(notion_api, 'get_headers') else None
+    if not headers:
+        try:
+            from notion_api import get_headers as _gh
+            headers = _gh()
+        except Exception as e:
+            return {'kept': [], 'removed': [], 'missing': False, 'error': f'get_headers unavailable: {e}'}
+    payload = {
+        "properties": {
+            prop_name: {
+                "multi_select": {"options": [{"name": opt['name']} for opt in kept]}
+            }
+        }
+    }
+    try:
+        resp = _requests.patch(url, headers=headers, json=payload, timeout=30)
+        if resp.status_code != 200:
+            return {
+                'kept': [opt.get('name') for opt in kept],
+                'removed': [],
+                'missing': False,
+                'error': f'PATCH failed: {resp.status_code} {resp.text[:200]}',
+            }
+    except Exception as e:
+        return {'kept': [opt.get('name') for opt in kept], 'removed': [], 'missing': False, 'error': f'PATCH exception: {e}'}
+
+    return {
+        'kept': [opt.get('name') for opt in kept],
+        'removed': [opt.get('name') for opt in removed],
+        'missing': False,
+        'error': None,
+    }
+
+
+@app.route('/api/admin/notion/track-options', methods=['GET'])
+def get_notion_track_options_route():
+    """현재 Notion DB 들의 트랙 옵션 + canonical 비교 리포트 (preview 용)."""
+    user = _get_authenticated_discord_user()
+    if not user or not _is_admin_user(user.get('id')):
+        return jsonify({'status': 'error', 'message': 'admin only'}), 403
+
+    canonical = sorted(_canonical_track_names())
+
+    targets = [
+        {
+            'label': '멤버 마스터 DB · 트랙',
+            'db_id': os.getenv('GROUP_PREVIEW_TEST_MEMBER_DB_ID') or os.getenv('TRACK_JO_DB_ID'),
+            'prop_name': '트랙',
+        },
+        {
+            'label': '트랙 마스터 DB · 트랙명',
+            'db_id': os.getenv('GROUP_PREVIEW_TEST_GROUP_DB_ID') or os.getenv('GROUP_DB_ID'),
+            'prop_name': '트랙명',
+        },
+    ]
+
+    canonical_set = set(canonical)
+    try:
+        from notion_api import get_database as _get_db
+    except Exception:
+        return jsonify({'status': 'error', 'message': 'notion_api unavailable'}), 500
+
+    report = []
+    for tgt in targets:
+        db_id = tgt['db_id']
+        if not db_id:
+            report.append({'label': tgt['label'], 'dbId': None, 'kept': [], 'extras': [], 'error': 'db env missing'})
+            continue
+        try:
+            db = _get_db(db_id)
+        except Exception as e:
+            report.append({'label': tgt['label'], 'dbId': db_id, 'kept': [], 'extras': [], 'error': str(e)})
+            continue
+        if not db:
+            report.append({'label': tgt['label'], 'dbId': db_id, 'kept': [], 'extras': [], 'error': 'db not found'})
+            continue
+        prop = (db.get('properties') or {}).get(tgt['prop_name'])
+        if not prop or prop.get('type') != 'multi_select':
+            report.append({'label': tgt['label'], 'dbId': db_id, 'kept': [], 'extras': [], 'error': f"prop '{tgt['prop_name']}' missing or not multi_select"})
+            continue
+        options = [opt.get('name') for opt in (prop.get('multi_select', {}).get('options') or [])]
+        kept = [n for n in options if n in canonical_set]
+        extras = [n for n in options if n not in canonical_set]
+        report.append({'label': tgt['label'], 'dbId': db_id, 'propName': tgt['prop_name'], 'kept': kept, 'extras': extras, 'error': None})
+
+    return jsonify({'canonical': canonical, 'targets': report}), 200
+
+
+@app.route('/api/admin/notion/prune-track-options', methods=['POST'])
+def prune_notion_track_options_route():
+    """Canonical 외의 트랙 옵션을 Notion 에서 제거. 옵션이 페이지에 이미 있으면 페이지 값은 유지됨."""
+    user = _get_authenticated_discord_user()
+    if not user or not _is_admin_user(user.get('id')):
+        return jsonify({'status': 'error', 'message': 'admin only'}), 403
+
+    canonical = _canonical_track_names()
+    try:
+        import notion_api as _napi
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f'notion_api import failed: {e}'}), 500
+
+    targets = [
+        {'label': '멤버 마스터 DB · 트랙', 'db_id': os.getenv('GROUP_PREVIEW_TEST_MEMBER_DB_ID') or os.getenv('TRACK_JO_DB_ID'), 'prop_name': '트랙'},
+        {'label': '트랙 마스터 DB · 트랙명', 'db_id': os.getenv('GROUP_PREVIEW_TEST_GROUP_DB_ID') or os.getenv('GROUP_DB_ID'), 'prop_name': '트랙명'},
+    ]
+
+    results = []
+    for tgt in targets:
+        result = _prune_multi_select_options(_napi, tgt['db_id'], tgt['prop_name'], canonical)
+        results.append({
+            'label': tgt['label'],
+            'dbId': tgt['db_id'],
+            'propName': tgt['prop_name'],
+            **result,
+        })
+    return jsonify({'canonical': sorted(canonical), 'results': results}), 200
+
+
 @app.route('/api/cohort-config', methods=['PUT'])
 def put_cohort_config_route():
     user = _get_authenticated_discord_user()
@@ -1026,6 +1178,17 @@ TRACK_APPLICATION_CREATOR_SUB_MAP = {
     'short_only': '숏폼만',
     'short_long': '숏폼 + 롱폼',
 }
+
+
+# Notion '트랙' / '트랙명' multi_select 에 들어가야 할 정식 트랙명 화이트리스트.
+# 그 외는 legacy/orphan 으로 간주하고 prune 대상.
+def _canonical_track_names():
+    names = set()
+    for _, label in TRACK_APPLICATION_WEEKDAY_TRACK_MAP.values():
+        names.add(label)
+    for label in TRACK_APPLICATION_LIGHT_TRACK_MAP.values():
+        names.add(label)
+    return names
 
 
 def _normalize_track_application_cohort_value(cohort_label):
