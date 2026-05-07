@@ -3262,8 +3262,14 @@ def _run_commit_job_async(job_id, payload):
 @app.route('/api/admin/reset-track-applications', methods=['POST'])
 def reset_track_applications_mockup():
     """
-    [관리자 전용] track-application admin mockup 캐시를 비웁니다.
+    [관리자 전용] track-application 관련 서버 캐시를 모두 비웁니다.
     데모 시연 / 테스트 반복 시 '처음부터 다시' 용도.
+
+    비우는 캐시 (test/prod 환경별):
+      1) track_applications_cache_*.json
+         (실 Discord 사용자가 OAuth 로 제출한 신청서)
+      2) track_applications_admin_mock_cache_*.json
+         (admin 편집 모달로 추가/수정한 mockup 멤버)
 
     ⚠️ Discord 채널·역할 / Notion 페이지는 이 endpoint 가 건드리지 않습니다.
        그쪽 정리는 디스코드 테스트 길드에서 `!테스트초기화` 봇 명령으로 별도 실행.
@@ -3275,17 +3281,29 @@ def reset_track_applications_mockup():
         }), 403
 
     try:
-        cleared_count = 0
-        existing = _read_track_application_admin_mock_cache() or {}
-        cohorts = existing.get('cohorts') or {}
-        for cohort_label, bucket in (cohorts.items() if isinstance(cohorts, dict) else []):
+        # 1) admin mockup 캐시 — 멤버 row 단위 카운트
+        cleared_mock_members = 0
+        existing_mock = _read_track_application_admin_mock_cache() or {}
+        for _, bucket in (existing_mock.get('cohorts') or {}).items():
             members = (bucket or {}).get('members') or []
-            cleared_count += len(members) if isinstance(members, list) else 0
+            cleared_mock_members += len(members) if isinstance(members, list) else 0
         _write_track_application_admin_mock_cache({'cohorts': {}})
+
+        # 2) 실 사용자 신청 캐시 — application 단위 카운트
+        cleared_real_applications = 0
+        existing_real = _read_track_application_cache() or {}
+        for _, bucket in (existing_real.get('cohorts') or {}).items():
+            apps = (bucket or {}).get('applications') or {}
+            cleared_real_applications += len(apps) if isinstance(apps, dict) else 0
+        _write_track_application_cache_file(TRACK_APPLICATION_CACHE_FILE, {'cohorts': {}})
+
+        total = cleared_mock_members + cleared_real_applications
         return jsonify({
             "status": "success",
-            "message": "track-application admin mockup 캐시 초기화 완료",
-            "clearedMembers": cleared_count,
+            "message": "트랙 신청 캐시 초기화 완료 (실 사용자 + admin mockup)",
+            "clearedMembers": total,
+            "clearedRealApplications": cleared_real_applications,
+            "clearedMockMembers": cleared_mock_members,
             "note": "Discord 채널/역할 + Notion 트랙 페이지는 디스코드에서 `!테스트초기화` 명령으로 별도 정리하세요.",
         })
     except Exception as e:
