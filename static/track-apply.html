@@ -1503,6 +1503,22 @@
     </div>
   </section>
 
+  <!-- ===== 신청 저장 진행 / 완료 모달 (사용자 신청 폼 → 저장하기 클릭 시) ===== -->
+  <div id="submit-loading-modal" class="admin-modal hidden-view" role="dialog" aria-modal="true" aria-live="polite">
+    <div class="admin-modal-backdrop"></div>
+    <div class="admin-modal-panel" style="max-width: 380px;">
+      <div class="admin-modal-body" style="padding: 32px 24px; text-align: center;">
+        <div id="submit-loading-icon" style="margin: 0 auto 16px; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px;">
+          <span class="gp-spinner" style="width: 28px; height: 28px; border-width: 3px;"></span>
+        </div>
+        <div id="submit-loading-title" class="admin-modal-title" style="margin-bottom: 6px;">신청을 저장하는 중...</div>
+        <div id="submit-loading-subtitle" class="admin-modal-subtitle" style="font-size: 13px; color: #6B7280;">
+          Notion 동기화 중입니다. 창을 닫지 마세요.
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== 조 배정 완료 모달 (3단계: 확인 → 진행 → 성공) ===== -->
   <div id="gp-finish-modal" class="admin-modal hidden-view" role="dialog" aria-modal="true" aria-labelledby="gp-finish-modal-title">
     <div class="admin-modal-backdrop" data-gp-finish-close></div>
@@ -2833,6 +2849,28 @@
     }
 
     // 저장하기 클릭 → 수집 → validate → summary 렌더 → state 전환
+    /** 신청 저장 진행 모달 제어 */
+    function showSubmitLoadingModal(state /* 'loading' | 'success' */) {
+      const modal = document.getElementById('submit-loading-modal');
+      if (!modal) return;
+      const icon = document.getElementById('submit-loading-icon');
+      const title = document.getElementById('submit-loading-title');
+      const subtitle = document.getElementById('submit-loading-subtitle');
+      if (state === 'loading') {
+        if (icon) icon.innerHTML = '<span class="gp-spinner" style="width: 28px; height: 28px; border-width: 3px;"></span>';
+        if (title) title.textContent = '신청을 저장하는 중...';
+        if (subtitle) subtitle.textContent = 'Notion 동기화 중입니다. 창을 닫지 마세요.';
+      } else if (state === 'success') {
+        if (icon) icon.innerHTML = '<span style="font-size: 32px; line-height: 1;">✅</span>';
+        if (title) title.textContent = '저장 완료';
+        if (subtitle) subtitle.textContent = '잠시 후 제출 완료 페이지로 이동합니다.';
+      }
+      modal.classList.remove('hidden-view');
+    }
+    function hideSubmitLoadingModal() {
+      document.getElementById('submit-loading-modal')?.classList.add('hidden-view');
+    }
+
     document.getElementById('btn-submit').addEventListener('click', async () => {
       const data = collectFormData();
       const err = validate(data);
@@ -2849,7 +2887,12 @@
         tracks: collectNormalizedTracks(),
         notes: data.notes,
       };
+      const submitBtn = document.getElementById('btn-submit');
+      const wasDisabled = submitBtn?.disabled;
       try {
+        if (submitBtn) submitBtn.disabled = true;
+        showSubmitLoadingModal('loading');
+
         const response = await fetch(`${APPLICATION_API_BASE}/api/track-applications`, {
           method: 'POST',
           credentials: 'include',
@@ -2861,6 +2904,9 @@
           throw new Error(result.message || '신청 저장에 실패했습니다.');
         }
 
+        // 성공 표시 (1.2초 노출 후 다음 화면)
+        showSubmitLoadingModal('success');
+
         const savedMember = upsertMockMember(result.member);
         if (savedMember) {
           syncViewerSubmissionState(savedMember);
@@ -2870,13 +2916,17 @@
           renderEditStatus();
         }
         refreshAdminViews(getActiveAdminTrackId());
-        applyState('open-edit');
-      // 상단으로 스크롤
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      // persist (껐다 켜도 복구)
         if (typeof saveState === 'function') saveState();
+
+        await new Promise(r => setTimeout(r, 1200));
+        hideSubmitLoadingModal();
+        applyState('open-edit');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       } catch (error) {
+        hideSubmitLoadingModal();
         showValidationMsg(error?.message || '신청 저장에 실패했습니다.');
+      } finally {
+        if (submitBtn) submitBtn.disabled = wasDisabled || false;
       }
     });
 
