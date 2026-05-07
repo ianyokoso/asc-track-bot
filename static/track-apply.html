@@ -2284,7 +2284,8 @@
         headerActions.innerHTML = `
           ${backToApplyBtn}
           <button type="button" class="btn-ghost" id="admin-cohort-config" title="기수 / 신청 기간 / Today 오버라이드 설정">⚙️ 기수·기간 설정</button>
-          <button type="button" class="btn-ghost" id="admin-fill-mock" title="하드코딩된 목업 멤버 120명 (기본 트랙 신청 포함) 으로 복원">📋 목업 채우기</button>
+          <button type="button" class="btn-ghost" id="admin-fill-mock" title="하드코딩된 목업 멤버 120명 (기본 트랙 신청 포함) 으로 복원 — deterministic baseline">📋 목업 채우기</button>
+          <button type="button" class="btn-ghost" id="admin-fill-mock-random" title="멤버 120명 풀은 그대로, 트랙·조장·sub-form 을 매번 다른 랜덤 분배로 셔플">🎲 랜덤 채우기</button>
           <button type="button" class="btn-ghost" id="admin-clear-mock" title="목업 멤버 120명을 리스트에서 완전히 제거 (실 OAuth 사용자만 남김)">🧹 목업 지우기</button>
           <button type="button" class="btn-ghost text-bad" id="admin-full-reset" title="신청 데이터 초기화 (서버 캐시 + 브라우저). Discord 채널/역할은 봇 !테스트초기화 별도 실행 필요.">🗑️ 전체 초기화</button>
           <button class="btn-ghost" id="admin-track-apply-sync">Full Sync</button>
@@ -2298,6 +2299,9 @@
           });
           document.getElementById('admin-fill-mock')?.addEventListener('click', () => {
             void runAdminFillMock();
+          });
+          document.getElementById('admin-fill-mock-random')?.addEventListener('click', () => {
+            void runAdminFillMockRandom();
           });
           document.getElementById('admin-clear-mock')?.addEventListener('click', () => {
             void runAdminClearMock();
@@ -2797,6 +2801,100 @@
       try { localStorage.removeItem(GP_STATE_KEY); } catch (e) {}
       // '목업 지우기' 플래그도 해제 — baseline 다시 보이도록
       try { localStorage.removeItem(MOCK_HIDDEN_KEY); } catch (e) {}
+      _markAdminReloadIfApplicable();
+      location.reload();
+    }
+
+    /**
+     * [관리자] 목업 데이터 트랙 분배를 랜덤으로 셔플.
+     * - 멤버 120명 풀은 그대로, 각자 어느 트랙에 들어갈지 / 조장인지 / sub form 을 랜덤 결정.
+     * - "목업 채우기" (deterministic baseline) 와 다르게 demo 마다 분배가 달라짐.
+     * - 분배 규칙:
+     *   · 신청률 ~85%: 일부 멤버는 미신청 (현실 반영)
+     *   · 정규 트랙: 멤버당 0~3개 weekday 트랙 랜덤 (요일별 1개씩 max)
+     *   · 라이트 트랙: 별도 ~15% 확률로 부여 (creator_light 또는 builder_light)
+     *   · 조장: weekday 트랙 보유자 중 ~12% 확률로 leader=true
+     *   · 크리에이터 트랙은 creatorSub: short_only / short_long 랜덤
+     */
+    async function runAdminFillMockRandom() {
+      const confirmed = confirm(
+        '🎲 랜덤 채우기\n\n' +
+        '멤버 120명 풀은 그대로 두고, 각 멤버의 트랙 / 조장 / 크리에이터 sub-form 을\n' +
+        '모두 랜덤으로 다시 분배합니다. 매번 결과가 달라집니다.\n\n' +
+        '※ 서버 캐시 / Discord / Notion 은 건드리지 않음.\n' +
+        '※ 현재 브라우저 편집 사항 + 조 배정 캐시는 사라집니다.\n\n' +
+        '진행할까요?'
+      );
+      if (!confirmed) return;
+
+      const WEEKDAY_IDS = ['creator', 'builder_basic', 'builder_advanced', 'sales_real', 'ai_agent', 'app_dev', 'self_inquiry'];
+      const WEEKDAY_TO_DAY = {
+        creator: 'wed', builder_basic: 'tue', builder_advanced: 'tue',
+        sales_real: 'mon', ai_agent: 'wed', app_dev: 'thu', self_inquiry: 'mon',
+      };
+      const CREATOR_LIGHT_IDS = ['creator_light_short', 'creator_light_long'];
+      const BUILDER_LIGHT_IDS = ['builder_light_basic', 'builder_light_adv'];
+      const CREATOR_SUBS = ['short_only', 'short_long'];
+
+      const APPLY_PROBABILITY = 0.88;       // 88% 멤버가 신청
+      const LEADER_PROBABILITY = 0.12;      // 신청자 중 12% 가 조장
+      const CREATOR_LIGHT_PROBABILITY = 0.15;
+      const BUILDER_LIGHT_PROBABILITY = 0.15;
+      const MAX_WEEKDAY_TRACKS = 3;         // 멤버당 최대 정규 트랙 수
+
+      const _pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+      const _chance = (p) => Math.random() < p;
+
+      function _genWeekdayTracksForMember() {
+        const occupied = new Set();
+        const numTracks = (() => {
+          const r = Math.random();
+          if (r < 0.45) return 1;
+          if (r < 0.85) return 2;
+          if (r < 0.97) return 3;
+          return Math.min(MAX_WEEKDAY_TRACKS, 4);
+        })();
+        const result = [];
+        const shuffled = WEEKDAY_IDS.slice().sort(() => Math.random() - 0.5);
+        for (const id of shuffled) {
+          if (result.length >= numTracks) break;
+          const day = WEEKDAY_TO_DAY[id];
+          if (occupied.has(day)) continue;
+          occupied.add(day);
+          const entry = { type: 'weekday', id, leader: _chance(LEADER_PROBABILITY) };
+          if (id === 'creator') entry.creatorSub = _pick(CREATOR_SUBS);
+          result.push(entry);
+        }
+        return result;
+      }
+
+      // MOCK_MEMBERS in-place 셔플.
+      MOCK_MEMBERS.forEach(m => {
+        if (!_chance(APPLY_PROBABILITY)) {
+          m.tracks = [];
+          m.edits = 0;
+          m.submitted = null;
+          if ('submittedAt' in m) m.submittedAt = null;
+          return;
+        }
+        const tracks = _genWeekdayTracksForMember();
+        if (_chance(CREATOR_LIGHT_PROBABILITY)) tracks.push({ type: 'light', id: _pick(CREATOR_LIGHT_IDS) });
+        if (_chance(BUILDER_LIGHT_PROBABILITY)) tracks.push({ type: 'light', id: _pick(BUILDER_LIGHT_IDS) });
+        m.tracks = tracks;
+        m.edits = Math.floor(Math.random() * 4);
+        // 신청 시각 — 신청 윈도우 내 랜덤 (현재는 5월 20~22일 demo 범위)
+        const day = 20 + Math.floor(Math.random() * 3);
+        const hour = String(8 + Math.floor(Math.random() * 14)).padStart(2, '0');
+        const min = String(Math.floor(Math.random() * 60)).padStart(2, '0');
+        m.submitted = `05-${String(day).padStart(2, '0')} ${hour}:${min}`;
+      });
+
+      // 조 배정 캐시 무효화 — 새 멤버 분배 기반으로 재산출되도록.
+      try { localStorage.removeItem(GP_STATE_KEY); } catch (e) {}
+      try { localStorage.removeItem(MOCK_HIDDEN_KEY); } catch (e) {}
+      // 변경된 MOCK_MEMBERS 를 ADMIN_STORAGE_KEY 에 저장 (새로고침 후 보존).
+      if (typeof saveState === 'function') saveState();
+
       _markAdminReloadIfApplicable();
       location.reload();
     }
