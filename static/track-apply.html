@@ -1489,9 +1489,14 @@
       <!-- 편집 툴바 -->
       <div class="flex items-center justify-between mb-5 flex-wrap gap-2">
         <p class="text-[12px] text-ink-soft">
-          <span class="inline-flex items-center gap-1"><span class="text-navy">⠿</span> 행을 끌어다 다른 조로 이동</span>
-          <span class="mx-2 text-border-strong">·</span>
-          <span class="inline-flex items-center gap-1"><span class="text-navy">★</span> 조장 토글</span>
+          <span id="gp-hint-weekday">
+            <span class="inline-flex items-center gap-1"><span class="text-navy">⠿</span> 행을 끌어다 다른 조로 이동</span>
+            <span class="mx-2 text-border-strong">·</span>
+            <span class="inline-flex items-center gap-1"><span class="text-navy">★</span> 조장 토글</span>
+          </span>
+          <span id="gp-hint-light" class="hidden">
+            <span class="inline-flex items-center gap-1">라이트 트랙은 조 배정 없이 부모 트랙의 공지·과제 채널 접근 권한만 부여됩니다.</span>
+          </span>
           <span class="ml-3 text-ink-soft" title="조 배정 변경은 브라우저 localStorage 에 자동 저장됩니다. 새로고침하거나 다시 들어와도 그대로 유지됩니다.">· 자동 임시저장됨</span>
           <span id="gp-dirty-flag" class="ml-2 text-warn font-semibold hidden" title="아직 'Notion/Discord 에 commit' 되지 않았습니다. 우측 '조 배정 완료 →' 버튼을 누르면 Notion 트랙 페이지에 조 DB 가 생성되고 Discord 채널/역할이 자동 부여됩니다.">· Notion/Discord 미반영</span>
         </p>
@@ -4620,8 +4625,10 @@
       return lightIds.flatMap(id => gpGetLightMembers(id));
     }
 
-    /** 탭 배지에 보일 조 개수: 배정 상태가 있으면 그 길이, 없으면 자동 산출 */
+    /** 탭 배지에 보일 조 개수: 배정 상태가 있으면 그 길이, 없으면 자동 산출.
+     *  라이트 트랙은 조 분할 없음 → 멤버 수 그대로 노출 (조 카운트 의미 없음). */
     function gpGetGroupCount(tab) {
+      if (tab.kind === 'light_group') return gpGetTabEntries(tab).length;
       if (_gpAssignments[tab.id]) return _gpAssignments[tab.id].length;
       const n = gpGetTabEntries(tab).length;
       return n === 0 ? 0 : Math.ceil(n / 5);
@@ -4692,7 +4699,10 @@
         return _gpAssignments[tab.id];
       }
       const entries = gpGetTabEntries(tab);
-      const groups = gpChunk(entries, 5);
+      // 라이트 트랙은 조 배정 개념 없음 → 단일 그룹에 전 멤버 (드래그/조장/조 분할 비활성).
+      const groups = (tab.kind === 'light_group')
+        ? (entries.length ? [entries] : [[]])
+        : gpChunk(entries, 5);
       _gpAssignments[tab.id] = groups.map(g => g.map(e => e.member.id));
       // 빈 트랙 — 최소 1개 빈 조는 갖도록 (드롭 타겟 제공)
       if (_gpAssignments[tab.id].length === 0) _gpAssignments[tab.id].push([]);
@@ -5221,9 +5231,12 @@
             ? `<button type="button" data-no-drag data-toggle-leader="${escapeAttr(memberId)}" class="inline-flex items-center gap-1 h-6 px-2 rounded-xs bg-navy-soft text-navy text-[11px] font-semibold flex-shrink-0" title="조장 해제">★ 조장</button>`
             : `<button type="button" data-no-drag data-toggle-leader="${escapeAttr(memberId)}" class="inline-flex items-center justify-center w-6 h-6 rounded-xs text-ink-soft hover:bg-surface-2 hover:text-navy text-[14px] flex-shrink-0" title="조장 지정" aria-label="조장 지정">☆</button>`)
         : '';
+      // 라이트 트랙은 드래그/조장 토글 비활성 — 조 분할 의미 없음.
+      const isLight = tab.kind === 'light_group';
+      const rowDraggable = isLight ? '' : 'draggable="true"';
       return `
         <div class="gp-member-row flex items-center gap-3 py-2 px-3 -mx-3 rounded-md ${rowBg}"
-             draggable="true"
+             ${rowDraggable}
              data-member-id="${escapeAttr(memberId)}"
              data-group-idx="${groupIdx}">
           ${avatarHtml}
@@ -5232,7 +5245,7 @@
             <div class="text-[11px] text-ink-soft truncate">${m.handle}</div>
           </div>
           ${leaderBtn}
-          <span class="gp-grip" aria-hidden="true">⠿</span>
+          ${isLight ? '' : '<span class="gp-grip" aria-hidden="true">⠿</span>'}
         </div>
       `;
     }
@@ -5282,26 +5295,33 @@
       const peopleSvg  = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
       const trashSvg   = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
 
+      const isLight = tab.kind === 'light_group';
       const cards = groupIds.map((memberIds, idx) => {
         const entries = memberIds.map(id => gpResolveEntry(id, tab)).filter(Boolean);
         const leaderCount = entries.filter(e => e.leader).length;
         const isEmpty = entries.length === 0;
-        const trashBtn = isEmpty
-          ? `<button type="button" data-delete-group="${idx}" class="text-ink-soft hover:text-bad transition-colors" aria-label="빈 조 삭제" title="빈 조 삭제">${trashSvg}</button>`
-          : `<button type="button" class="text-ink-soft hover:text-ink transition-colors" aria-label="자세히" title="자세히">${extLinkSvg}</button>`;
+        const trashBtn = (isLight || !isEmpty)
+          ? `<button type="button" class="text-ink-soft hover:text-ink transition-colors" aria-label="자세히" title="자세히">${extLinkSvg}</button>`
+          : `<button type="button" data-delete-group="${idx}" class="text-ink-soft hover:text-bad transition-colors" aria-label="빈 조 삭제" title="빈 조 삭제">${trashSvg}</button>`;
+        // 라이트: '조 N조' 라벨 대신 부모 트랙 라이트 신청자 라벨.
+        const cardTitle = isLight
+          ? `${GP_TEST_COHORT_LABEL} ${tab.label} 신청자`
+          : `${GP_TEST_COHORT_LABEL} ${idx + 1}조`;
+        const denominator = isLight ? entries.length : (entries.length || 5);
+        const cardClasses = isLight ? 'gp-card gp-card-light rounded-lg border border-border-hair bg-canvas' : 'gp-card rounded-lg border border-border-hair bg-canvas';
         return `
-          <div class="gp-card rounded-lg border border-border-hair bg-canvas" data-group-idx="${idx}">
+          <div class="${cardClasses}" data-group-idx="${idx}">
             <div class="p-5">
               <div class="flex items-center justify-between mb-3">
-                <h3 class="text-[16px] font-bold text-ink">${GP_TEST_COHORT_LABEL} ${idx + 1}조</h3>
+                <h3 class="text-[16px] font-bold text-ink">${cardTitle}</h3>
                 ${trashBtn}
               </div>
               <div class="flex items-center justify-between text-[12px] text-ink-soft mb-3 pb-3 border-b border-border-hair">
-                <span class="inline-flex items-center gap-1">${peopleSvg} ${entries.length}명${leaderCount ? ` · 조장 ${leaderCount}` : ''}</span>
-                <span class="tabular-nums"><strong class="text-ink">0</strong>/${entries.length || 5} · 0%</span>
+                <span class="inline-flex items-center gap-1">${peopleSvg} ${entries.length}명${(!isLight && leaderCount) ? ` · 조장 ${leaderCount}` : ''}</span>
+                ${isLight ? '' : `<span class="tabular-nums"><strong class="text-ink">0</strong>/${denominator} · 0%</span>`}
               </div>
               ${isEmpty
-                ? '<div class="py-10 text-center text-[12px] text-ink-soft">멤버를 끌어다 놓으세요</div>'
+                ? `<div class="py-10 text-center text-[12px] text-ink-soft">${isLight ? '아직 신청자가 없습니다.' : '멤버를 끌어다 놓으세요'}</div>`
                 : `<div class="space-y-1">${entries.map(e => gpMemberRowHtml(e, idx, tab)).join('')}</div>`}
             </div>
           </div>
@@ -5310,6 +5330,14 @@
 
       wrap.innerHTML = cards;
       gpAttachDnDHandlers(tab);
+
+      // 헤더의 hint 텍스트 + '빈 조 추가' 버튼은 라이트 탭에서 숨김.
+      const hintWeekday = document.getElementById('gp-hint-weekday');
+      const hintLight = document.getElementById('gp-hint-light');
+      const addGroupBtn = document.getElementById('gp-add-group-btn');
+      if (hintWeekday) hintWeekday.classList.toggle('hidden', isLight);
+      if (hintLight) hintLight.classList.toggle('hidden', !isLight);
+      if (addGroupBtn) addGroupBtn.classList.toggle('hidden', isLight);
     }
 
     function gpAttachDnDHandlers(tab) {
@@ -5381,9 +5409,14 @@
           gpResortAll(t);
         }
       });
-      // 상단 요약: "N개 트랙 · 총 K개 조"
-      const activeTracks = GP_TABS.filter(t => gpGetGroupCount(t) > 0).length;
-      const totalGroups  = GP_TABS.reduce((sum, t) => sum + gpGetGroupCount(t), 0);
+      // 상단 요약: "N개 트랙 · 총 K개 조" — 조 카운트는 정규 트랙만 (라이트는 조 개념 없음)
+      const activeTracks = GP_TABS.filter(t => {
+        return t.kind === 'light_group' ? gpGetTabEntries(t).length > 0 : gpGetGroupCount(t) > 0;
+      }).length;
+      const totalGroups = GP_TABS.reduce((sum, t) => {
+        if (t.kind === 'light_group') return sum;
+        return sum + gpGetGroupCount(t);
+      }, 0);
       const summary = document.getElementById('gp-summary');
       if (summary) summary.textContent = `${activeTracks}개 트랙 · 총 ${totalGroups}개 조`;
       gpRenderTabs();
