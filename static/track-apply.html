@@ -2476,7 +2476,14 @@
           const persistedAdminMembers = await loadAdminMockMembers();
           replaceMockMembers(persistedAdminMembers);
         }
-        await migrateLegacyViewerSubmission(data.members);
+        // ⚠️ migrateLegacyViewerSubmission 자동 호출 제거 (2026-05-07).
+        // 이전엔 localStorage 에 viewer 의 이전 신청이 있고 서버에 없으면 자동으로
+        // POST /api/track-applications 해서 부활시켰음. 그러나:
+        //   - 운영진이 '전체 초기화' 누른 후 user 가 로그인하면 stale localStorage 가
+        //     서버를 다시 채워서 reset 이 무력화됨 (유령 신청 부활)
+        //   - 의도적인 wipe 와 충돌하는 footgun
+        // 데이터 복구가 필요하면 user 가 명시적으로 폼에서 다시 제출.
+        // await migrateLegacyViewerSubmission(data.members);
         saveState();
         refreshAdminViews(getActiveAdminTrackId());
 
