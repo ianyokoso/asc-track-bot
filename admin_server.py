@@ -211,11 +211,35 @@ def _normalize_notion_id(value):
 
 
 def _get_track_application_notion_target():
+    """
+    트랙 신청서 DB 의 Notion 클라이언트 + DB ID 를 결정.
+
+    🚨 이전 버그 (~ 2026-05-07):
+      fallback chain 이
+        GROUP_PREVIEW_TEST_TRACK_APPLICATION_DB_ID   (env)
+        OR GROUP_PREVIEW_DEFAULT_TRACK_APPLICATION_TEST_DB_ID  (line 190 모듈 상수)
+        OR TRACK_APPLICATION_DB_ID  (env)
+      이었음. 그런데 line 190 의 GROUP_PREVIEW_DEFAULT_... 자체가
+      `os.getenv('GROUP_PREVIEW_TEST_...', '3566400e9...')` 로 평가돼 항상 truthy
+      (env 미설정이면 하드코딩 test DB ID fallback). 결과:
+        · `.env` 에 TRACK_APPLICATION_DB_ID (운영용) 를 설정해도 영원히 도달 안 함.
+        · 운영 신청이 test workspace 의 DB 로 라우팅됨 → prod 토큰으로 권한 없음 → 500.
+        · 운영자는 prod DB 만 보고 "안 쌓인다" 로 인식.
+
+    수정: 우선순위 교체 — 운영 DB ID 명시 설정이 있으면 최우선.
+      1) TRACK_APPLICATION_DB_ID                              (운영용 명시 설정)
+      2) GROUP_PREVIEW_TEST_TRACK_APPLICATION_DB_ID            (test override env)
+      3) GROUP_PREVIEW_DEFAULT_TRACK_APPLICATION_TEST_DB_ID    (하드코딩 test fallback)
+
+    토큰 결정도 동일 정렬 — prod env 에서 운영용 DB 를 가리킬 때
+    test 토큰을 override 하지 않도록 GROUP_PREVIEW_TEST_NOTION_TOKEN 이 명시
+    설정된 경우에만 override (기존 동작 유지).
+    """
     notion_client = _load_notion_api(notion_token_override=GROUP_PREVIEW_TEST_NOTION_TOKEN or None)
     track_application_db_id = _normalize_notion_id(
-        os.getenv('GROUP_PREVIEW_TEST_TRACK_APPLICATION_DB_ID')
+        os.getenv('TRACK_APPLICATION_DB_ID')
+        or os.getenv('GROUP_PREVIEW_TEST_TRACK_APPLICATION_DB_ID')
         or GROUP_PREVIEW_DEFAULT_TRACK_APPLICATION_TEST_DB_ID
-        or os.getenv('TRACK_APPLICATION_DB_ID')
     )
     return notion_client, track_application_db_id
 
