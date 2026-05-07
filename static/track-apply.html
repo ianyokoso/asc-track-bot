@@ -227,6 +227,9 @@
       transition: background-color 150ms, border-color 150ms, color 150ms;
       user-select: none;
       white-space: nowrap;
+      width: fit-content;
+      max-width: 100%;
+      align-self: flex-start;  /* flex-wrap 시 row 가득 채우지 않도록 명시 */
     }
     .leader-apply input[type="checkbox"] {
       /* 체크박스는 숨기고 pill 전체가 토글 UI */
@@ -1000,7 +1003,7 @@
                   </label>
                   <label class="leader-apply is-disabled">
                     <input type="checkbox" disabled>
-<span>세일즈 실전 트랙 조장 지원하기</span>
+<span class="leader-star">★</span><span>조장 지원</span>
                   </label>
                 </div>
                 <div class="track-schedule" data-track="sales_real">
@@ -1025,7 +1028,7 @@
                   </label>
                   <label class="leader-apply is-disabled">
                     <input type="checkbox" disabled>
-<span>나 탐구 트랙 조장 지원하기</span>
+<span class="leader-star">★</span><span>조장 지원</span>
                   </label>
                 </div>
                 <div class="track-schedule" data-track="self_inquiry">
@@ -1055,7 +1058,7 @@
                   </label>
                   <label class="leader-apply is-disabled">
                     <input type="checkbox" disabled>
-<span>빌더 심화 트랙 조장 지원하기</span>
+<span class="leader-star">★</span><span>조장 지원</span>
                   </label>
                 </div>
                 <div class="track-schedule" data-track="builder_advanced">
@@ -1083,7 +1086,7 @@
                   </label>
                   <label class="leader-apply is-disabled">
                     <input type="checkbox" disabled>
-<span>빌더 기초 트랙 조장 지원하기</span>
+<span class="leader-star">★</span><span>조장 지원</span>
                   </label>
                 </div>
                 <div class="track-schedule" data-track="builder_basic">
@@ -1118,7 +1121,7 @@
                   </label>
                   <label class="leader-apply is-disabled">
                     <input type="checkbox" disabled>
-<span>AI 에이전트 트랙 조장 지원하기</span>
+<span class="leader-star">★</span><span>조장 지원</span>
                   </label>
                 </div>
                 <div class="track-schedule" data-track="ai_agent">
@@ -1140,7 +1143,7 @@
                   </label>
                   <label class="leader-apply is-disabled" title="숏폼/롱폼 구분 없이 통합 운영">
                     <input type="checkbox" disabled>
-<span>크리에이터 트랙 조장 지원하기</span>
+<span class="leader-star">★</span><span>조장 지원</span>
                   </label>
                 </div>
                 <div class="track-schedule" data-track="creator">
@@ -1179,7 +1182,7 @@
                   </label>
                   <label class="leader-apply is-disabled">
                     <input type="checkbox" disabled>
-<span>앱 개발 트랙 조장 지원하기</span>
+<span class="leader-star">★</span><span>조장 지원</span>
                   </label>
                 </div>
                 <div class="track-schedule" data-track="app_dev">
@@ -2046,6 +2049,16 @@
         });
         if (!resp.ok) return;
         const data = await resp.json().catch(() => ({}));
+
+        // 세션 만료 감지 — URL query 엔 viewer 정보가 있어도 서버 세션 쿠키가
+        // 만료/삭제되면 authenticated=false. 모바일에서 창 닫고 다시 켜는 경우 자주 발생.
+        if (data.authenticated === false) {
+          alert('로그인 세션이 만료되었습니다.\n다시 로그인해주세요.');
+          applyState('logout');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          return;
+        }
+
         if (typeof data.isAdmin !== 'boolean') return;
         if (data.isAdmin === IS_VIEWER_ADMIN) return; // 변화 없음
 
@@ -2934,6 +2947,17 @@
           body: JSON.stringify(payload),
         });
         const result = await response.json().catch(() => ({}));
+
+        // 세션 만료 (모바일에서 창 닫고 다시 켜면 쿠키 expire 자주 발생)
+        // → 안내 alert 후 로그인 화면으로 부드럽게 복귀.
+        if (response.status === 401 || /Discord auth/i.test(result.message || '')) {
+          hideSubmitLoadingModal();
+          alert('로그인 세션이 만료되었습니다.\n다시 로그인해주세요.');
+          applyState('logout');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          return;
+        }
+
         if (!response.ok || result.status !== 'success') {
           throw new Error(result.message || '신청 저장에 실패했습니다.');
         }
