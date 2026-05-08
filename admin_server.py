@@ -2279,18 +2279,23 @@ def _collect_member_group_labels(tracks):
 
 
 def _find_existing_member_page(notion_api, member_db_id, fields, member):
+    """
+    멤버 마스터 DB 매칭 정책 (2026-05-08 변경):
+      - Discord 사용자 ID (snowflake) — 1차 unique 식별자.
+      - Discord handle (@닉네임) — 2차 unique 식별자.
+      - title (이름) 매칭은 제거 — 동명이인 위험 (사용자 정책).
+      - title === member_id (legacy fallback): 마스터 DB title 컬럼에 Discord ID 가
+        저장돼있는 옛 데이터 호환용. ID 매칭이라 동명이인 위험 없음 → 유지.
+    """
     filters = []
     member_id = str(member.get('userId') or member.get('id') or '').strip()
-    member_name = str(member.get('name') or member.get('id') or '').strip()
     handle = str(member.get('handle', '')).strip()
 
     if member_id and fields.get('user_id'):
         filters.append({"property": fields['user_id'], "rich_text": {"equals": member_id}})
     if handle and fields.get('handle'):
         filters.append({"property": fields['handle'], "rich_text": {"equals": handle}})
-    if member_name and fields.get('title'):
-        filters.append({"property": fields['title'], "title": {"equals": member_name}})
-    if member_id and member_id != member_name and fields.get('title'):
+    if member_id and fields.get('title'):
         filters.append({"property": fields['title'], "title": {"equals": member_id}})
 
     if not filters:
