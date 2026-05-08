@@ -2386,21 +2386,22 @@ def _ensure_member_track_options(notion_api, member_db_id, track_property_name, 
         notion_api.add_multi_select_option(member_db_id, track_property_name, track_name)
 
 
-def _upsert_group_preview_members(notion_api, member_db_id, members, member_group_labels):
+def _upsert_group_preview_members(notion_api, member_db_id, members, member_group_labels, auto_create_missing=False):
     """
-    멤버 마스터 DB 갱신 정책 (2026-05-08 변경):
+    멤버 마스터 DB 갱신.
 
-      직전: 매칭 실패 시 새 row 자동 생성 → 운영자가 의도하지 않은 신규 멤버 등장,
-            기존 멤버와 중복, 페이지 안에 들어있는 정보 (과제·출석 등 relation) 위험.
+    auto_create_missing=False (기본):
+      - 매칭 실패 → SKIP + missing 리스트 누적. (운영자 데이터 보호)
+    auto_create_missing=True:
+      - 매칭 실패 → 신규 row 생성 (title=name, user_id, handle, track, group 모두 set).
+      - 운영자가 success modal 의 '🔧 마스터 DB 자동 추가' 버튼 클릭 시 활성화.
 
-      변경: 매칭 (Discord user ID 또는 handle) 실패 시 SKIP + missing 리스트 수집.
-            매칭 성공 시 트랙·조 properties 만 update (title / user_id / handle / notes
-            는 보존). 기존 페이지의 다른 데이터를 건드리지 않음.
+    매칭 성공 케이스는 항상 트랙·조만 patch (다른 필드 보존).
 
-      반환: (member_page_ids dict, summary dict).
-        summary['updated']: 매칭 성공해서 트랙·조만 갱신된 멤버 수.
-        summary['missing']: 매칭 실패해서 skip 된 멤버 정보 list.
-        summary['created']: 0 (정책상 새 row 만들지 않음).
+    반환: (member_page_ids dict, summary dict)
+      summary['updated']: 매칭 성공 → 트랙·조 patch.
+      summary['created']: auto_create_missing=True 일 때 신규 생성된 수.
+      summary['missing']: 결국 처리 못 한 케이스 (auto_create 도 실패한 경우 / userId 없는 경우).
     """
     db_obj = notion_api.get_database(member_db_id)
     if not db_obj:
@@ -2434,6 +2435,26 @@ def _upsert_group_preview_members(notion_api, member_db_id, members, member_grou
                 raise RuntimeError(f'Failed to update member row: {member_id}')
             member_page_ids[member_id] = existing['id']
             summary['updated'] += 1
+        elif auto_create_missing:
+            # 운영자가 명시적으로 자동 생성 요청 → 신규 row 만듦.
+            properties = _build_member_properties(
+                fields,
+                member,
+                member_group_labels.get(member_id, []),
+                update_only_tracks_and_group=False,
+            )
+            new_page_id = notion_api.add_row_to_database(member_db_id, properties)
+            if not new_page_id:
+                # 생성 실패 — missing 으로 fallback.
+                summary['missing'].append({
+                    'userId': member_id,
+                    'name': str(member.get('name') or '').strip(),
+                    'handle': str(member.get('handle') or '').strip(),
+                    'reason': 'create_failed',
+                })
+                continue
+            member_page_ids[member_id] = new_page_id
+            summary['created'] += 1
         else:
             # 매칭 실패 — SKIP, missing 리스트에 누적해서 운영자에게 보고.
             summary['missing'].append({
@@ -2911,6 +2932,9 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
     cohort_label = str(payload.get('cohortLabel') or '9기').strip()
     members = payload.get('members') or []
     tracks = payload.get('tracks') or []
+    # 🔧 운영자가 success modal 의 '🔧 마스터 DB 자동 추가' 버튼 클릭 시 활성화.
+    #   매칭 실패 (master DB 에 row 없음) 멤버를 자동으로 신규 생성. 기본은 false (skip).
+    auto_create_missing = bool(payload.get('autoCreateMissing'))
 
     if not members:
         raise ValueError('No mock members were provided.')
@@ -2946,6 +2970,7 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
         member_db_id,
         members,
         member_group_labels,
+        auto_create_missing=auto_create_missing,
     )
 
     # ─────────────────────────────────────────────────────────────────────

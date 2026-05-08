@@ -5921,8 +5921,46 @@
           const more = missing.length > samples.length ? ` 외 ${missing.length - samples.length}명` : '';
           detail.innerHTML =
             `<strong>⚠️ 멤버 마스터 DB 매칭 실패:</strong> ${samples.join(', ')}${more}<br>` +
-            `<span class="text-[10px] text-ink-soft">매칭 기준: Discord 사용자 ID 또는 닉네임. 매칭 안 된 멤버는 마스터 DB에 row 가 추가되지 않고 조 inline DB 에서도 제외됐습니다.</span>`;
+            `<span class="text-[10px] text-ink-soft">매칭 기준: Discord 사용자 ID 또는 닉네임. 마스터 DB 에 row 가 없어서 트랙·조 갱신과 조 inline DB row 생성이 skip 됐습니다.</span>` +
+            `<div class="mt-2 flex justify-end">` +
+              `<button type="button" id="gp-auto-create-missing" class="btn-navy h-8 px-3 text-[11px] inline-flex items-center gap-1.5">` +
+                `🔧 매칭 실패 ${missing.length}명을 마스터 DB에 추가하고 조 배정 마무리` +
+              `</button>` +
+            `</div>`;
           stats.appendChild(detail);
+
+          // 🔧 클릭 → 같은 commit endpoint 에 autoCreateMissing=true 플래그로 재호출.
+          //   서버는 매칭 성공한 기존 멤버는 incremental sync (no-op),
+          //   매칭 실패한 멤버만 master DB 신규 row + 조 inline DB row 추가.
+          //   payload 는 직전 호출과 동일 — gpBuildCommitPayload() 가 현재 그룹 상태로 재구성.
+          requestAnimationFrame(() => {
+            const btn = document.getElementById('gp-auto-create-missing');
+            if (!btn) return;
+            btn.addEventListener('click', async () => {
+              btn.disabled = true;
+              const originalLabel = btn.innerHTML;
+              btn.innerHTML = '<span class="gp-spinner" style="border-color:#FFFFFF;border-top-color:transparent;width:11px;height:11px;"></span> 처리 중…';
+              try {
+                const retryPayload = gpBuildCommitPayload();
+                retryPayload.autoCreateMissing = true;
+                const retryResult = await gpCallSyncApi(retryPayload);
+                const newSummary = retryResult?.summary || {};
+                const newMissing = Array.isArray(newSummary.members_missing) ? newSummary.members_missing : [];
+                const created = newSummary.members_created || 0;
+                if (typeof showToast === 'function') {
+                  showToast(`✓ 마스터 DB ${created}명 추가 완료${newMissing.length ? ` (${newMissing.length}명 여전히 실패)` : ''}`);
+                }
+                // 빨간 detail 박스 갱신 — created 만큼 줄어든 missing 다시 그림.
+                detail.remove();
+                gpShowFinishSuccess(sum, retryResult);
+              } catch (err) {
+                console.error('[자동 생성] 실패:', err);
+                alert(`자동 생성 실패: ${err?.message || err}`);
+                btn.disabled = false;
+                btn.innerHTML = originalLabel;
+              }
+            });
+          });
         }
       }
 
