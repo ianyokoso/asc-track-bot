@@ -4096,7 +4096,11 @@
     }
 
     // ── localStorage persistence (편집 결과 유지 / 껐다 켜도 복구) ─────
-    const ADMIN_STORAGE_KEY = 'asc_track_apply_mockup_v2';
+    // 🆙 v2 → v3 (2026-05-08): 운영진 '전체 초기화' 후 stale lastSubmittedData 가
+    //    학생 디바이스에 부활하던 footgun 해결을 위해 키 버전 bump.
+    //    옛 v2 키 데이터는 자동으로 무시되고, 추가로 한 번 정리.
+    const ADMIN_STORAGE_KEY = 'asc_track_apply_mockup_v3';
+    try { localStorage.removeItem('asc_track_apply_mockup_v2'); } catch (e) {}
     // 목업 멤버 (HTML 하드코딩 baseline) 숨김 플래그 — 운영진이 '목업 지우기'
     // 클릭하면 true. 다음 페이지 init 에서 baseline 멤버를 전부 splice 제거.
     // OAuth 로그인한 실 사용자는 server 응답을 통해 별도로 push 됨.

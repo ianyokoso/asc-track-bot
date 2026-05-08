@@ -51,15 +51,36 @@ def serve_root():
     return redirect('/apply', code=302)
 
 
+def _no_cache_headers(response):
+    """
+    🛑 정적 HTML/JS/CSS 에 강제 캐시 무효화 헤더 부착.
+
+    이전 footgun:
+      Flask 의 send_from_directory 기본 SEND_FILE_MAX_AGE_DEFAULT = 12 hours.
+      학생 모바일 브라우저가 옛 track-apply.html 을 12 시간 캐싱.
+      운영진이 '전체 초기화' 한 후 신규 fix 가 배포돼도 학생 디바이스는
+      옛 JS 그대로 → stale localStorage / 미적용 fix 로 UI 불일치 지속.
+      "캐시 비워주세요" 라고 학생들에게 안내하는 건 운영상 비현실적.
+
+    수정:
+      - no-cache, no-store, must-revalidate 로 매 요청마다 서버에서 새로 받게.
+      - Pragma/Expires 도 동시 명시 (legacy proxy 호환).
+    """
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
+
 @app.route('/apply')
 def serve_apply_page():
     """track-bot Flask 가 직접 apply UI 정적 HTML 을 서빙."""
-    return send_from_directory(STATIC_DIR, 'track-apply.html')
+    return _no_cache_headers(send_from_directory(STATIC_DIR, 'track-apply.html'))
 
 
 @app.route('/static/<path:filename>')
 def serve_static_assets(filename):
-    return send_from_directory(STATIC_DIR, filename)
+    return _no_cache_headers(send_from_directory(STATIC_DIR, filename))
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
