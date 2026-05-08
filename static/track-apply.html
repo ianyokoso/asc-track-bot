@@ -840,6 +840,45 @@
       display: inline-block;
     }
     @keyframes gp-spin { to { transform: rotate(360deg); } }
+    /* 🔧 Toast — '저장 완료' 같은 짧은 success/info 안내. 디자인 톤: navy 배경 + white text. */
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 32px;
+      transform: translateX(-50%) translateY(8px);
+      background: #1E2A4A;
+      color: #FFFFFF;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 500;
+      box-shadow: 0 8px 24px rgba(20, 30, 60, 0.18), 0 2px 6px rgba(20, 30, 60, 0.12);
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease-out, transform 180ms ease-out;
+      z-index: 10000;
+      white-space: nowrap;
+    }
+    .toast.is-visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .toast::before {
+      content: '✓';
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.16);
+      color: #FFFFFF;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
     /* 🔧 Cohort-config flash 방지 (2026-05-08).
        페이지 첫 paint 시점에 cohort-config 가 아직 도착 안 해서 default startDate (2026-05-20)
        로 view-upcoming '11일 ...' 카운트다운이 잠깐 보였다가 cohort-config 도착 후 view-logout
@@ -4716,6 +4755,19 @@
       if (!editingMemberId) return;
       const m = MOCK_MEMBERS.find(x => x.id === editingMemberId);
       if (!m) return;
+
+      const saveBtn = document.getElementById('admin-edit-save');
+      const cancelBtn = document.querySelector('#admin-edit-modal [data-close-modal]');
+      const originalLabel = saveBtn ? saveBtn.innerHTML : '저장';
+      // 🔧 Loading state — 사용자 피드백: '저장 버튼을 누르면 로딩이 보이게끔'.
+      //   흰색 spinner (navy 배경 위) + '저장 중...' 텍스트로 진행 중임을 명시.
+      //   double-click 방지 위해 button + cancel 모두 disable.
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span class="gp-spinner" style="border-color:#FFFFFF;border-top-color:transparent;width:12px;height:12px;"></span><span>저장 중…</span>';
+      }
+      if (cancelBtn) cancelBtn.setAttribute('disabled', 'disabled');
+
       m.tracks = editingTracks.map(t => ({ ...t }));
       m.edits = (m.edits || 0) + 1;  // 관리자 직권 수정도 카운트
       try {
@@ -4731,8 +4783,17 @@
         renderAdminLeaderBar(activeTab);
         renderAdminTable(activeTab);
         saveState();
+        // 🔧 완료 안내 — 디자인 톤 맞춘 navy toast (1.8s 자동 fade out).
+        if (typeof showToast === 'function') showToast('저장 완료되었습니다');
       } catch (error) {
         alert(error?.message || '관리자 수정 저장에 실패했습니다.');
+      } finally {
+        // 모달이 이미 닫혔어도 다음 진입 시 정상 라벨 보이도록 button 복원.
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.innerHTML = originalLabel;
+        }
+        if (cancelBtn) cancelBtn.removeAttribute('disabled');
       }
     });
 
@@ -6068,6 +6129,24 @@
       stateButtons.forEach(b => b.classList.remove('active'));
       renderGroupPreview();
     }
+  </script>
+  <!-- 🔧 Success/info toast container — showToast() 가 message 채우고 .is-visible 토글. -->
+  <div id="app-toast" class="toast" role="status" aria-live="polite"></div>
+  <script>
+    (function () {
+      let _toastTimer = null;
+      window.showToast = function showToast(message, durationMs) {
+        const el = document.getElementById('app-toast');
+        if (!el) return;
+        el.textContent = String(message || '');
+        el.classList.add('is-visible');
+        if (_toastTimer) clearTimeout(_toastTimer);
+        _toastTimer = setTimeout(() => {
+          el.classList.remove('is-visible');
+          _toastTimer = null;
+        }, Number.isFinite(durationMs) ? durationMs : 1800);
+      };
+    })();
   </script>
 </body>
 </html>
