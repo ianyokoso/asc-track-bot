@@ -2102,9 +2102,13 @@
       if (startDate && todayDate.getTime() < startDate.getTime()) return 'upcoming';
       if (endDate && todayDate.getTime() > endDate.getTime()) return 'closed';
 
-      // 신청 기간 중: viewer 가 로그인했고 이전 제출이 있으면 open-edit, 아니면 open-new
+      // 신청 기간 중: viewer 가 로그인했고 이전 제출이 있으면 open-edit, 아니면 open-new.
+      // lastSubmittedData 는 let 으로 선언돼 페이지 init 시점에는 TDZ 상태일 수 있어
+      // try-catch 로 안전하게 처리 (init 시점엔 신청 데이터 아직 없으므로 open-new 가 자연스러움).
       if (VIEWER_USER_ID) {
-        return lastSubmittedData ? 'open-edit' : 'open-new';
+        let hasSubmission = false;
+        try { hasSubmission = !!lastSubmittedData; } catch (e) { /* TDZ — init 단계 */ }
+        return hasSubmission ? 'open-edit' : 'open-new';
       }
       return 'logout';
     }
@@ -2460,8 +2464,21 @@
       if (IS_GROUP_PREVIEW_DIRECT) return 'admin';
       if (IS_ADMIN_MOCK) return 'admin';
       if (REQUESTED_STATE && STATES[REQUESTED_STATE]) return REQUESTED_STATE;
-      // Discord OAuth 콜백으로 실제 userId 가 들어왔을 때만 open-new 진입.
-      // VIEWER_HANDLE 은 placeholder('@시연유저') 가 default 라 truthy 가정 불가.
+
+      // 🔧 신청 기간 vs TODAY 비교를 페이지 초기 로드 시점에도 적용 (2026-05-08).
+      // 이전 footgun:
+      //   - TODAY < 시작일 인데 첫 화면에 'logout' 또는 'open-new' (신청 폼) 가 떠서
+      //     아직 신청 시작 전인데 로그인하라고 안내됨.
+      //   - 학생이 OAuth 콜백 후 바로 신청 폼으로 진입.
+      // 수정: _evaluateViewerStateFromConfig() 결과로 upcoming/closed 우선 적용.
+      try {
+        const windowState = (typeof _evaluateViewerStateFromConfig === 'function')
+          ? _evaluateViewerStateFromConfig()
+          : null;
+        if (windowState && STATES[windowState]) return windowState;
+      } catch (e) { /* fallback to legacy */ }
+
+      // Legacy fallback — 기간 비교 로직 실패 시 기존 동작 유지.
       if (VIEWER_USER_ID) return 'open-new';
       return 'logout';
     })();
