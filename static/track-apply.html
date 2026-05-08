@@ -2359,6 +2359,14 @@
         renderClosedSummary();
       }
 
+      // 🔄 admin / group-preview 진입 시 항상 최신 데이터로 자동 새로고침.
+      //    이전엔 페이지 로드 시 1회 fetch 후 사용자가 Refresh 버튼 누르기 전까지 stale.
+      //    학생이 마감 직전 신청·수정해도 운영자가 admin view 진입 시 즉시 반영되도록.
+      if ((stateKey === 'admin' || stateKey === 'group-preview') && typeof loadTrackApplications === 'function') {
+        // fire-and-forget — UI 전환은 즉시, 데이터는 도착 시 자동 갱신
+        Promise.resolve().then(() => loadTrackApplications()).catch(() => { /* 실패 시 기존 데이터 유지 */ });
+      }
+
       notifyParentHeight();
     }
 
