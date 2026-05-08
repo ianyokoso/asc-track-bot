@@ -4261,6 +4261,44 @@
       { id: 'un2v0w2x', handle: '@anon_2063', edits: 0, submitted: null, initials: 'un', tracks: [] },
     ];
 
+    // 🔧 목업 멤버에 한글 이름 부여 (2026-05-08 추가).
+    //   사용자 요청: '매번 같게 하고 이름좀 쉽게 바꿔줘봐 / 한글 이름으로'.
+    //   ID 를 입력으로 결정론적 hash → KOR_FAMILIES + KOR_GIVEN 에서 stable 선택.
+    //   같은 id 는 항상 같은 이름. clone 시 random id 라도 derive 결과 일관성 유지.
+    const _MOCK_KOR_FAMILIES = [
+      '김','이','박','최','정','강','조','윤','장','임',
+      '한','오','서','신','권','황','안','송','류','홍'
+    ];
+    const _MOCK_KOR_GIVEN = [
+      '민준','서윤','도윤','예준','시우','주원','하준','지호','지후','준우',
+      '준서','건우','현우','우진','선우','서준','민재','현준','연우','정우',
+      '승현','승민','동현','지환','시윤','한결','진우','시현','지윤','서연',
+      '서현','하윤','민서','지우','수아','하은','지유','윤서','채원','지민',
+      '수빈','다은','예원','지원','유진','가은','시은','예은','다인','이서'
+    ];
+    function _hashId(id) {
+      const s = String(id || '');
+      let h = 0;
+      for (let i = 0; i < s.length; i++) {
+        h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+      }
+      return Math.abs(h);
+    }
+    function _deriveKoreanName(id) {
+      const h = _hashId(id);
+      const family = _MOCK_KOR_FAMILIES[h % _MOCK_KOR_FAMILIES.length];
+      const given = _MOCK_KOR_GIVEN[(h >> 8) % _MOCK_KOR_GIVEN.length];
+      return family + given;
+    }
+    MOCK_MEMBERS.forEach(m => {
+      if (!m.name) {
+        const koreanName = _deriveKoreanName(m.id);
+        m.name = koreanName;
+        // initials = 성 1자 (예: '김민준' → '김') — avatar 에 한글 한 글자 노출.
+        m.initials = koreanName.substring(0, 1);
+      }
+    });
+
     /** 신청 여부 — tracks 가 비어있으면 미신청 */
     const BASE_MOCK_MEMBER_IDS = new Set(
       MOCK_MEMBERS.map(member => getMemberIdentityKey(member)).filter(Boolean)
@@ -4305,11 +4343,16 @@
             const src = baseline[cloneIndex % baseline.length];
             const seq = MOCK_MEMBERS.length + 1; // 1-base 순번
             const seqStr = String(seq).padStart(4, '0');
+            // 🔧 clone id 결정론적 (직전: Math.random 으로 매번 달라짐).
+            //   seq 기반 → 같은 N 명을 다시 생성해도 항상 같은 id/name.
+            const cloneId = `clone${seqStr}`;
+            const koreanName = _deriveKoreanName(cloneId);
             const cloned = {
               ...src,
-              id: `clone${seqStr}${Math.random().toString(36).slice(2, 6)}`,
+              id: cloneId,
               handle: `@anon_clone_${seqStr}`,
-              initials: `c${(seq % 100).toString().padStart(2, '0').slice(0, 2)}`,
+              name: koreanName,
+              initials: koreanName.substring(0, 1),
               tracks: Array.isArray(src.tracks)
                 ? src.tracks.map(t => ({ ...t }))
                 : [],
