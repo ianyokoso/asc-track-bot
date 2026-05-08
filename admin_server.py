@@ -2307,7 +2307,19 @@ def _find_existing_member_page(notion_api, member_db_id, fields, member):
     return pages[0] if pages else None
 
 
-def _build_member_properties(fields, member, group_labels):
+def _build_member_properties(fields, member, group_labels, update_only_tracks_and_group=False):
+    """
+    멤버 마스터 DB 의 row 에 set 할 properties.
+
+    update_only_tracks_and_group=True (기존 row 매칭 케이스):
+      - 사용자 정책 (2026-05-08): '멤버 마스터 DB 는 이미 채워져 있으니 트랙·조만
+        교체. 기존 페이지의 정보 (title, user_id, handle, notes 등)는 건드리지 마라.'
+      - 신청서의 디스코드 닉네임/사용자 ID 로 멤버 매칭 후, 트랙 multi_select 와 조
+        텍스트만 새 기수 데이터로 교체.
+
+    update_only_tracks_and_group=False (신규 row 생성 케이스 — fallback):
+      - 매칭 실패해도 어쩔 수 없이 row 만들어야 할 때 (예: legacy 호환). title 등 전체 set.
+    """
     properties = {}
     member_id = str(member.get('userId') or member.get('id') or '').strip()
     member_name = str(member.get('name') or member.get('id') or '').strip() or member_id
@@ -2315,14 +2327,7 @@ def _build_member_properties(fields, member, group_labels):
     track_names = [name for name in member.get('trackNames', []) if name]
     group_text = ', '.join(group_labels)
 
-    if fields.get('title'):
-        properties[fields['title']] = {"title": [{"text": {"content": member_name[:2000] or 'unknown'}}]}
-    if fields.get('user_id'):
-        properties[fields['user_id']] = {"rich_text": [{"text": {"content": member_id[:2000]}}]}
-    if fields.get('handle'):
-        properties[fields['handle']] = {
-            "rich_text": [{"text": {"content": (handle or member_id)[:2000]}}]
-        }
+    # 트랙 + 조는 두 케이스 모두 set (새 기수 정보로 교체).
     if fields.get('track'):
         properties[fields['track']] = {
             "multi_select": [{"name": name[:100]} for name in track_names[:100]]
@@ -2333,6 +2338,19 @@ def _build_member_properties(fields, member, group_labels):
             if group_text
             else {"rich_text": []}
         )
+
+    if update_only_tracks_and_group:
+        # 기존 row 보존 모드 — title / user_id / handle / notes 건드리지 않음.
+        return properties
+
+    if fields.get('title'):
+        properties[fields['title']] = {"title": [{"text": {"content": member_name[:2000] or 'unknown'}}]}
+    if fields.get('user_id'):
+        properties[fields['user_id']] = {"rich_text": [{"text": {"content": member_id[:2000]}}]}
+    if fields.get('handle'):
+        properties[fields['handle']] = {
+            "rich_text": [{"text": {"content": (handle or member_id)[:2000]}}]
+        }
     if fields.get('notes'):
         note_parts = ['source=dashboard-group-preview']
         if handle:
@@ -2364,6 +2382,21 @@ def _ensure_member_track_options(notion_api, member_db_id, track_property_name, 
 
 
 def _upsert_group_preview_members(notion_api, member_db_id, members, member_group_labels):
+    """
+    멤버 마스터 DB 갱신 정책 (2026-05-08 변경):
+
+      직전: 매칭 실패 시 새 row 자동 생성 → 운영자가 의도하지 않은 신규 멤버 등장,
+            기존 멤버와 중복, 페이지 안에 들어있는 정보 (과제·출석 등 relation) 위험.
+
+      변경: 매칭 (Discord user ID 또는 handle) 실패 시 SKIP + missing 리스트 수집.
+            매칭 성공 시 트랙·조 properties 만 update (title / user_id / handle / notes
+            는 보존). 기존 페이지의 다른 데이터를 건드리지 않음.
+
+      반환: (member_page_ids dict, summary dict).
+        summary['updated']: 매칭 성공해서 트랙·조만 갱신된 멤버 수.
+        summary['missing']: 매칭 실패해서 skip 된 멤버 정보 list.
+        summary['created']: 0 (정책상 새 row 만들지 않음).
+    """
     db_obj = notion_api.get_database(member_db_id)
     if not db_obj:
         raise RuntimeError(f'Failed to load member test DB: {member_db_id}')
@@ -2375,7 +2408,7 @@ def _upsert_group_preview_members(notion_api, member_db_id, members, member_grou
     _ensure_member_track_options(notion_api, member_db_id, fields.get('track'), members)
 
     member_page_ids = {}
-    summary = {'created': 0, 'updated': 0}
+    summary = {'created': 0, 'updated': 0, 'missing': []}
 
     for member in members:
         member_id = str(member.get('userId') or member.get('id') or '').strip()
@@ -2383,20 +2416,26 @@ def _upsert_group_preview_members(notion_api, member_db_id, members, member_grou
             continue
 
         existing = _find_existing_member_page(notion_api, member_db_id, fields, member)
-        properties = _build_member_properties(fields, member, member_group_labels.get(member_id, []))
 
         if existing:
+            # 트랙·조만 패치 (기존 페이지 다른 정보 보존).
+            properties = _build_member_properties(
+                fields,
+                member,
+                member_group_labels.get(member_id, []),
+                update_only_tracks_and_group=True,
+            )
             if not notion_api.update_page_properties(existing['id'], properties):
                 raise RuntimeError(f'Failed to update member row: {member_id}')
-            page_id = existing['id']
+            member_page_ids[member_id] = existing['id']
             summary['updated'] += 1
         else:
-            page_id = notion_api.add_row_to_database(member_db_id, properties)
-            if not page_id:
-                raise RuntimeError(f'Failed to create member row: {member_id}')
-            summary['created'] += 1
-
-        member_page_ids[member_id] = page_id
+            # 매칭 실패 — SKIP, missing 리스트에 누적해서 운영자에게 보고.
+            summary['missing'].append({
+                'userId': member_id,
+                'name': str(member.get('name') or '').strip(),
+                'handle': str(member.get('handle') or '').strip(),
+            })
 
     return member_page_ids, summary
 
@@ -2930,7 +2969,11 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
                 member_id = str(member.get('userId') or member.get('id') or '').strip()
                 member_page_id = member_page_ids.get(member_id)
                 if not member_page_id:
-                    raise RuntimeError(f'No member page found for grouped member: {member_id}')
+                    # 멤버 마스터 DB 에 매칭 안 된 멤버 — _upsert_group_preview_members 에서
+                    # 이미 missing 리스트에 누적됨. 조 inline DB 에도 row 안 만들고 skip
+                    # (조 페이지 자체는 생성됨, 매칭된 멤버들만 들어감).
+                    print(f"[group-assign] skip group row — member not in master DB: {member_id}")
+                    continue
 
                 row_track_name = (member.get('rowTrackName') or track_name).strip()
                 row_title = str(member.get('name') or member.get('id') or member_id).strip() or member_id
@@ -2980,6 +3023,9 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
             "track_pages": track_name_to_page_id,
             "members_created": member_summary['created'],
             "members_updated": member_summary['updated'],
+            # 멤버 마스터 DB 에 매칭 안 돼서 skip 된 멤버 (Discord ID/handle 둘 다 안 맞음).
+            # 운영자 UI 가 alert 으로 표시.
+            "members_missing": member_summary.get('missing', []),
             "tracks_touched": touched_tracks,
             "archived_inline_dbs": archived_inline_dbs,
             "group_databases_created": created_group_dbs,

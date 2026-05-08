@@ -5896,11 +5896,34 @@
       // 통계
       const stats = document.getElementById('gp-success-stats');
       if (stats) {
+        // 🔧 정책 변경 (2026-05-08): 멤버 마스터 DB 에 새 row 생성하지 않음 — 매칭 시
+        //   트랙·조만 update. members_created 는 이제 항상 0 이라 통계에서 제외.
+        //   매칭 실패 (members_missing) 가 있으면 별도 알림으로 표시.
+        const missing = Array.isArray(apiSummary.members_missing) ? apiSummary.members_missing : [];
+        const missingNote = missing.length
+          ? ` · <span class="text-bad font-semibold">⚠️ ${missing.length}명 매칭 실패</span>`
+          : '';
         stats.innerHTML =
-          `멤버 DB <strong class="text-ink font-semibold">${apiSummary.members_created || 0}</strong>개 생성 · ` +
-          `멤버 DB <strong class="text-ink font-semibold">${apiSummary.members_updated || 0}</strong>개 업데이트 · ` +
+          `멤버 DB <strong class="text-ink font-semibold">${apiSummary.members_updated || 0}</strong>개 트랙·조 갱신 · ` +
           `조 DB <strong class="text-ink font-semibold">${apiSummary.group_databases_created || sum.totalGroups}</strong>개 생성 · ` +
-          `조원 row <strong class="text-ink font-semibold">${apiSummary.group_rows_created || sum.totalMembers}</strong>개 반영.`;
+          `조원 row <strong class="text-ink font-semibold">${apiSummary.group_rows_created || sum.totalMembers}</strong>개 반영` +
+          missingNote +
+          `.`;
+        if (missing.length) {
+          // 매칭 실패 멤버 detail 을 stats 아래에 표시 — 운영자가 멤버 마스터 DB 에서
+          // 누가 빠졌는지 빠르게 확인할 수 있도록.
+          const detail = document.createElement('div');
+          detail.className = 'mt-2 text-[11px] text-bad bg-[#FEF2F2] border border-[#FECACA] rounded-md px-3 py-2';
+          const samples = missing.slice(0, 5).map(m => {
+            const label = (m.name || m.handle || m.userId || '').toString();
+            return label;
+          }).filter(Boolean);
+          const more = missing.length > samples.length ? ` 외 ${missing.length - samples.length}명` : '';
+          detail.innerHTML =
+            `<strong>⚠️ 멤버 마스터 DB 매칭 실패:</strong> ${samples.join(', ')}${more}<br>` +
+            `<span class="text-[10px] text-ink-soft">매칭 기준: Discord 사용자 ID 또는 닉네임. 매칭 안 된 멤버는 마스터 DB에 row 가 추가되지 않고 조 inline DB 에서도 제외됐습니다.</span>`;
+          stats.appendChild(detail);
+        }
       }
 
       const channelsEl = document.getElementById('gp-success-channels');
