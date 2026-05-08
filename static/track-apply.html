@@ -1847,8 +1847,11 @@
     const REQUESTED_STATE = (mockupParams.get('state') || '').trim();
     let APPLICATION_START_DATE = (mockupParams.get('applicationStartDate') || '2026-05-20').trim();
     let APPLICATION_END_DATE = (mockupParams.get('applicationEndDate') || '2026-05-24').trim();
-    let APPLICATION_OPEN_AT = (mockupParams.get('applicationOpenAt') || '2026-05-20T00:00:00+09:00').trim();
-    let APPLICATION_CLOSE_AT = (mockupParams.get('applicationCloseAt') || '2026-05-24T23:59:59+09:00').trim();
+    // 🔧 OPEN_AT/CLOSE_AT 기본값은 START/END_DATE 에서 파생 — URL 에 startDate 만 들어와도
+    //    일관성 유지. 직전: 정적 기본값 '2026-05-20' 이라 startDate=2026-05-19 일 때
+    //    카운트다운이 '11일' (잘못된 target=05-20) → cohort-config fetch 후 '10일' 로 점프.
+    let APPLICATION_OPEN_AT = (mockupParams.get('applicationOpenAt') || `${APPLICATION_START_DATE}T00:00:00+09:00`).trim();
+    let APPLICATION_CLOSE_AT = (mockupParams.get('applicationCloseAt') || `${APPLICATION_END_DATE}T23:59:59+09:00`).trim();
     let APPLICATION_START_DISPLAY = (mockupParams.get('applicationStartDisplay') || '05.20').trim();
     let APPLICATION_END_DISPLAY = (mockupParams.get('applicationEndDisplay') || '05.24').trim();
     let APPLICATION_WINDOW_LABEL = (mockupParams.get('applicationWindowLabel') || '05.20(수) 00:00 ~ 05.24(일) 23:59 KST').trim();
@@ -2017,6 +2020,9 @@
       applyCohortLabels();
       applyWindowLabels();
       updateTodayProgress();
+      // 🔧 cohort-config 응답으로 OPEN_AT 이 갱신됐으면 카운트다운도 즉시 재렌더.
+      //   직전: 다음 1초 tick 까지 stale target 으로 그려져 'N일' → 'N-1일' 점프 발생.
+      if (typeof updateUpcomingCountdown === 'function') updateUpcomingCountdown();
 
       // 헤더 타이틀 / 액션 영역도 갱신 (현재 active state 기준).
       // 직전: .state-btn.active 셀렉터 (mockup devtools 버튼) — 패널 제거된 후 항상 null.
@@ -2512,6 +2518,24 @@
     }
 
     stateButtons.forEach(btn => btn.addEventListener('click', () => applyState(btn.dataset.state)));
+
+    // 🔒 미로그인 admin 진입 가드 (2026-05-08).
+    //   직전 footgun: 누구나 /apply?state=admin 으로 admin 뷰 shell (헤더 + 빈 멤버 리스트)
+    //   에 접근 가능했음. 데이터는 서버 가드로 빈 응답이지만 UI 노출 자체가 어색하고,
+    //   admin OAuth 흐름을 시각적으로 검증할 수 없음.
+    //   Fix: REQUESTED_STATE='admin' 인데 VIEWER_USER_ID 비어있으면 즉시 OAuth 로 redirect.
+    //        OAuth 콜백이 ?discordUserId=... 를 박아 보내므로 정상 시나리오에서는 가드 통과.
+    if (REQUESTED_STATE === 'admin' && !VIEWER_USER_ID && !IS_GROUP_PREVIEW_DIRECT) {
+      try {
+        const u = new URL(LOGIN_URL, window.location.origin);
+        u.searchParams.set('next', '/apply?state=admin');
+        window.location.replace(u.toString());
+      } catch (e) {
+        window.location.replace(`${APPLICATION_API_BASE}/api/auth/discord?next=${encodeURIComponent('/apply?state=admin')}`);
+      }
+      // redirect 시점부터 이후 JS 는 사실상 의미 없지만 stop 명시적으로 막진 않음 — 페이지 unload 됨.
+    }
+
     const initialState = (() => {
       if (IS_GROUP_PREVIEW_DIRECT) return 'admin';
       if (IS_ADMIN_MOCK) return 'admin';
