@@ -2131,11 +2131,11 @@
       return `${days}일 ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
     }
     function _getNowMsForCountdown() {
-      // TODAY override 가 박혀있으면 그 날짜 00:00 KST 기준 — 실시간 흐름 X (모달에서 변경 시점에만 변동).
-      if (TODAY_OVERRIDE_DATE && /^\d{4}-\d{2}-\d{2}$/.test(TODAY_OVERRIDE_DATE)) {
-        const t = Date.parse(`${TODAY_OVERRIDE_DATE}T00:00:00+09:00`);
-        if (Number.isFinite(t)) return t;
-      }
+      // 🔧 TODAY override 무시하고 항상 실시간.
+      //   직전: override 있으면 그 날짜 00:00 KST 로 freeze → '4일 00:00:00' 멈춰버림.
+      //   override 의 본래 목적은 _evaluateViewerStateFromConfig 의 'view 상태 결정용'
+      //   (예: override=2026-05-15 → upcoming 화면 강제). 카운트다운 텍스트는 시각적
+      //   효과라 항상 ticking 이 자연스러움. admin 은 upcoming 레이아웃 검수가 목적.
       return Date.now();
     }
     function updateUpcomingCountdown() {
