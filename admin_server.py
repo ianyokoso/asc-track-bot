@@ -734,7 +734,18 @@ def _write_cohort_config(data):
 
 @app.route('/api/cohort-config', methods=['GET'])
 def get_cohort_config_route():
-    return jsonify(_read_cohort_config()), 200
+    cfg = _read_cohort_config()
+    # 🔧 todayOverride 격리 (2026-05-08).
+    #   직전 footgun: admin 이 모달에서 TODAY 오버라이드 설정 후 그대로 두면
+    #   cohort_config.json 에 박혀서 모바일 일반 사용자에게도 적용됨.
+    #   결과: 카운트다운(real time)은 '신청 시작' CTA 떠있는데 클라이언트 state eval
+    #   (override 기준)은 'upcoming' 으로 평가 → 로그인 후 다시 메인페이지로 떨어짐.
+    #   변경: GET 응답에서 todayOverride 는 admin 세션에만 노출. 일반 사용자는 None.
+    #   (서버 _check_track_application_window 도 별도 fix — 하단 참고.)
+    if not _is_admin_session():
+        cfg = dict(cfg or {})
+        cfg['todayOverride'] = None
+    return jsonify(cfg), 200
 
 
 def _prune_multi_select_options(notion_api, db_id, prop_name, canonical_names):
@@ -2028,11 +2039,18 @@ def _check_track_application_window():
     end_iso = str(cfg.get('applicationEndDate') or '').strip()
     today_override = str(cfg.get('todayOverride') or '').strip() or None
 
-    # today (override 우선, 없으면 KST now 의 날짜 부분만)
+    # 🔧 today 결정 (2026-05-08 수정):
+    #   override 가 있어도 'real time 이 startDate 통과한 경우' 에는 무시 — 즉
+    #   admin 의 demo override 가 일반 사용자의 실제 신청을 막지 않게.
+    #   (예: override='2026-05-15' / startDate='2026-05-08' / 실제 오늘=2026-05-08
+    #   → 종전 override 만 봄 → '시작 전' 으로 차단 → 사용자 신청 못함.)
+    real_today_iso = _get_kst_now().strftime('%Y-%m-%d')
     if today_override and _COHORT_CONFIG_DATE_RE.match(today_override):
-        today_iso = today_override
+        # override 가 real today 보다 미래면 그대로 사용 (admin 이 closed 미리보기 등 의도).
+        # override 가 real today 보다 과거면 real 로 fallback (real 이 진실).
+        today_iso = today_override if today_override >= real_today_iso else real_today_iso
     else:
-        today_iso = _get_kst_now().strftime('%Y-%m-%d')
+        today_iso = real_today_iso
 
     if start_iso and today_iso < start_iso:
         return False, 403, f'아직 신청 시작 전입니다 (오픈: {start_iso}).'

@@ -2097,7 +2097,18 @@
       const startDate = _parseISODate(APPLICATION_START_DATE);
       const endDate = _parseISODate(APPLICATION_END_DATE);
 
-      if (startDate && todayDate.getTime() < startDate.getTime()) return 'upcoming';
+      // 🔧 real time 이 OPEN_AT 통과한 경우 'upcoming' 반환 금지 (2026-05-08).
+      //   직전 footgun: 모바일 사용자가 카운트다운 0 (CTA mode) 본 후 로그인하면
+      //   override (admin 이 과거 날짜로 설정한 채 두면) 때문에 state eval=upcoming
+      //   으로 평가 → 로그인 후 다시 메인 (upcoming) 으로 떨어짐.
+      //   원인: countdown 은 real Date.now() 사용, state eval 은 override 사용 — mismatch.
+      //   변경: real now 가 OPEN_AT 지났으면 upcoming 무시. closed/open-* 분기로 진행.
+      const realPastOpen = (() => {
+        const openMs = Date.parse(APPLICATION_OPEN_AT);
+        return Number.isFinite(openMs) && Date.now() >= openMs;
+      })();
+
+      if (!realPastOpen && startDate && todayDate.getTime() < startDate.getTime()) return 'upcoming';
       if (endDate && todayDate.getTime() > endDate.getTime()) return 'closed';
 
       // 신청 기간 중: viewer 가 로그인했고 이전 제출이 있으면 open-edit, 아니면 open-new.
