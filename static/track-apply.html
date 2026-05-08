@@ -1961,14 +1961,18 @@
       return `${iso}(${KOR_WEEKDAY[kstDay]})`;
     }
 
-    function applyCohortConfigFromServer(cfg) {
+    function applyCohortConfigFromServer(cfg, opts) {
       if (!cfg || typeof cfg !== 'object') return;
+      // opts.fromModalSave === true 면 URL param 우선 무시하고 cfg 강제 적용.
+      // (운영자가 '기수·기간 설정' 모달에서 명시 변경한 의도이므로 URL 보다 우선)
+      // 페이지 초기 로드 시엔 URL param 우선 (개발/테스트 deeplink 동작 보존).
+      const fromModalSave = !!(opts && opts.fromModalSave);
 
-      // URL param 으로 명시 override 한 경우는 그대로 둔다 (개발/테스트 우선).
-      const cohortFromUrl = (mockupParams.get('cohortName') || '').trim();
-      const startFromUrl = (mockupParams.get('applicationStartDate') || '').trim();
-      const endFromUrl = (mockupParams.get('applicationEndDate') || '').trim();
-      const todayFromUrl = (mockupParams.get('todayOverride') || '').trim();
+      // URL param 으로 명시 override 한 경우는 그대로 둔다 — 단 모달 저장 시엔 무시.
+      const cohortFromUrl = fromModalSave ? '' : (mockupParams.get('cohortName') || '').trim();
+      const startFromUrl = fromModalSave ? '' : (mockupParams.get('applicationStartDate') || '').trim();
+      const endFromUrl = fromModalSave ? '' : (mockupParams.get('applicationEndDate') || '').trim();
+      const todayFromUrl = fromModalSave ? '' : (mockupParams.get('todayOverride') || '').trim();
 
       if (!cohortFromUrl && cfg.cohortLabel) {
         const next = String(cfg.cohortLabel).trim();
@@ -2022,6 +2026,46 @@
       if (activeKey && STATES[activeKey] && headerTitle) {
         headerTitle.textContent = STATES[activeKey].title;
       }
+
+      // 모달 저장 시: 새 설정 기준으로 viewer state 자동 재평가.
+      // (admin / group-preview view 는 그대로 — 운영자가 의도해서 머무는 화면)
+      if (fromModalSave) {
+        const viewerStates = new Set(['logout', 'upcoming', 'open-new', 'open-edit', 'closed']);
+        if (!activeKey || viewerStates.has(activeKey)) {
+          const target = _evaluateViewerStateFromConfig();
+          if (target && STATES[target] && target !== activeKey) {
+            applyState(target);
+          }
+        }
+      }
+    }
+
+    function _evaluateViewerStateFromConfig() {
+      // TODAY 결정 (override 우선, 없으면 KST 오늘)
+      let todayDate = null;
+      if (TODAY_OVERRIDE_DATE && /^\d{4}-\d{2}-\d{2}$/.test(TODAY_OVERRIDE_DATE)) {
+        todayDate = _parseISODate(TODAY_OVERRIDE_DATE);
+      } else {
+        const now = new Date();
+        const kstNow = new Date(now.getTime() + (now.getTimezoneOffset() + 540) * 60000);
+        const yyyy = kstNow.getFullYear();
+        const mm = String(kstNow.getMonth() + 1).padStart(2, '0');
+        const dd = String(kstNow.getDate()).padStart(2, '0');
+        todayDate = _parseISODate(`${yyyy}-${mm}-${dd}`);
+      }
+      if (!todayDate) return null;
+
+      const startDate = _parseISODate(APPLICATION_START_DATE);
+      const endDate = _parseISODate(APPLICATION_END_DATE);
+
+      if (startDate && todayDate.getTime() < startDate.getTime()) return 'upcoming';
+      if (endDate && todayDate.getTime() > endDate.getTime()) return 'closed';
+
+      // 신청 기간 중: viewer 가 로그인했고 이전 제출이 있으면 open-edit, 아니면 open-new
+      if (VIEWER_USER_ID) {
+        return lastSubmittedData ? 'open-edit' : 'open-new';
+      }
+      return 'logout';
     }
 
     function updateTodayProgress() {
@@ -2147,7 +2191,7 @@
           alert(`저장 실패: ${data.message || res.status}`);
           return;
         }
-        applyCohortConfigFromServer(data);
+        applyCohortConfigFromServer(data, { fromModalSave: true });
         closeCohortConfigModal();
       } catch (err) {
         alert(`저장 실패: ${err.message || err}`);
