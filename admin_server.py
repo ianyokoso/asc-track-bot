@@ -1257,9 +1257,8 @@ TRACK_APPLICATION_LEADER_LABELS = {
     '나 탐구 트랙',
     '빌더 심화 트랙',
     '빌더 기초 트랙',
-    '크리에이터 트랙',
-    # 🔧 creator sub-form 도 leader 자격 인정 — wednesday_track 에 sub-specific 라벨이
-    #    찍히면 leader_apply 도 같은 라벨 기준으로 매칭되도록.
+    # 🔧 '크리에이터 트랙' 은 Notion 트랙 신청서 DB 옵션에서 제거됨 (2026-05-08).
+    #   숏폼/롱폼 sub-form 라벨만 leader 자격 인정.
     '크리에이터 숏폼 트랙',
     '크리에이터 롱폼 트랙',
     'AI 에이전트 트랙',
@@ -1321,19 +1320,18 @@ def _extract_track_application_submission(record):
             if not weekday_info:
                 continue
             day_key, label = weekday_info
-            # 🔧 크리에이터 트랙 + creatorSub 조합 → sub-specific 라벨 사용 (2026-05-08).
-            #   직전: 어떤 sub 든 항상 '크리에이터 트랙' 으로 통합돼 Notion 수요일 트랙 컬럼이
-            #         숏폼/롱폼 구분 못 함. creatorSub 는 기타(notes) 백업에만 들어감.
-            #   변경: short_only → '크리에이터 숏폼 트랙', short_long → '크리에이터 롱폼 트랙'.
-            #         creatorSub 자체는 notes 에 계속 남아 ('숏폼만' / '숏폼 + 롱폼') 운영자
-            #         참고용으로 유지.
+            # 🔧 크리에이터 트랙 — Notion 수요일 트랙 select 옵션을 '크리에이터 숏폼 트랙' /
+            #   '크리에이터 롱폼 트랙' 둘만 남기는 정책으로 변경 (2026-05-08).
+            #   parent '크리에이터 트랙' 옵션 제거됨 → 어떤 경우에도 둘 중 하나로만 매핑.
+            #   - short_long → '크리에이터 롱폼 트랙' (롱폼까지 하는 케이스를 더 명시적으로 표시)
+            #   - short_only / 미설정 / 기타 → '크리에이터 숏폼 트랙' (shorts 가 baseline)
+            #   creatorSub 자체는 notes 에 계속 백업 ('숏폼만' / '숏폼 + 롱폼').
             if track.get('id') == 'creator':
                 creator_sub_id = str(track.get('creatorSub') or '').strip()
-                if creator_sub_id == 'short_only':
-                    label = '크리에이터 숏폼 트랙'
-                elif creator_sub_id == 'short_long':
+                if creator_sub_id == 'short_long':
                     label = '크리에이터 롱폼 트랙'
-                # 그 외: 기본 '크리에이터 트랙' 유지 (creatorSub 미설정 case).
+                else:
+                    label = '크리에이터 숏폼 트랙'
                 creator_sub = TRACK_APPLICATION_CREATOR_SUB_MAP.get(creator_sub_id) or creator_sub
             weekdays[day_key] = label
             if track.get('leader') and label in TRACK_APPLICATION_LEADER_LABELS:
