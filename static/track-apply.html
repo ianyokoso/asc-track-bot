@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>트랙 신청 프리뷰 — 관리자 테스트</title>
+  <title>ASC 트랙 신청</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -844,35 +844,10 @@
 </head>
 <body class="bg-canvas text-ink antialiased">
 
-  <details class="mockup-devtools hidden-view" open>
-    <summary>Mockup States</summary>
-    <div class="states">
-      <button data-state="logout" class="active">로그아웃</button>
-      <button data-state="upcoming">오픈 전</button>
-      <button data-state="open-new">오픈 · 미제출</button>
-      <button data-state="open-edit">오픈 · 제출완료</button>
-      <button data-state="closed">마감</button>
-      <button data-state="admin">관리자</button>
-    </div>
-    <div style="border-top: 1px solid #F4F6F8; padding: 6px 6px 8px;">
-      <button id="devtools-reset" type="button"
-              style="width:100%; text-align:left; background:transparent; border:none; padding:7px 10px; border-radius:6px; font-size:12px; color:#DC2626; cursor:pointer; font-family:inherit; font-weight:500;">
-        데이터 초기화
-      </button>
-    </div>
-    <p class="hint">이 패널은 목업 전용입니다. 실제 화면에는 없고, 상태별 UI를 미리보기 위한 devtools입니다.</p>
-  </details>
+  <!-- 🔧 Mockup devtools 패널 + ADMIN PREVIEW 배너 제거 (2026-05-08).
+       10기부터 운영 모드 전환되면서 mockup demo UI 불필요. 관련 IS_ADMIN_MOCK
+       branch 도 항상 false 처리 (line 1885 부근). -->
 
-  <div id="admin-preview-banner" class="border-b border-border-hair bg-surface">
-    <div class="px-4 md:px-10 py-2.5 flex items-center justify-between gap-4 text-[12px] text-ink-muted">
-      <p class="leading-relaxed">
-        <strong class="text-ink font-semibold">관리자 테스트 프리뷰</strong>
-        <span class="mx-2 text-ink-soft">·</span>
-        공개 신청 플로우는 <span class="font-semibold text-ink">/apply</span> 에서 관리되고, 이 화면은 관리자/조 배정 검증만 위한 테스트 전용 진입점입니다.
-      </p>
-      <span class="text-eyebrow whitespace-nowrap">ADMIN PREVIEW</span>
-    </div>
-  </div>
 
   <!-- ===== HEADER (공통) ===== -->
   <header id="common-header" class="bg-canvas border-b border-border-hair">
@@ -1882,10 +1857,17 @@
     let APPLICATION_OPENS_LABEL = (mockupParams.get('applicationOpensLabel') || 'Opens 05.20 Wed').trim();
     let TODAY_OVERRIDE_DATE = (mockupParams.get('todayOverride') || '').trim();
     const IS_GROUP_PREVIEW_DIRECT = window.location.hash === '#group-preview';
-    const IS_ADMIN_MOCK = REQUESTED_STATE === 'admin' || REQUESTED_STATE === 'admin-preview';
+    // 🔧 Mockup admin preview 모드 폐기 (2026-05-08).
+    //   - 직전: ?state=admin 이면 IS_ADMIN_MOCK=true → preview 배너 + devtools panel
+    //     노출 + mock-only API 경로 활성화. 그러나 OAuth 콜백 시 next=/apply?state=admin
+    //     으로 admin 자동 진입을 구현한 뒤로 실 운영자가 mockup 화면으로 빠지는 footgun.
+    //   - 현재: 항상 false. ?state=admin 은 단순히 initialState='admin' 힌트 (line 2489)
+    //     로만 작동 — 실 운영자도 mockup 화면 안 봄.
+    //   - mock-only API 경로 (/api/mockups/...) 는 모두 IS_ADMIN_MOCK 가드라 자연스럽게 비활성.
+    const IS_ADMIN_MOCK = false;
     const IS_APPLY_WRAPPER = mockupParams.get('source') === 'apply';
     let TRACK_APPLY_TITLE = `${COHORT_LABEL} 트랙 신청`;
-    let TRACK_APPLY_STATUS_TITLE = `${COHORT_LABEL} 트랙 신청 프리뷰`;
+    let TRACK_APPLY_STATUS_TITLE = `${COHORT_LABEL} 트랙 신청`;
     let TRACK_PREVIEW_TITLE = `${COHORT_LABEL} 트랙 미리보기`;
     let GROUP_ASSIGNMENT_TITLE = `${COHORT_LABEL} 조 배정`;
 
@@ -1900,7 +1882,7 @@
     }
 
     function applyCohortLabels() {
-      document.title = `${TRACK_APPLY_STATUS_TITLE} — 관리자 테스트 프리뷰`;
+      document.title = TRACK_APPLY_STATUS_TITLE;
       setText('gp-top-label', GROUP_ASSIGNMENT_TITLE);
       setText('gp-confirm-cohort-label', GROUP_ASSIGNMENT_TITLE);
       setText('gp-success-group-db-label', `${GROUP_ASSIGNMENT_TITLE} 데이터베이스`);
@@ -2013,7 +1995,7 @@
 
       // 파생 라벨 재계산.
       TRACK_APPLY_TITLE = `${COHORT_LABEL} 트랙 신청`;
-      TRACK_APPLY_STATUS_TITLE = `${COHORT_LABEL} 트랙 신청 프리뷰`;
+      TRACK_APPLY_STATUS_TITLE = `${COHORT_LABEL} 트랙 신청`;
       TRACK_PREVIEW_TITLE = `${COHORT_LABEL} 트랙 미리보기`;
       GROUP_ASSIGNMENT_TITLE = `${COHORT_LABEL} 조 배정`;
 
@@ -2037,8 +2019,9 @@
       updateTodayProgress();
 
       // 헤더 타이틀 / 액션 영역도 갱신 (현재 active state 기준).
-      const activeBtn = document.querySelector('.state-btn.active');
-      const activeKey = activeBtn ? activeBtn.dataset.state : null;
+      // 직전: .state-btn.active 셀렉터 (mockup devtools 버튼) — 패널 제거된 후 항상 null.
+      // 변경: getCurrentStateKey() 가 .view 활성 상태 기반으로 정확한 state 반환.
+      const activeKey = (typeof getCurrentStateKey === 'function') ? getCurrentStateKey() : null;
       if (activeKey && STATES[activeKey] && headerTitle) {
         headerTitle.textContent = STATES[activeKey].title;
       }
@@ -2582,8 +2565,9 @@
     const _VIEWER_WINDOW_POLL_INTERVAL_MS = 60 * 1000;
     setInterval(() => {
       try {
-        const activeBtn = document.querySelector('.state-btn.active');
-        const activeKey = activeBtn?.dataset.state;
+        // 직전: .state-btn.active 셀렉터 (mockup devtools 의 active 버튼) — 패널 제거 후 항상 null.
+        // 변경: getCurrentStateKey() 로 .view 활성 상태에서 직접 추출.
+        const activeKey = (typeof getCurrentStateKey === 'function') ? getCurrentStateKey() : null;
         const viewerStates = new Set(['logout', 'upcoming', 'open-new', 'open-edit', 'closed']);
         if (activeKey && !viewerStates.has(activeKey)) return; // admin/group-preview 등 — 유지
 
