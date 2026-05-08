@@ -934,7 +934,46 @@ def put_cohort_config_route():
     })
     if not saved:
         return jsonify({'status': 'error', 'message': 'persist failed'}), 500
-    return jsonify(saved), 200
+
+    # 🆕 cohort 라벨이 바뀌면 트랙 신청 캐시(실+mock) 자동 초기화.
+    # 의도: 9기 → 10기 전환 시 운영진이 "왜 새 기수에 데이터가 그대로 있지?" 라고
+    # 묻는 footgun 방지. 데이터는 cohort_label 별 bucket 으로 분리되어 있긴 하지만
+    # 같은 라벨로 mock fill 했던 이력이 잔존하는 등 표시상 혼란이 생김.
+    # 정책: 라벨 변경 = '새 기수 시작' 으로 간주, 모든 cohorts bucket 비움.
+    # (운영자가 별도 export 후 라벨 바꾸는 워크플로 가정 — 9기 archive 는 Notion 永속.)
+    cohort_reset_summary = None
+    old_label = (current.get('cohortLabel') or '').strip()
+    if old_label and old_label != new_label:
+        try:
+            cleared_real = 0
+            existing_real = _read_track_application_cache() or {}
+            for _, bucket in (existing_real.get('cohorts') or {}).items():
+                apps = (bucket or {}).get('applications') or {}
+                cleared_real += len(apps) if isinstance(apps, dict) else 0
+            _write_track_application_cache_file(TRACK_APPLICATION_CACHE_FILE, {'cohorts': {}})
+
+            cleared_mock = 0
+            existing_mock = _read_track_application_admin_mock_cache() or {}
+            for _, bucket in (existing_mock.get('cohorts') or {}).items():
+                members = (bucket or {}).get('members') or []
+                cleared_mock += len(members) if isinstance(members, list) else 0
+            _write_track_application_admin_mock_cache({'cohorts': {}})
+
+            cohort_reset_summary = {
+                'previousCohort': old_label,
+                'newCohort': new_label,
+                'clearedRealApplications': cleared_real,
+                'clearedMockMembers': cleared_mock,
+            }
+            print(f"[INFO] cohort label changed {old_label} -> {new_label}, "
+                  f"cleared {cleared_real} real apps + {cleared_mock} mock members")
+        except Exception as e:
+            print(f"[ERROR] failed to clear caches on cohort change: {e}")
+
+    response = dict(saved)
+    if cohort_reset_summary:
+        response['cohortReset'] = cohort_reset_summary
+    return jsonify(response), 200
 
 
 def _default_track_application_cache():

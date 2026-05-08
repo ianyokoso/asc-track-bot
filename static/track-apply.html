@@ -2393,6 +2393,22 @@
         }
         applyCohortConfigFromServer(data, { fromModalSave: true });
         closeCohortConfigModal();
+        // 서버가 cohort 라벨 변경을 감지해 캐시를 자동 초기화한 경우 안내 토스트.
+        if (data && data.cohortReset) {
+          const r = data.cohortReset;
+          try {
+            window.showToast?.(
+              `🔄 ${r.previousCohort} → ${r.newCohort} 전환: 신청 ${r.clearedRealApplications}건 + 목업 ${r.clearedMockMembers}건 초기화됨`,
+              4000
+            );
+          } catch (_) { /* ignore */ }
+          // 대시보드가 열려있으면 즉시 새 데이터로 갱신.
+          try {
+            if (typeof loadTrackApplications === 'function') {
+              void loadTrackApplications();
+            }
+          } catch (_) { /* ignore */ }
+        }
       } catch (err) {
         alert(`저장 실패: ${err.message || err}`);
       } finally {
