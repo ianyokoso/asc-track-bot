@@ -1247,6 +1247,10 @@ TRACK_APPLICATION_LEADER_LABELS = {
     '빌더 심화 트랙',
     '빌더 기초 트랙',
     '크리에이터 트랙',
+    # 🔧 creator sub-form 도 leader 자격 인정 — wednesday_track 에 sub-specific 라벨이
+    #    찍히면 leader_apply 도 같은 라벨 기준으로 매칭되도록.
+    '크리에이터 숏폼 트랙',
+    '크리에이터 롱폼 트랙',
     'AI 에이전트 트랙',
     '앱 개발 트랙',
 }
@@ -1306,11 +1310,23 @@ def _extract_track_application_submission(record):
             if not weekday_info:
                 continue
             day_key, label = weekday_info
+            # 🔧 크리에이터 트랙 + creatorSub 조합 → sub-specific 라벨 사용 (2026-05-08).
+            #   직전: 어떤 sub 든 항상 '크리에이터 트랙' 으로 통합돼 Notion 수요일 트랙 컬럼이
+            #         숏폼/롱폼 구분 못 함. creatorSub 는 기타(notes) 백업에만 들어감.
+            #   변경: short_only → '크리에이터 숏폼 트랙', short_long → '크리에이터 롱폼 트랙'.
+            #         creatorSub 자체는 notes 에 계속 남아 ('숏폼만' / '숏폼 + 롱폼') 운영자
+            #         참고용으로 유지.
+            if track.get('id') == 'creator':
+                creator_sub_id = str(track.get('creatorSub') or '').strip()
+                if creator_sub_id == 'short_only':
+                    label = '크리에이터 숏폼 트랙'
+                elif creator_sub_id == 'short_long':
+                    label = '크리에이터 롱폼 트랙'
+                # 그 외: 기본 '크리에이터 트랙' 유지 (creatorSub 미설정 case).
+                creator_sub = TRACK_APPLICATION_CREATOR_SUB_MAP.get(creator_sub_id) or creator_sub
             weekdays[day_key] = label
             if track.get('leader') and label in TRACK_APPLICATION_LEADER_LABELS:
                 leader_labels.append(label)
-            if track.get('id') == 'creator':
-                creator_sub = TRACK_APPLICATION_CREATOR_SUB_MAP.get(track.get('creatorSub')) or creator_sub
         elif track.get('type') == 'light':
             label = TRACK_APPLICATION_LIGHT_TRACK_MAP.get(track.get('id'))
             if label and label not in light_tracks:
