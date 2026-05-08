@@ -3044,8 +3044,23 @@
 
         replaceMockMembers(data.members);
         if (IS_ADMIN_MOCK) {
+          // 🔧 admin 모드에서 실 신청 + admin mock cache 를 merge.
+          //    이전엔 replaceMockMembers(persistedAdminMembers) 가 실 신청 데이터를
+          //    100% 덮어써서, 진짜 학생이 신청해도 운영자 admin view 에 안 보임.
+          //    수정: 실 신청자(data.members) 를 base 로, admin mock cache 의 멤버 중
+          //    같은 식별자가 없는 것만 추가. 같은 식별자면 실 신청 우선 (더 정확/최신).
           const persistedAdminMembers = await loadAdminMockMembers();
-          replaceMockMembers(persistedAdminMembers);
+          if (Array.isArray(persistedAdminMembers) && persistedAdminMembers.length) {
+            const realIds = new Set(
+              MOCK_MEMBERS.map(m => getMemberIdentityKey(m)).filter(Boolean)
+            );
+            persistedAdminMembers.forEach(mockMember => {
+              const id = getMemberIdentityKey(mockMember);
+              if (id && !realIds.has(id)) {
+                MOCK_MEMBERS.push(mockMember);
+              }
+            });
+          }
         }
         // ⚠️ migrateLegacyViewerSubmission 자동 호출 제거 (2026-05-07).
         // 이전엔 localStorage 에 viewer 의 이전 신청이 있고 서버에 없으면 자동으로
