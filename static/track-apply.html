@@ -2728,7 +2728,25 @@
     }
 
     async function saveAdminMembersToServer(payload) {
-      const response = await fetch(`${APPLICATION_API_BASE}/api/mockups/track-applications/admin`, {
+      // 🔧 endpoint 자동 분기 (2026-05-08):
+      //  - 단일 member 편집인데 그 member 가 진짜 Discord 사용자(snowflake ID 형식)면
+      //    /api/track-applications/admin → 노션 트랙 신청서 DB + 일반 신청 캐시 sync
+      //  - mock 멤버 또는 bulk sync(payload.members) 면
+      //    /api/mockups/track-applications/admin → admin mock cache 만 update (기존 동작)
+      // 이전 footgun: 운영자가 admin view 에서 학생 신청을 편집해도 mock cache 만
+      // update 되어 노션 트랙 신청서 DB 와 학생 본인 view 에 반영 안 됨.
+      let endpoint = '/api/mockups/track-applications/admin';
+      let isRealUserEdit = false;
+      if (payload && payload.member && !payload.members) {
+        const userId = String(payload.member.userId || payload.member.id || '').trim();
+        // Discord snowflake 는 17~19 자리 정수. mock 멤버는 짧은 hex/string.
+        if (/^\d{15,20}$/.test(userId)) {
+          endpoint = '/api/track-applications/admin';
+          isRealUserEdit = true;
+        }
+      }
+
+      const response = await fetch(`${APPLICATION_API_BASE}${endpoint}`, {
         method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -2738,8 +2756,13 @@
       if (!response.ok || result.status !== 'success') {
         throw new Error(result.message || '관리자 신청 데이터 저장에 실패했습니다.');
       }
-      replaceMockMembers(result.members || []);
-      saveState();
+
+      // 저장 후 전체 admin view 다시 로드 — 실 신청 + admin mock cache merge 결과로 갱신.
+      // (mockups endpoint 응답은 mock cache 전체만, 정식 endpoint 응답은 편집된 member 만
+      // 반환하므로 부분 응답으로 replaceMockMembers 하면 데이터 손실 위험)
+      if (typeof loadTrackApplications === 'function') {
+        try { await loadTrackApplications(); } catch (e) { /* admin view 재로드 실패 시 무시 */ }
+      }
       return result;
     }
 
