@@ -1988,11 +1988,53 @@ def get_track_application_admin_mock_members():
     })
 
 
+def _check_track_application_window():
+    """
+    학생 신청 (POST /api/track-applications) 가 신청 윈도우 안에서만 받게 강제.
+
+    이전 footgun:
+      클라이언트 view 가드만 있고 서버는 시간 검증 없음 → 학생이 devtools/curl
+      등으로 직접 API 호출하면 마감 후/시작 전에도 노션·캐시에 row 들어감.
+      운영 정책 위배 + 운영자가 closed/upcoming 화면을 띄워둬도 우회 가능.
+
+    수정:
+      - cohort_config 의 applicationStartDate / applicationEndDate / todayOverride
+        기준으로 현재 시각(혹은 override)이 윈도우 안인지 검사.
+      - 윈도우 밖이면 (None, status, message) 반환해 호출부가 즉시 거부 응답.
+      - 운영자(_is_admin_session) 는 우회 — 학생 대신 입력 케이스 보존.
+        운영자 편집은 별도 정식 endpoint(/api/track-applications/admin) 사용 권장.
+    """
+    if _is_admin_session():
+        return None, None, None  # 운영자 우회
+
+    cfg = _read_cohort_config() or _default_cohort_config()
+    start_iso = str(cfg.get('applicationStartDate') or '').strip()
+    end_iso = str(cfg.get('applicationEndDate') or '').strip()
+    today_override = str(cfg.get('todayOverride') or '').strip() or None
+
+    # today (override 우선, 없으면 KST now 의 날짜 부분만)
+    if today_override and _COHORT_CONFIG_DATE_RE.match(today_override):
+        today_iso = today_override
+    else:
+        today_iso = _get_kst_now().strftime('%Y-%m-%d')
+
+    if start_iso and today_iso < start_iso:
+        return False, 403, f'아직 신청 시작 전입니다 (오픈: {start_iso}).'
+    if end_iso and today_iso > end_iso:
+        return False, 403, f'신청이 마감되었습니다 (마감일: {end_iso}).'
+    return True, None, None
+
+
 @app.route('/api/track-applications', methods=['POST'])
 def save_track_application():
     discord_user = _get_authenticated_discord_user()
     if not discord_user:
         return jsonify({"status": "error", "message": "Discord authentication required."}), 401
+
+    # 🛑 신청 윈도우 가드 — 마감 후/시작 전 직접 호출 차단 (운영자는 우회).
+    window_ok, window_status, window_msg = _check_track_application_window()
+    if window_ok is False:
+        return jsonify({"status": "error", "message": window_msg}), window_status
 
     payload = request.get_json(silent=True) or {}
     cohort_label = _get_current_cohort_label(payload.get('cohortLabel') or payload.get('cohort'))
