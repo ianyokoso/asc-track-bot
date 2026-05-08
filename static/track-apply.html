@@ -2347,22 +2347,30 @@
 
     function renderHeaderActions(kind) {
       if (kind === 'upcoming') {
-        const adminBtnUpcoming = IS_VIEWER_ADMIN
-          ? `<button type="button" id="btn-go-admin" class="btn-ghost text-[12px] h-9 px-3 whitespace-nowrap" title="운영진 전용 — 신청자 관리 / 조 배정">
-               🛡️ 관리자 페이지
-             </button>`
-          : '';
+        // upcoming 은 미로그인 상태로도 자주 보이는 화면이므로 (시크릿창/방문자)
+        // IS_VIEWER_ADMIN 기준이 아니라 항상 admin 진입 버튼 노출.
+        // - 로그인된 admin: applyState('admin') 으로 즉시 진입.
+        // - 미로그인: Discord OAuth → 콜백 후 admin 검증 → admin 일 때만 admin 뷰 진입 가능.
+        // - 로그인된 일반 사용자: applyState('admin') 호출되면 서버에서 권한 체크.
         headerActions.innerHTML = `
           <span class="text-[11px] font-semibold text-warn uppercase tracking-wider">${APPLICATION_OPENS_LABEL}</span>
-          ${adminBtnUpcoming}
+          <button type="button" id="btn-go-admin" class="btn-ghost text-[12px] h-9 px-3 whitespace-nowrap" title="운영진 전용 — 로그인 필요">
+            🛡️ 관리자
+          </button>
         `;
-        if (IS_VIEWER_ADMIN) {
-          requestAnimationFrame(() => {
-            document.getElementById('btn-go-admin')?.addEventListener('click', () => {
+        requestAnimationFrame(() => {
+          document.getElementById('btn-go-admin')?.addEventListener('click', () => {
+            if (IS_VIEWER_ADMIN) {
               applyState('admin');
-            });
+            } else if (VIEWER_USER_ID) {
+              // 로그인은 됐는데 admin 이 아닌 경우 → 서버 라이브 체크 후 권한 없으면 안내
+              applyState('admin');
+            } else {
+              // 미로그인 → Discord OAuth. 콜백 후 admin 인 경우 자동으로 admin 버튼 라벨 갱신.
+              window.location.href = LOGIN_URL;
+            }
           });
-        }
+        });
       } else if (kind === 'user') {
         // viewer 배지는 본문 인라인 배너 (.viewer-banner-display / .viewer-banner-handle) 가 담당.
         // 헤더에는 관리자 버튼만 (운영진일 때).
