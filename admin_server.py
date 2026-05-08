@@ -2386,6 +2386,62 @@ def _ensure_member_track_options(notion_api, member_db_id, track_property_name, 
         notion_api.add_multi_select_option(member_db_id, track_property_name, track_name)
 
 
+def _clear_non_participant_tracks_and_groups(notion_api, member_db_id, fields, touched_page_ids):
+    """
+    Option C 구현 (2026-05-08):
+      현재 기수 sync 대상 (touched_page_ids) 에 포함 안 된 master DB 멤버의 트랙·조
+      컬럼을 비움. 결과: master DB 트랙·조 = '현재 기수 참여자만' 반영.
+
+      이전 기수 history 는 트랙 신청서 DB + (archive 안 된) 옛 inline DB 에 보존됨.
+
+    반환: 비워진 멤버 수 (cleared count).
+    """
+    track_field = fields.get('track')
+    group_field = fields.get('group')
+    if not track_field and not group_field:
+        return 0
+
+    try:
+        all_pages = notion_api.fetch_all_pages(
+            f'https://api.notion.com/v1/databases/{member_db_id}/query',
+            {"page_size": 100},
+        )
+    except Exception as e:
+        print(f"[clear-non-participants] fetch all pages failed: {e}")
+        return 0
+
+    cleared = 0
+    for page in all_pages or []:
+        if page.get('id') in touched_page_ids:
+            continue
+        props = page.get('properties', {}) or {}
+
+        clear_props = {}
+        if track_field:
+            current_tracks = (props.get(track_field, {}) or {}).get('multi_select') or []
+            if current_tracks:
+                clear_props[track_field] = {"multi_select": []}
+        if group_field:
+            current_group = (props.get(group_field, {}) or {}).get('rich_text') or []
+            # rich_text 가 비어있으면 skip. 'plain_text' 중 하나라도 비어있지 않으면 clear.
+            has_text = any(
+                (item.get('plain_text') or '').strip() or (item.get('text', {}).get('content') or '').strip()
+                for item in current_group
+            )
+            if has_text:
+                clear_props[group_field] = {"rich_text": []}
+
+        if not clear_props:
+            continue
+        try:
+            if notion_api.update_page_properties(page['id'], clear_props):
+                cleared += 1
+        except Exception as e:
+            print(f"[clear-non-participants] update failed for {page.get('id')}: {e}")
+
+    return cleared
+
+
 def _upsert_group_preview_members(notion_api, member_db_id, members, member_group_labels, auto_create_missing=False):
     """
     멤버 마스터 DB 갱신.
@@ -2414,7 +2470,7 @@ def _upsert_group_preview_members(notion_api, member_db_id, members, member_grou
     _ensure_member_track_options(notion_api, member_db_id, fields.get('track'), members)
 
     member_page_ids = {}
-    summary = {'created': 0, 'updated': 0, 'missing': []}
+    summary = {'created': 0, 'updated': 0, 'missing': [], 'cleared': 0}
 
     for member in members:
         member_id = str(member.get('userId') or member.get('id') or '').strip()
@@ -2462,6 +2518,15 @@ def _upsert_group_preview_members(notion_api, member_db_id, members, member_grou
                 'name': str(member.get('name') or '').strip(),
                 'handle': str(member.get('handle') or '').strip(),
             })
+
+    # 🔧 Option C — 미참여자 트랙·조 컬럼 비우기 (2026-05-08).
+    #   master DB 의 모든 row 중 이번 sync 에 포함 안 된 멤버 (touched_page_ids 에 없음)
+    #   의 트랙 multi_select + 조 rich_text 를 비움. 결과: master DB 가 '현재 기수
+    #   참여자만' 반영. 이전 기수 history 는 트랙 신청서 DB 에 보존.
+    touched_page_ids = set(member_page_ids.values())
+    summary['cleared'] = _clear_non_participant_tracks_and_groups(
+        notion_api, member_db_id, fields, touched_page_ids
+    )
 
     return member_page_ids, summary
 
@@ -3140,6 +3205,9 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
             "track_pages": track_name_to_page_id,
             "members_created": member_summary['created'],
             "members_updated": member_summary['updated'],
+            # 미참여자 (master DB 에 있지만 이번 기수 sync 대상 아님) 트랙·조 컬럼이
+            # 비워진 수 (Option C).
+            "members_cleared": member_summary.get('cleared', 0),
             # 멤버 마스터 DB 에 매칭 안 돼서 skip 된 멤버 (Discord ID/handle 둘 다 안 맞음).
             # 운영자 UI 가 alert 으로 표시.
             "members_missing": member_summary.get('missing', []),

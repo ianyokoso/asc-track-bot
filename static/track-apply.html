@@ -5903,10 +5903,15 @@
         const missingNote = missing.length
           ? ` · <span class="text-bad font-semibold">⚠️ ${missing.length}명 매칭 실패</span>`
           : '';
+        const clearedCount = apiSummary.members_cleared || 0;
+        const clearedNote = clearedCount
+          ? ` · <span class="text-ink-muted">미참여자 ${clearedCount}명 트랙·조 비움</span>`
+          : '';
         stats.innerHTML =
           `멤버 DB <strong class="text-ink font-semibold">${apiSummary.members_updated || 0}</strong>개 트랙·조 갱신 · ` +
           `조 DB <strong class="text-ink font-semibold">${apiSummary.group_databases_created || sum.totalGroups}</strong>개 생성 · ` +
           `조원 row <strong class="text-ink font-semibold">${apiSummary.group_rows_created || sum.totalMembers}</strong>개 반영` +
+          clearedNote +
           missingNote +
           `.`;
         if (missing.length) {
