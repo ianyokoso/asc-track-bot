@@ -2041,7 +2041,7 @@
         headerTitle.textContent = STATES[activeKey].title;
       }
 
-      // 모달 저장 시: URL 도 새 cohort/날짜로 갱신 + viewer state 자동 재평가.
+      // 모달 저장 시: URL 도 새 cohort/날짜로 갱신.
       if (fromModalSave) {
         // URL 의 cohortName/applicationStartDate/applicationEndDate/todayOverride 갱신.
         // 새로고침해도 새 설정 유지되고, URL 공유 시 일관성 보장.
@@ -2066,15 +2066,22 @@
             mockupParams.delete('todayOverride');
           }
         } catch (e) { /* URL API 실패해도 무시 */ }
+      }
 
-        // 새 설정 기준으로 viewer state 자동 재평가.
-        // (admin / group-preview view 는 그대로 — 운영자가 의도해서 머무는 화면)
-        const viewerStates = new Set(['logout', 'upcoming', 'open-new', 'open-edit', 'closed']);
-        if (!activeKey || viewerStates.has(activeKey)) {
-          const target = _evaluateViewerStateFromConfig();
-          if (target && STATES[target] && target !== activeKey) {
-            applyState(target);
-          }
+      // 🔧 viewer state 자동 재평가 — fromModalSave 여부 무관 (2026-05-08).
+      //   직전 footgun: 페이지 첫 로드 시 cohort-config 가 비동기 fetch 라
+      //   initialState 는 default startDate (2026-05-20) 기준으로 'upcoming' 결정.
+      //   그 뒤 cohort-config 가 도착해 OPEN_AT 이 과거 날짜로 갱신되면 countdown 만
+      //   CTA 모드로 morph 하고 view 자체는 view-upcoming 에 머물러 사용자가 로그인
+      //   해도 같은 화면으로 떨어짐.
+      //   변경: applyCohortConfigFromServer 가 호출될 때마다 (initial fetch + 모달 저장)
+      //   state 재평가 → 다른 state 로 변경 필요 시 즉시 applyState.
+      // (admin / group-preview view 는 그대로 — 운영자가 의도해서 머무는 화면)
+      const viewerStates = new Set(['logout', 'upcoming', 'open-new', 'open-edit', 'closed']);
+      if (!activeKey || viewerStates.has(activeKey)) {
+        const target = _evaluateViewerStateFromConfig();
+        if (target && STATES[target] && target !== activeKey) {
+          applyState(target);
         }
       }
     }
