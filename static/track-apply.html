@@ -2347,7 +2347,22 @@
 
     function renderHeaderActions(kind) {
       if (kind === 'upcoming') {
-        headerActions.innerHTML = `<span class="text-[11px] font-semibold text-warn uppercase tracking-wider">${APPLICATION_OPENS_LABEL}</span>`;
+        const adminBtnUpcoming = IS_VIEWER_ADMIN
+          ? `<button type="button" id="btn-go-admin" class="btn-ghost text-[12px] h-9 px-3 whitespace-nowrap" title="운영진 전용 — 신청자 관리 / 조 배정">
+               🛡️ 관리자 페이지
+             </button>`
+          : '';
+        headerActions.innerHTML = `
+          <span class="text-[11px] font-semibold text-warn uppercase tracking-wider">${APPLICATION_OPENS_LABEL}</span>
+          ${adminBtnUpcoming}
+        `;
+        if (IS_VIEWER_ADMIN) {
+          requestAnimationFrame(() => {
+            document.getElementById('btn-go-admin')?.addEventListener('click', () => {
+              applyState('admin');
+            });
+          });
+        }
       } else if (kind === 'user') {
         // viewer 배지는 본문 인라인 배너 (.viewer-banner-display / .viewer-banner-handle) 가 담당.
         // 헤더에는 관리자 버튼만 (운영진일 때).
