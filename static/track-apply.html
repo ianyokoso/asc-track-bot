@@ -3072,6 +3072,22 @@
         }
         if (viewerMember) {
           syncViewerSubmissionState(viewerMember);
+        } else if (!IS_ADMIN_MOCK && (viewerId || viewerHandle)) {
+          // 🛑 서버에 viewer 신청이 없는데 stale localStorage 의 lastSubmittedData 가 남아있으면
+          //    "제출 완료" 가 유령처럼 부활하는 footgun. 운영진 '전체 초기화' 후 user 디바이스
+          //    재접속 시나리오. 서버를 source-of-truth 로 강제 — 클라이언트 캐시 무효화.
+          lastSubmittedData = null;
+          editCount = 0;
+          try {
+            if (typeof renderSelectionSummary === 'function') renderSelectionSummary(null);
+            if (typeof renderEditStatus === 'function') renderEditStatus();
+          } catch (e) { /* 렌더 실패해도 상태는 정리됨 */ }
+          if (typeof saveState === 'function') saveState();
+          // 미신청 화면으로 강제 전환 (이미 그 상태면 noop)
+          const currentState = (typeof getCurrentStateKey === 'function') ? getCurrentStateKey() : '';
+          if (currentState === 'open-edit' || currentState === 'closed') {
+            try { applyState('open-new'); } catch (e) { /* state 모듈 미초기화 시 무시 */ }
+          }
         }
       } catch (error) {
         console.warn('[트랙 신청] 신청 목록을 불러오지 못했습니다.', error);
