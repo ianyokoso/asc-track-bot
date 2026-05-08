@@ -3030,8 +3030,10 @@
       } catch (e) {}
       try { localStorage.removeItem(ADMIN_STORAGE_KEY); } catch (e) {}
       try { localStorage.removeItem(GP_STATE_KEY); } catch (e) {}
-      // '목업 지우기' 플래그도 해제 — baseline 다시 보이도록
+      // 옛 hidden 플래그 정리 (deprecated, 잔존 클라이언트 호환).
       try { localStorage.removeItem(MOCK_HIDDEN_KEY); } catch (e) {}
+      // 🔧 명시적 visible 플래그 ON — 새로고침 후 baseline mock 이 드러남.
+      try { localStorage.setItem(MOCK_VISIBLE_KEY, '1'); } catch (e) {}
       _markAdminReloadIfApplicable();
       location.reload();
     }
@@ -3123,6 +3125,10 @@
       // 조 배정 캐시 무효화 — 새 멤버 분배 기반으로 재산출되도록.
       try { localStorage.removeItem(GP_STATE_KEY); } catch (e) {}
       try { localStorage.removeItem(MOCK_HIDDEN_KEY); } catch (e) {}
+      // 🔧 visible 플래그 — 랜덤 채우기는 mock 이 이미 노출 상태일 때만 의미가 있지만
+      //    혹시 비노출 상태에서 호출되면 noop 인 채로 reload 후 다시 비어버림.
+      //    안전하게 visible 도 ON 처리.
+      try { localStorage.setItem(MOCK_VISIBLE_KEY, '1'); } catch (e) {}
       // 변경된 MOCK_MEMBERS 를 ADMIN_STORAGE_KEY 에 저장 (새로고침 후 보존).
       if (typeof saveState === 'function') saveState();
 
@@ -3146,7 +3152,11 @@
         '진행할까요?'
       );
       if (!confirmed) return;
-      try { localStorage.setItem(MOCK_HIDDEN_KEY, '1'); } catch (e) {}
+      // 🔧 visible 플래그 OFF — 새로고침 후 baseline mock 비노출 상태가 됨.
+      //    옛 hidden 플래그도 같이 정리 (이전 동작과의 호환성 유지 — 누가 두 플래그
+      //    모두 본다 해도 visible=false 가 우선이므로 결국 비노출).
+      try { localStorage.removeItem(MOCK_VISIBLE_KEY); } catch (e) {}
+      try { localStorage.removeItem(MOCK_HIDDEN_KEY); } catch (e) {}
       // 기존 편집 / 조 배정 캐시도 무의미해지므로 같이 제거
       try { localStorage.removeItem(ADMIN_STORAGE_KEY); } catch (e) {}
       try { localStorage.removeItem(GP_STATE_KEY); } catch (e) {}
@@ -3178,6 +3188,12 @@
         }
         // 1) 조 배정 상태 (별도 키) 제거
         try { localStorage.removeItem(GP_STATE_KEY); } catch (e) {}
+        // 1-b) baseline mock 노출 플래그도 OFF — '전체 초기화' 는 기수 갈아끼는
+        //      목적이라 baseline mock 부활시킬 이유 없음. 학생/admin 둘 다 빈 상태로.
+        try { localStorage.removeItem(MOCK_VISIBLE_KEY); } catch (e) {}
+        try { localStorage.removeItem(MOCK_HIDDEN_KEY); } catch (e) {}
+        try { localStorage.removeItem(MOCK_TARGET_COUNT_KEY); } catch (e) {}
+        try { localStorage.removeItem(ADMIN_STORAGE_KEY); } catch (e) {}
         // 2) MOCK_MEMBERS 의 신청 정보 in-place wipe
         //    하드코딩된 baseline 의 default tracks 가 새로고침 후 부활하지 않도록
         //    saveState() 로 빈 상태를 ADMIN_STORAGE_KEY 에 영속화.
@@ -4031,11 +4047,20 @@
       MOCK_MEMBERS.map(member => getMemberIdentityKey(member)).filter(Boolean)
     );
 
-    // '목업 지우기' 플래그가 true 면 baseline 멤버를 전부 제거.
-    // BASE_MOCK_MEMBER_IDS 는 그 전에 이미 캡쳐됐으므로 shouldMergeRemoteMember 로직은 영향 없음.
+    // 🔧 baseline mock 노출 정책 (2026-05-08 변경):
+    //   이전: 기본 노출. '목업 지우기' 클릭 시 MOCK_HIDDEN_KEY='1' 로 숨김.
+    //   변경: 기본 비노출 (10기부터 운영 모드 — 새 기수는 빈 상태로 시작).
+    //         '📋 목업 채우기' 클릭 시에만 MOCK_VISIBLE_KEY='1' 설정 → baseline 노출.
+    // BASE_MOCK_MEMBER_IDS 는 직전에 캡쳐돼서 shouldMergeRemoteMember 로직은 그대로 유효
+    // (실제 신청자 + baseline ID 매칭 멤버는 계속 merge 됨).
     try {
-      if (localStorage.getItem('asc_track_apply_mock_hidden_v1') === '1') {
+      const visible = localStorage.getItem('asc_track_apply_mock_visible_v1') === '1';
+      if (!visible) {
         MOCK_MEMBERS.length = 0;
+        // ADMIN_STORAGE_KEY (asc_track_apply_mockup_v3) 에 직전 세션의 baseline 멤버가
+        // persist 돼있으면 loadState() 가 다시 push 해서 부활하는 footgun.
+        // visible 플래그 없을 때는 같이 정리 (실 OAuth 사용자는 server 응답으로 별도 복구됨).
+        try { localStorage.removeItem('asc_track_apply_mockup_v3'); } catch (e2) {}
       }
     } catch (e) {}
 
@@ -4311,10 +4336,13 @@
     //    옛 v2 키 데이터는 자동으로 무시되고, 추가로 한 번 정리.
     const ADMIN_STORAGE_KEY = 'asc_track_apply_mockup_v3';
     try { localStorage.removeItem('asc_track_apply_mockup_v2'); } catch (e) {}
-    // 목업 멤버 (HTML 하드코딩 baseline) 숨김 플래그 — 운영진이 '목업 지우기'
-    // 클릭하면 true. 다음 페이지 init 에서 baseline 멤버를 전부 splice 제거.
-    // OAuth 로그인한 실 사용자는 server 응답을 통해 별도로 push 됨.
+    // 목업 멤버 (HTML 하드코딩 baseline) 숨김 플래그 — DEPRECATED.
+    //   2026-05-08 부터 정책이 invert 됨: 기본 비노출 + visible 플래그가 set 일 때만 노출.
+    //   잔존 클라이언트와의 호환을 위해 키는 유지 (clear 시점에 같이 remove 처리).
     const MOCK_HIDDEN_KEY = 'asc_track_apply_mock_hidden_v1';
+    // 🔧 신규 : baseline mock 노출 플래그. '📋 목업 채우기' / '🎲 랜덤 채우기' 시 set.
+    //   '🧹 목업 지우기' / '🗑️ 전체 초기화' 시 clear → 기본 비노출 상태로 복귀.
+    const MOCK_VISIBLE_KEY = 'asc_track_apply_mock_visible_v1';
     // 목업 채우기 목표 인원 — 미설정 시 baseline 그대로 (=하드코딩 120명).
     // 사용자가 '목업 채우기' 버튼에서 prompt 로 다른 숫자 입력 시 저장됨.
     const MOCK_TARGET_COUNT_KEY = 'asc_track_apply_mock_target_count_v1';
