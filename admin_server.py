@@ -2767,6 +2767,7 @@ def _archive_track_page_inline_dbs(notion_api, track_page_id):
     """
     Legacy `_reset_cohort_groups` 와 동일: 트랙 페이지 안의 모든 inline DB 를 archive.
     재배정 시마다 깨끗한 상태에서 새 그룹 DB 를 만들기 위함.
+    DEPRECATED (2026-05-08): incremental sync 로 전환되면서 호출 안 함.
     """
     existing_dbs = notion_api.get_inline_databases(track_page_id)
     deleted_count = 0
@@ -2774,6 +2775,52 @@ def _archive_track_page_inline_dbs(notion_api, track_page_id):
         if notion_api.delete_database(db['id']):
             deleted_count += 1
     return deleted_count
+
+
+def _find_inline_db_by_title(notion_api, parent_page_id, title):
+    """트랙 페이지 안에서 정확히 같은 title 의 inline DB 찾기. 없으면 None."""
+    if not parent_page_id or not title:
+        return None
+    target = title.strip()
+    for db in notion_api.get_inline_databases(parent_page_id):
+        existing_title = str(db.get('title', '')).strip()
+        if existing_title == target:
+            return db
+    return None
+
+
+def _get_existing_member_relations_in_inline_db(notion_api, inline_db_id, relation_prop_name='이름'):
+    """
+    inline DB 의 모든 row 를 조회 → '이름' relation 의 member_page_id → row info dict.
+    반환: { member_page_id: { 'row_id': ..., 'leader': bool } }.
+    """
+    result = {}
+    if not inline_db_id:
+        return result
+    try:
+        pages = notion_api.fetch_all_pages(
+            f'https://api.notion.com/v1/databases/{inline_db_id}/query',
+            {"page_size": 100},
+        )
+    except Exception as e:
+        print(f"[group-assign] fetch inline DB rows failed: {e}")
+        return result
+    for page in pages or []:
+        props = page.get('properties', {}) or {}
+        relation = props.get(relation_prop_name, {}).get('relation', []) or []
+        if not relation:
+            continue
+        for ref in relation:
+            mid = ref.get('id')
+            if not mid:
+                continue
+            role_select = props.get('직책', {}).get('select') or {}
+            result[mid] = {
+                'row_id': page.get('id'),
+                'leader': str(role_select.get('name') or '').strip() == '조장',
+            }
+            break  # 첫 relation 만 (멤버 1명 = row 1개 정책)
+    return result
 
 
 def _ensure_group_inline_db_schema(notion_api, target_db_id, member_db_id):
@@ -2951,25 +2998,39 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
         )
         track_name_to_page_id[track_name] = track_page_id
 
-        # 2. 해당 트랙 페이지의 기존 inline DB 모두 archive (legacy `_reset_cohort_groups`)
-        archived_inline_dbs += _archive_track_page_inline_dbs(notion_api, track_page_id)
+        # 🔧 incremental sync (2026-05-08):
+        #   직전: 트랙 페이지의 기존 inline DB 전부 archive 후 재생성 → URL 바뀌고
+        #         이미 등록된 멤버가 매번 건드려짐.
+        #   변경: archive 안 함. 그룹별로 같은 title 의 inline DB 찾아서 reuse.
+        #         row 도 기존 멤버 page_id 매칭으로 중복 안 만들고, 조장/조원 변동만 patch,
+        #         그룹에서 빠진 멤버는 row archive.
+        #   사용자 의도: '매칭이 안된 사람이 새로 들어오면 그 사람만 추가, 나머지는 건드리지 마'.
 
-        # 3. 그룹별 inline DB 생성 + 스키마 보장 + row 추가
+        # 3. 그룹별 inline DB find-or-create + 스키마 보장 + row incremental sync
         for group in groups:
             group_name = str(group.get('name') or '').strip()
             if not group_name:
                 continue
 
-            inline_db_id = _create_group_preview_inline_db(
-                notion_api,
-                track_page_id,
-                group_name,
-                member_db_id,
-            )
+            existing_db = _find_inline_db_by_title(notion_api, track_page_id, group_name)
+            if existing_db:
+                inline_db_id = existing_db['id']
+            else:
+                inline_db_id = _create_group_preview_inline_db(
+                    notion_api,
+                    track_page_id,
+                    group_name,
+                    member_db_id,
+                )
+                created_group_dbs += 1
             _ensure_group_inline_db_schema(notion_api, inline_db_id, member_db_id)
-            created_group_dbs += 1
             group_url = f"https://www.notion.so/{inline_db_id.replace('-', '')}"
 
+            existing_relations = _get_existing_member_relations_in_inline_db(
+                notion_api, inline_db_id
+            )
+
+            desired_member_page_ids = set()
             for member in group.get('members', []):
                 member_id = str(member.get('userId') or member.get('id') or '').strip()
                 member_page_id = member_page_ids.get(member_id)
@@ -2979,10 +3040,12 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
                     # (조 페이지 자체는 생성됨, 매칭된 멤버들만 들어감).
                     print(f"[group-assign] skip group row — member not in master DB: {member_id}")
                     continue
+                desired_member_page_ids.add(member_page_id)
 
                 row_track_name = (member.get('rowTrackName') or track_name).strip()
                 row_title = str(member.get('name') or member.get('id') or member_id).strip() or member_id
                 row_handle = str(member.get('handle') or member.get('userId') or member_id).strip()
+                desired_leader = bool(member.get('leader'))
                 row_props = {
                     "ID": {"title": [{"text": {"content": row_title[:2000] or 'unknown'}}]},
                     "디스코드 ID": {
@@ -2990,13 +3053,37 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
                     },
                     "트랙": {"select": {"name": row_track_name[:100]}},
                     "기수": {"select": {"name": cohort_label[:100]}},
-                    "직책": {"select": {"name": "조장" if member.get('leader') else "조원"}},
+                    "직책": {"select": {"name": "조장" if desired_leader else "조원"}},
                     "이름": {"relation": [{"id": member_page_id}]}
                 }
+
+                existing_row = existing_relations.get(member_page_id)
+                if existing_row:
+                    # 이미 있는 멤버 — 조장 토글이 바뀐 경우만 patch.
+                    if existing_row.get('leader') != desired_leader:
+                        notion_api.update_page_properties(
+                            existing_row['row_id'],
+                            {"직책": {"select": {"name": "조장" if desired_leader else "조원"}}},
+                        )
+                    # 그 외는 변경 없음 — 기존 row 그대로 유지 (URL/relation 보존).
+                    continue
+
                 row_id = notion_api.add_row_to_database(inline_db_id, row_props)
                 if not row_id:
                     raise RuntimeError(f'Failed to create group row for {member_id} in {group_name}')
                 created_group_rows += 1
+
+            # 그룹에서 빠진 멤버 (existing 에 있지만 desired 에 없음) → row archive.
+            #   admin 이 이 그룹에서 다른 그룹으로 옮겼거나 제거한 경우. stale row 정리.
+            for stale_member_page_id, info in existing_relations.items():
+                if stale_member_page_id in desired_member_page_ids:
+                    continue
+                # notion_api 모듈의 archive_page (PATCH /v1/pages/{id} archived=true)
+                try:
+                    from notion_api import archive_page as _archive_page
+                    _archive_page(info['row_id'])
+                except Exception as _e:
+                    print(f"[group-assign] archive stale row failed: {_e}")
 
                 # legacy `assign_member_to_group` — 멤버 페이지의 '소속 조' 에 링크 포함 텍스트 저장
                 try:
