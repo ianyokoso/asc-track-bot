@@ -935,7 +935,7 @@
   <section class="view hidden-view" id="view-upcoming">
     <div class="max-w-xl mx-auto px-4 md:px-10 py-16 md:py-24 text-center">
       <p class="text-eyebrow mb-3">Opens In</p>
-      <div class="text-[44px] md:text-[56px] font-bold text-ink tracking-tight tabular-nums mb-2 leading-none">
+      <div id="upcoming-countdown" class="text-[44px] md:text-[56px] font-bold text-ink tracking-tight tabular-nums mb-2 leading-none">
         3일 12:45:32
       </div>
       <p id="upcoming-window-label" class="text-sm text-ink-muted tabular-nums mb-10">
@@ -2113,6 +2113,40 @@
       return 'logout';
     }
 
+    /**
+     * view-upcoming 카운트다운 텍스트 1초마다 갱신.
+     * - APPLICATION_OPEN_AT (ISO 8601 with KST offset) 까지 남은 시간을 'N일 HH:MM:SS' 로.
+     * - TODAY_OVERRIDE_DATE 가 있으면 그 날짜 00:00 KST 를 'now' 로 사용 — static 값.
+     * - 0 이 되면 표시는 '0일 00:00:00' 이지만, 실제 view 전환은 60초 polling
+     *   (_evaluateViewerStateFromConfig) 이 담당. 카운트다운 자체는 1초 단위로 보일 뿐.
+     */
+    function _formatCountdown(diffMs) {
+      if (!Number.isFinite(diffMs) || diffMs < 0) diffMs = 0;
+      const totalSec = Math.floor(diffMs / 1000);
+      const days = Math.floor(totalSec / 86400);
+      const hours = Math.floor((totalSec % 86400) / 3600);
+      const minutes = Math.floor((totalSec % 3600) / 60);
+      const seconds = totalSec % 60;
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${days}일 ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+    }
+    function _getNowMsForCountdown() {
+      // TODAY override 가 박혀있으면 그 날짜 00:00 KST 기준 — 실시간 흐름 X (모달에서 변경 시점에만 변동).
+      if (TODAY_OVERRIDE_DATE && /^\d{4}-\d{2}-\d{2}$/.test(TODAY_OVERRIDE_DATE)) {
+        const t = Date.parse(`${TODAY_OVERRIDE_DATE}T00:00:00+09:00`);
+        if (Number.isFinite(t)) return t;
+      }
+      return Date.now();
+    }
+    function updateUpcomingCountdown() {
+      const el = document.getElementById('upcoming-countdown');
+      if (!el) return;
+      const target = Date.parse(APPLICATION_OPEN_AT);
+      if (!Number.isFinite(target)) return;
+      const diff = target - _getNowMsForCountdown();
+      el.textContent = _formatCountdown(diff);
+    }
+
     function updateTodayProgress() {
       // Application Window 진행바 + 'Today MM.DD' 위치를 현재 날짜 기준으로 계산.
       const start = _parseISODate(APPLICATION_START_DATE);
@@ -2478,6 +2512,11 @@
         renderClosedSummary();
       }
 
+      // upcoming 진입 시 카운트다운 즉시 1회 갱신 — 매 1초 interval 첫 tick 까지 기다리지 않고.
+      if (stateKey === 'upcoming' && typeof updateUpcomingCountdown === 'function') {
+        updateUpcomingCountdown();
+      }
+
       // 🔄 admin / group-preview 진입 시 항상 최신 데이터로 자동 새로고침.
       //    이전엔 페이지 로드 시 1회 fetch 후 사용자가 Refresh 버튼 누르기 전까지 stale.
       //    학생이 마감 직전 신청·수정해도 운영자가 admin view 진입 시 즉시 반영되도록.
@@ -2555,6 +2594,18 @@
         }
       } catch (e) { /* polling 실패해도 다음 tick 시 재시도 */ }
     }, _VIEWER_WINDOW_POLL_INTERVAL_MS);
+
+    // 🕐 view-upcoming 카운트다운 1초 ticking — 'N일 HH:MM:SS' 표시가 매초 줄어들도록.
+    //   - upcoming 뷰가 활성일 때만 갱신 (다른 뷰에서는 DOM 미존재 → no-op).
+    //   - TODAY override 가 있으면 _getNowMsForCountdown() 가 static 값 반환 → 변동 없음.
+    //   - 0 도달 시 별도 처리 안 함 — 60초 polling 이 view 전환 담당.
+    setInterval(() => {
+      try {
+        const activeView = document.querySelector('.view:not(.hidden-view)');
+        if (activeView?.id !== 'view-upcoming') return;
+        if (typeof updateUpcomingCountdown === 'function') updateUpcomingCountdown();
+      } catch (e) { /* tick 실패해도 다음 tick 재시도 */ }
+    }, 1000);
 
     /**
      * 페이지 로드 후 서버에서 최신 admin 상태 동기화.
