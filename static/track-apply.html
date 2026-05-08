@@ -840,9 +840,42 @@
       display: inline-block;
     }
     @keyframes gp-spin { to { transform: rotate(360deg); } }
+    /* 🔧 Cohort-config flash 방지 (2026-05-08).
+       페이지 첫 paint 시점에 cohort-config 가 아직 도착 안 해서 default startDate (2026-05-20)
+       로 view-upcoming '11일 ...' 카운트다운이 잠깐 보였다가 cohort-config 도착 후 view-logout
+       으로 점프하는 flash 가 발생. flash 동안 view + header 를 숨기고 loading 문구만 노출. */
+    body.app-loading-config #common-header,
+    body.app-loading-config #window-progress,
+    body.app-loading-config .view {
+      visibility: hidden !important;
+    }
+    body.app-loading-config::before {
+      content: '현재 기수 설정을 불러오는 중입니다...';
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      color: #6B7280;
+      z-index: 9999;
+    }
   </style>
 </head>
-<body class="bg-canvas text-ink antialiased">
+<body class="bg-canvas text-ink antialiased app-loading-config">
+  <script>
+    // applicationStartDate 가 URL 에 없으면 cohort-config fetch 결과 반영 전까지 화면 숨김.
+    // 도착 즉시 (또는 timeout 시) 클래스 제거 → view 노출. 인라인 script 라 head 끝나기 전 동작.
+    (function () {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('applicationStartDate')) {
+          // URL 에 명시 startDate 있으면 (deeplink/test) flash 방지 불필요 — 즉시 노출.
+          document.body.classList.remove('app-loading-config');
+        }
+      } catch (e) { /* fail open — flash 가 잘못 떠도 크게 문제 없음 */ }
+    })();
+  </script>
 
   <!-- 🔧 Mockup devtools 패널 + ADMIN PREVIEW 배너 제거 (2026-05-08).
        10기부터 운영 모드 전환되면서 mockup demo UI 불필요. 관련 IS_ADMIN_MOCK
@@ -2250,8 +2283,16 @@
         applyCohortConfigFromServer(cfg);
       } catch (err) {
         console.warn('[cohort-config] fetch failed:', err);
+      } finally {
+        // 🔧 cohort-config 도착 (성공/실패 무관) → flash 방지 loading 클래스 해제.
+        //   default startDate 로 잘못 렌더된 view 가 사라지고 정확한 view 가 보임.
+        try { document.body.classList.remove('app-loading-config'); } catch (e) {}
       }
     }
+    // safety net: 5초 안에 cohort-config 응답 없으면 강제 노출 (사용자가 무한 loading 안 보게).
+    setTimeout(() => {
+      try { document.body.classList.remove('app-loading-config'); } catch (e) {}
+    }, 5000);
 
     function _normalizeCohortInput(value) {
       const raw = String(value || '').trim();
@@ -3608,8 +3649,17 @@
           return;
         }
         let body = escapeHtml(val);
-        if (w.name === 'wed' && val === '크리에이터 트랙' && data.creatorSub) {
-          body += `<span class="text-ink-soft font-normal ml-1">· ${escapeHtml(data.creatorSub)}</span>`;
+        // 🔧 크리에이터 트랙은 숏폼/롱폼 구별 표기 — 직전: 비교문이 '크리에이터 트랙' 이라
+        //    val 이 '크리에이터' (TRACK_LABELS.creator) 일 때 매칭 실패 → suffix 미노출 dead code.
+        //    creatorSub: '숏폼만' (short_only) | '숏폼 + 롱폼' (short_long).
+        //    side suffix 가 아니라 트랙명 자체에 합쳐서 한 줄로 명확히.
+        if (
+          w.name === 'wed' &&
+          data.creatorSub &&
+          (val === TRACK_LABELS.creator || val === '크리에이터 트랙')
+        ) {
+          if (data.creatorSub === '숏폼 + 롱폼') body = '크리에이터 숏폼+롱폼';
+          else if (data.creatorSub === '숏폼만') body = '크리에이터 숏폼';
         }
         body += leaderBadgeHtml(val, data.leaderApply);
         rows.push(rowHtml(w.kr, body));
