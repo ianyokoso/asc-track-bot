@@ -3391,10 +3391,20 @@
       editCount = Number(member.edits || 0);
       renderSelectionSummary(lastSubmittedData);
       renderEditStatus();
-      // 사용자가 이미 admin/group-preview/closed 등 다른 뷰로 이동했다면 덮어쓰지 않는다.
-      // (관리자가 devtools 로 관리자 뷰에 진입하거나 조 배정 ↗ 버튼으로 group-preview 로 들어간 경우 등)
+      // 사용자가 이미 admin/group-preview/closed 등 다른 뷰로 이동했다면 state 자체는 덮어쓰지 않는다.
+      // (관리자가 admin 뷰에 진입하거나 조 배정 ↗ 버튼으로 group-preview 로 들어간 경우 등)
       if (IS_ADMIN_MOCK) return;
       const currentState = getCurrentStateKey();
+      // 🔧 view-closed 에서 fetch 가 끝나면 summary 재렌더 (2026-05-08).
+      //   직전 footgun: smith_james 가 신청 기간에 제출 → 마감 후 모바일 진입 →
+      //   state='closed' 가 먼저 결정 → renderClosedSummary 호출 시 lastSubmittedData
+      //   는 아직 null → '신청 기간 중 제출된 내역이 없습니다' 표시.
+      //   loadTrackApplications 비동기 완료 후 syncViewerSubmissionState 가 set 했지만
+      //   closed 상태에서는 re-render 호출이 없어서 화면 stale.
+      if (currentState === 'closed' && typeof renderClosedSummary === 'function') {
+        renderClosedSummary();
+        return;
+      }
       if (currentState && currentState !== 'open-new' && currentState !== 'open-edit') return;
       if (document.getElementById('view-open-edit')) {
         applyState('open-edit');
