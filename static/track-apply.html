@@ -1821,19 +1821,35 @@
         loadingTarget.innerHTML = '<div class="min-h-screen flex items-center justify-center text-[14px] text-ink-soft">현재 기수 설정을 불러오는 중입니다...</div>';
       }
       (async () => {
+        // 🔧 cohort source-of-truth 우선순위 (2026-05-08):
+        //   1) /api/cohort-config (track-bot Flask, cohort_config_<env>.json)
+        //      ← 운영자 '기수·기간 설정' 모달이 직접 update 하는 파일.
+        //   2) /api-proxy/api/settings (dashboard backend, CURRENT_COHORT env)
+        //      ← legacy fallback. 운영자 모달은 이걸 안 건드림.
+        //   3) '9기' hardcoded fallback
+        // 이전엔 /api/settings 만 사용해서 모달 변경이 URL 에 반영 안 됨.
+        let resolved = '';
         try {
-          const response = await fetch(`${SETTINGS_API_BASE}/api/settings`, { credentials: 'include' });
-          const data = await response.json().catch(() => ({}));
-          const configured = String(data?.cohortName || '').trim();
-          const resolved = configured ? (configured.endsWith('기') ? configured : `${configured}기`) : '9기';
-          const nextParams = new URLSearchParams(window.location.search);
-          nextParams.set('cohortName', resolved);
-          window.location.replace(`${window.location.pathname}?${nextParams.toString()}${window.location.hash}`);
-        } catch (error) {
-          const fallbackParams = new URLSearchParams(window.location.search);
-          fallbackParams.set('cohortName', '9기');
-          window.location.replace(`${window.location.pathname}?${fallbackParams.toString()}${window.location.hash}`);
+          const cfgRes = await fetch('/api/cohort-config', { credentials: 'include' });
+          if (cfgRes.ok) {
+            const cfg = await cfgRes.json().catch(() => ({}));
+            const label = String(cfg?.cohortLabel || '').trim();
+            if (label) resolved = label.endsWith('기') ? label : `${label}기`;
+          }
+        } catch (e) { /* fallback 시도 */ }
+        if (!resolved) {
+          try {
+            const response = await fetch(`${SETTINGS_API_BASE}/api/settings`, { credentials: 'include' });
+            const data = await response.json().catch(() => ({}));
+            const configured = String(data?.cohortName || '').trim();
+            if (configured) resolved = configured.endsWith('기') ? configured : `${configured}기`;
+          } catch (e) { /* hardcoded fallback */ }
         }
+        if (!resolved) resolved = '9기';
+
+        const nextParams = new URLSearchParams(window.location.search);
+        nextParams.set('cohortName', resolved);
+        window.location.replace(`${window.location.pathname}?${nextParams.toString()}${window.location.hash}`);
       })();
       throw new Error('Reloading mockup with resolved cohortName');
     }
@@ -2027,9 +2043,34 @@
         headerTitle.textContent = STATES[activeKey].title;
       }
 
-      // 모달 저장 시: 새 설정 기준으로 viewer state 자동 재평가.
-      // (admin / group-preview view 는 그대로 — 운영자가 의도해서 머무는 화면)
+      // 모달 저장 시: URL 도 새 cohort/날짜로 갱신 + viewer state 자동 재평가.
       if (fromModalSave) {
+        // URL 의 cohortName/applicationStartDate/applicationEndDate/todayOverride 갱신.
+        // 새로고침해도 새 설정 유지되고, URL 공유 시 일관성 보장.
+        try {
+          const url = new URL(window.location.href);
+          if (COHORT_LABEL) url.searchParams.set('cohortName', COHORT_LABEL);
+          if (APPLICATION_START_DATE) url.searchParams.set('applicationStartDate', APPLICATION_START_DATE);
+          if (APPLICATION_END_DATE) url.searchParams.set('applicationEndDate', APPLICATION_END_DATE);
+          if (TODAY_OVERRIDE_DATE) {
+            url.searchParams.set('todayOverride', TODAY_OVERRIDE_DATE);
+          } else {
+            url.searchParams.delete('todayOverride');
+          }
+          history.replaceState(null, '', url.toString());
+          // mockupParams 도 동기화 — 후속 코드들이 이 객체 사용
+          mockupParams.set('cohortName', COHORT_LABEL || '');
+          mockupParams.set('applicationStartDate', APPLICATION_START_DATE || '');
+          mockupParams.set('applicationEndDate', APPLICATION_END_DATE || '');
+          if (TODAY_OVERRIDE_DATE) {
+            mockupParams.set('todayOverride', TODAY_OVERRIDE_DATE);
+          } else {
+            mockupParams.delete('todayOverride');
+          }
+        } catch (e) { /* URL API 실패해도 무시 */ }
+
+        // 새 설정 기준으로 viewer state 자동 재평가.
+        // (admin / group-preview view 는 그대로 — 운영자가 의도해서 머무는 화면)
         const viewerStates = new Set(['logout', 'upcoming', 'open-new', 'open-edit', 'closed']);
         if (!activeKey || viewerStates.has(activeKey)) {
           const target = _evaluateViewerStateFromConfig();
