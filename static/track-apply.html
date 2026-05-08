@@ -1507,14 +1507,9 @@
       </div>
     </div>
 
-    <!-- 테스트 프리뷰 배너 — 운영이 아닌 테스트 대상에만 반영 -->
-    <div class="bg-[#FEF3C7] border-b border-[#FCD34D]">
-      <div class="max-w-7xl mx-auto px-5 md:px-10 py-2.5 flex items-center justify-center gap-2 text-[12px]">
-        <span class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-warn text-white text-[10px] font-bold">!</span>
-        <span class="text-[#78350F] font-semibold">테스트 전용 프리뷰</span>
-        <span class="text-[#92400E]">— 운영 워크스페이스가 아니라 테스트 Notion / 테스트 Discord 대상으로만 반영됩니다.</span>
-      </div>
-    </div>
+    <!-- 🔧 '테스트 전용 프리뷰' 배너 제거 (2026-05-08) — 사용자 요청.
+         운영 모드 전환되면서 테스트/운영 배너 전반 정리. -->
+
 
     <!-- 페이지 헤더 -->
     <div class="max-w-7xl mx-auto px-5 md:px-10 pt-10 pb-6">
@@ -1609,10 +1604,7 @@
           <div class="admin-modal-title" id="gp-finish-modal-title">조 배정을 확정합니다</div>
           <div class="admin-modal-subtitle" id="gp-finish-summary">아래 작업이 자동으로 실행됩니다.</div>
         </div>
-        <div class="bg-[#FEF3C7] border-b border-[#FCD34D] px-6 py-2.5 flex items-start gap-2 text-[11.5px] leading-relaxed">
-          <span class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-warn text-white text-[10px] font-bold flex-shrink-0 mt-0.5">!</span>
-          <span class="text-[#78350F]"><strong>테스트 프리뷰:</strong> 아래 단계는 운영이 아니라 테스트 Notion / 테스트 Discord 기준으로만 반영됩니다.</span>
-        </div>
+        <!-- 🔧 '테스트 프리뷰' 모달 내 배너 제거 (2026-05-08) — 페이지 상단 배너와 함께 정리. -->
         <div class="admin-modal-body">
           <section class="mb-5">
             <div class="flex items-center gap-2 mb-2">
