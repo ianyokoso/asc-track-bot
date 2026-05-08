@@ -2360,14 +2360,21 @@
         `;
         requestAnimationFrame(() => {
           document.getElementById('btn-go-admin')?.addEventListener('click', () => {
-            if (IS_VIEWER_ADMIN) {
-              applyState('admin');
-            } else if (VIEWER_USER_ID) {
-              // 로그인은 됐는데 admin 이 아닌 경우 → 서버 라이브 체크 후 권한 없으면 안내
+            if (IS_VIEWER_ADMIN || VIEWER_USER_ID) {
               applyState('admin');
             } else {
-              // 미로그인 → Discord OAuth. 콜백 후 admin 인 경우 자동으로 admin 버튼 라벨 갱신.
-              window.location.href = LOGIN_URL;
+              // 미로그인 → Discord OAuth. next 에 ?state=admin 실어서
+              // 콜백 후 페이지 로드 시 REQUESTED_STATE='admin' 으로 인식 → 자동 진입.
+              // (직전 footgun: next=/apply 로 콜백 → upcoming 으로 다시 떨어져서
+              //  admin 버튼 한 번 더 눌러야 했음.)
+              try {
+                const u = new URL(LOGIN_URL, window.location.origin);
+                u.searchParams.set('next', '/apply?state=admin');
+                window.location.href = u.toString();
+              } catch (e) {
+                // URL 파싱 실패 시 fallback — 직접 조립.
+                window.location.href = `${APPLICATION_API_BASE}/api/auth/discord?next=${encodeURIComponent('/apply?state=admin')}`;
+              }
             }
           });
         });
