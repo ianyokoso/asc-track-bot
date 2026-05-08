@@ -2142,7 +2142,40 @@
       const target = Date.parse(APPLICATION_OPEN_AT);
       if (!Number.isFinite(target)) return;
       const diff = target - _getNowMsForCountdown();
+
+      const eyebrowEl = el.previousElementSibling; // <p class="text-eyebrow">Opens In</p>
+      const labelEl = document.getElementById('upcoming-window-label');
+      const loginBtn = document.getElementById('btn-login-upcoming');
+
+      if (diff <= 0) {
+        // 🎉 신청 시각 도달 — 카운트다운 → CTA 모드 전환.
+        //   60초 polling 이 view-logout/open-new 로 자동 전환할 때까지 (max 60s)
+        //   사용자가 '0일 00:00:00' 멈춤 화면 안 보이도록 즉시 안내 문구로 교체.
+        if (eyebrowEl && eyebrowEl.classList.contains('text-eyebrow')) {
+          eyebrowEl.textContent = 'NOW OPEN';
+        }
+        // 폰트 크기 살짝 줄이고 색상 강조 — 카운트다운 숫자보다 짧은 문구라 동일 size 면 어색.
+        el.classList.remove('text-[44px]', 'md:text-[56px]');
+        el.classList.add('text-[28px]', 'md:text-[34px]', 'text-navy');
+        el.textContent = '🎉 트랙 신청이 열렸습니다';
+        if (labelEl) {
+          labelEl.textContent = '지금 Discord 로그인 후 트랙을 선택하세요';
+        }
+        if (loginBtn) {
+          // 로그인 버튼을 좀 더 두드러지게 — primary navy 톤 유지하되 size up.
+          loginBtn.classList.add('h-12', 'px-6', 'text-[14px]', 'font-semibold');
+        }
+        return;
+      }
+
+      // 정상 카운트다운 ticking — 'Opens In' 라벨 / 폰트 사이즈 원복.
+      if (eyebrowEl && eyebrowEl.classList.contains('text-eyebrow') && eyebrowEl.textContent !== 'Opens In') {
+        eyebrowEl.textContent = 'Opens In';
+      }
+      el.classList.remove('text-[28px]', 'md:text-[34px]', 'text-navy');
+      el.classList.add('text-[44px]', 'md:text-[56px]');
       el.textContent = _formatCountdown(diff);
+      // labelEl 은 applyWindowLabels() 가 KST 윈도우 라벨로 갱신하므로 여기서 손대지 않음.
     }
 
     function updateTodayProgress() {
