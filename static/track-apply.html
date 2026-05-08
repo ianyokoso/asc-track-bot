@@ -2610,6 +2610,12 @@
       // upcoming 진입 시 카운트다운 즉시 1회 갱신 — 매 1초 interval 첫 tick 까지 기다리지 않고.
       if (stateKey === 'upcoming' && typeof updateUpcomingCountdown === 'function') {
         updateUpcomingCountdown();
+        // 🔧 로그인된 사용자에게는 'Discord 로그인' 버튼 숨김 (misleading) — 카운트다운만 노출.
+        //    미로그인 사용자에게는 버튼 보여서 로그인 시 대비 시킴.
+        const upcomingLoginBtn = document.getElementById('btn-login-upcoming');
+        if (upcomingLoginBtn) {
+          upcomingLoginBtn.style.display = VIEWER_USER_ID ? 'none' : '';
+        }
       }
 
       // 🔄 admin / group-preview 진입 시 항상 최신 데이터로 자동 새로고침.
@@ -3716,8 +3722,40 @@
 
     /** 마감 뷰 렌더. lastSubmittedData 가 있으면 내용, 없으면 미제출 안내. */
     function renderClosedSummary() {
+      const closedView = document.getElementById('view-closed');
       const container = document.getElementById('closed-summary');
       if (!container) return;
+
+      // 🔧 미로그인 모바일 사용자 처리 (2026-05-08).
+      //   직전 동작: viewer info 박스에 placeholder ('시연유저' / '@시연유저') 가 그대로 노출.
+      //              + '최종 제출' 섹션에 '제출 없음' 만 노출 → 사용자가 본인 신청을
+      //              확인할 방법이 없음.
+      //   변경: 미로그인이면 viewer 박스 숨기고 '로그인 후 본인 신청 확인' CTA 노출.
+      const viewerBannerEl = closedView?.querySelector('.viewer-banner-display')?.closest('.flex.items-center');
+      const finalSubmitEyebrow = closedView?.querySelector('p.text-eyebrow');
+      const isLoggedIn = !!VIEWER_USER_ID;
+
+      if (viewerBannerEl) viewerBannerEl.style.display = isLoggedIn ? '' : 'none';
+      if (finalSubmitEyebrow && finalSubmitEyebrow.textContent.trim() === '최종 제출') {
+        finalSubmitEyebrow.style.display = isLoggedIn ? '' : 'none';
+      }
+
+      if (!isLoggedIn) {
+        container.innerHTML = `
+          <div class="py-10 text-center">
+            <div class="text-[14px] font-semibold text-ink mb-2">신청이 마감되었습니다</div>
+            <div class="text-[13px] text-ink-muted mb-6">본인 신청 내역을 확인하려면 Discord 로그인하세요.</div>
+            <button type="button" id="btn-login-closed" class="btn-discord inline-flex items-center justify-center gap-2 h-10 px-5 text-[13px]">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0a12.64 12.64 0 0 0-.617-1.25a.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057a19.9 19.9 0 0 0 5.993 3.03a.078.078 0 0 0 .084-.028a14.09 14.09 0 0 0 1.226-1.994a.076.076 0 0 0-.041-.106a13.107 13.107 0 0 1-1.872-.892a.077.077 0 0 1-.008-.128a10.2 10.2 0 0 0 .372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127a12.299 12.299 0 0 1-1.873.892a.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028a19.839 19.839 0 0 0 6.002-3.03a.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03ZM8.02 15.33c-1.182 0-2.157-1.085-2.157-2.419c0-1.333.956-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.956 2.418-2.157 2.418Zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.946 2.418-2.157 2.418Z"/></svg>
+              Discord로 로그인
+            </button>
+          </div>`;
+        document.getElementById('btn-login-closed')?.addEventListener('click', () => {
+          if (typeof _goToDiscordLogin === 'function') _goToDiscordLogin();
+        });
+        return;
+      }
+
       if (!lastSubmittedData) {
         container.innerHTML = `
           <div class="py-8 text-center">
