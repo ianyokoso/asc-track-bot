@@ -1347,7 +1347,17 @@ def _resolve_track_application_db_fields(db_obj):
             'checkbox',
             ['[선택] 라이트 트랙 (* 재참여자 Only) (빌더 트랙)'],
         ),
-        'leader_apply': _pick_db_property(properties, 'select', ['조장 지원 여부', 'Leader Apply']),
+        # leader_apply 는 select 또는 multi_select 둘 다 지원.
+        # 운영 정책상 한 멤버가 여러 트랙 조장을 동시 지원할 수 있으면 multi_select 권장.
+        # _build_track_application_notion_properties 에서 leader_apply_type 으로 분기.
+        'leader_apply': (
+            _pick_db_property(properties, 'multi_select', ['조장 지원 여부', 'Leader Apply'])
+            or _pick_db_property(properties, 'select', ['조장 지원 여부', 'Leader Apply'])
+        ),
+        'leader_apply_type': (
+            'multi_select' if _pick_db_property(properties, 'multi_select', ['조장 지원 여부', 'Leader Apply'])
+            else ('select' if _pick_db_property(properties, 'select', ['조장 지원 여부', 'Leader Apply']) else None)
+        ),
         'notes': _pick_db_property(properties, 'rich_text', ['기타', 'Notes']),
         'processed': _pick_db_property(properties, 'checkbox', ['봇 처리 완료', 'Processed']),
         'handled': _pick_db_property(properties, 'checkbox', ['조치 여부', 'Handled']),
@@ -1558,11 +1568,24 @@ def _build_track_application_notion_properties(
         }
     if fields.get('leader_apply'):
         leader_labels = list(submission['leaderLabels'])
-        if leader_labels:
-            leader_value = f'[{leader_labels[0]}] 조장에 지원하겠습니다.'
+        leader_apply_type = fields.get('leader_apply_type') or 'select'
+        if leader_apply_type == 'multi_select':
+            # 다중 조장 지원: 모든 라벨을 multi_select 옵션으로 한 번에 set
+            if leader_labels:
+                options = [
+                    {"name": f'[{label}] 조장에 지원하겠습니다.'}
+                    for label in leader_labels
+                ]
+            else:
+                options = [{"name": '지원에 희망하지 않습니다.'}]
+            properties[fields['leader_apply']] = {"multi_select": options}
         else:
-            leader_value = '지원에 희망하지 않습니다.'
-        properties[fields['leader_apply']] = {"select": {"name": leader_value}}
+            # 단일 select: 기존 동작 유지 (첫 번째 라벨만, 나머지는 notes 백업)
+            if leader_labels:
+                leader_value = f'[{leader_labels[0]}] 조장에 지원하겠습니다.'
+            else:
+                leader_value = '지원에 희망하지 않습니다.'
+            properties[fields['leader_apply']] = {"select": {"name": leader_value}}
     if fields.get('notes'):
         note_parts = []
         raw_notes = str(record.get('notes') or '').strip()
@@ -1570,7 +1593,12 @@ def _build_track_application_notion_properties(
             note_parts.append(raw_notes)
         if submission.get('creatorSub'):
             note_parts.append(f"크리에이터 세부 선택: {submission['creatorSub']}")
-        if len(submission['leaderLabels']) > 1:
+        # multi_select 일 땐 모든 라벨이 select 자체에 들어가니 notes 백업 불필요.
+        # select 단일일 때만 다중 조장을 notes 에 백업 (기존 동작).
+        if (
+            len(submission['leaderLabels']) > 1
+            and (fields.get('leader_apply_type') or 'select') == 'select'
+        ):
             note_parts.append(f"조장 지원 트랙: {', '.join(submission['leaderLabels'])}")
         if note_parts:
             properties[fields['notes']] = {
