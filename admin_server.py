@@ -734,18 +734,14 @@ def _write_cohort_config(data):
 
 @app.route('/api/cohort-config', methods=['GET'])
 def get_cohort_config_route():
-    cfg = _read_cohort_config()
-    # 🔧 todayOverride 격리 (2026-05-08).
-    #   직전 footgun: admin 이 모달에서 TODAY 오버라이드 설정 후 그대로 두면
-    #   cohort_config.json 에 박혀서 모바일 일반 사용자에게도 적용됨.
-    #   결과: 카운트다운(real time)은 '신청 시작' CTA 떠있는데 클라이언트 state eval
-    #   (override 기준)은 'upcoming' 으로 평가 → 로그인 후 다시 메인페이지로 떨어짐.
-    #   변경: GET 응답에서 todayOverride 는 admin 세션에만 노출. 일반 사용자는 None.
-    #   (서버 _check_track_application_window 도 별도 fix — 하단 참고.)
-    if not _is_admin_session():
-        cfg = dict(cfg or {})
-        cfg['todayOverride'] = None
-    return jsonify(cfg), 200
+    # 🔧 todayOverride 는 모든 사용자에게 노출 (2026-05-08 revert).
+    #   직전 (commit fb5f657) 에서 admin 전용으로 마스킹했는데, 이는 admin 의 demo 의도
+    #   (예: TODAY=2026-05-23 으로 closed 미리보기) 를 모바일 사용자에게는 보여주지
+    #   못하게 함. 사용자 피드백: '모바일 시크릿 페이지로 다시 로그인하니 아직 TODAY가
+    #   5월 8일로 되어있음'.
+    #   직전 footgun (CTA mode 본 후 로그인 → 다시 upcoming) 은 클라이언트 realPastOpen
+    #   가드 (track-apply.html _evaluateViewerStateFromConfig) 가 이미 처리함.
+    return jsonify(_read_cohort_config()), 200
 
 
 def _prune_multi_select_options(notion_api, db_id, prop_name, canonical_names):
