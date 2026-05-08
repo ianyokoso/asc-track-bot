@@ -3751,6 +3751,11 @@
       }
 
       if (!isLoggedIn) {
+        // 🔧 직전 footgun: container 가 'pointer-events-none' 클래스 (read-only 보호용)
+        //   라 안의 로그인 버튼 클릭 불가능 → '버튼이 먹통' 사용자 피드백.
+        //   미로그인 CTA 노출 동안만 임시로 pointer-events 활성화. 로그인 후 (제출 rows 노출)
+        //   에는 다시 비활성 (else 분기에서 자동 복원).
+        container.classList.remove('pointer-events-none');
         container.innerHTML = `
           <div class="py-10 text-center">
             <div class="text-[14px] font-semibold text-ink mb-2">신청이 마감되었습니다</div>
@@ -3765,6 +3770,8 @@
         });
         return;
       }
+      // 로그인 + 제출 rows 노출 분기에서는 pointer-events-none 다시 적용 (편집 차단 의도).
+      container.classList.add('pointer-events-none');
 
       if (!lastSubmittedData) {
         container.innerHTML = `
