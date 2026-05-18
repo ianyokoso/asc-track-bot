@@ -4082,7 +4082,8 @@ def reset_track_applications_mockup():
          (admin 편집 모달로 추가/수정한 mockup 멤버)
 
     ⚠️ Discord 채널·역할 / Notion 페이지는 이 endpoint 가 건드리지 않습니다.
-       그쪽 정리는 디스코드 테스트 길드에서 `!테스트초기화` 봇 명령으로 별도 실행.
+       이전 기수 트랙 채널 정리는 디스코드에서 `!채널삭제 <기수>` 봇 명령으로 별도 실행
+       (공지·카테고리·역할은 보존됨).
     """
     if not _is_admin_session():
         return jsonify({
@@ -4114,7 +4115,7 @@ def reset_track_applications_mockup():
             "clearedMembers": total,
             "clearedRealApplications": cleared_real_applications,
             "clearedMockMembers": cleared_mock_members,
-            "note": "Discord 채널/역할 + Notion 트랙 페이지는 디스코드에서 `!테스트초기화` 명령으로 별도 정리하세요.",
+            "note": "이전 기수 트랙 채널은 디스코드에서 `!채널삭제 <기수>` 명령으로 별도 정리하세요 (공지·카테고리·역할 보존).",
         })
     except Exception as e:
         print(f"[ERROR] reset-track-applications failed: {e}")

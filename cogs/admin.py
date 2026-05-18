@@ -11,7 +11,7 @@ from typing import Optional, Dict, Any, List, Tuple
 
 import notion_api
 from config import CONFIG, CONFIG_FILE, load_bot_config, merge_discord_runtime_resources, update_bot_config
-from env_utils import resolve_active_guild, is_prod_guild_blacklisted
+from env_utils import resolve_active_guild
 
 # 트랙명 → Discord 역할 접두사 매핑 (dropout_handler.py와 동일)
 _TRACK_DISCORD_PREFIX = {
@@ -1202,57 +1202,141 @@ class AdminCog(commands.Cog):
 
         return summary
 
-    @commands.command(name='테스트초기화', aliases=['cleanup_test'])
+    @commands.command(name='채널삭제', aliases=['cleanup_cohort_channels'])
     @commands.has_permissions(administrator=True)
-    async def cleanup_test_server(self, ctx):
+    async def cleanup_cohort_channels(self, ctx, cohort: Optional[str] = None):
         """
-        [테스트 전용] 봇이 test 서버에 만든 트랙 카테고리/채널/역할 모두 삭제.
+        지난 기수의 트랙 채널 + 트랙 역할 삭제. 공지 채널은 보존.
 
-        3중 안전장치:
-          1) ASC_ENV=test 모드에서만 동작
-          2) 명령 실행 길드가 TEST_DISCORD_GUILD_ID 와 일치해야 함
-          3) 사용자가 30초 안에 '확인' 메시지를 보내야 진행
+        사용법: `!채널삭제 8`  → 8기 트랙 채널·역할 정리
 
         삭제 대상:
-          - 이름이 '====='로 시작하고 '====='로 끝나는 카테고리 + 그 안의 모든 채널
-          - 트랙 short name 으로 시작하는 역할 (예: '세일즈-실전-9기-조장')
+          [채널] 모두 만족
+            1) 부모 카테고리가 `=====...=====` 트랙 카테고리
+            2) 이름이 `{트랙 prefix}-{기수}기-...` 형식
+            3) 이름이 `-공지` 로 끝나지 않음
+          [역할] 모두 만족
+            1) 이름이 `{트랙 prefix}-{기수}기-...` 형식 또는 `{트랙 prefix}-{기수}기`
+            2) 봇/통합 관리 역할 아님 (`role.managed=False`)
+            3) `@everyone` 아님
+
+        보존 대상:
+          - 트랙 카테고리 자체 (다음 기수가 같은 카테고리 누적)
+          - `-공지` 채널 (역사 보존)
+          - 카테고리 밖 채널 (자유게시판, 전체-공지 등)
+          - 다른 기수의 트랙 역할 / 시스템·봇 역할 / @everyone
+
+        안전장치:
+          - 관리자 권한 필요
+          - 삭제 대상 (채널 + 역할) 미리 표시 → 30초 내 `확인` 입력 시에만 진행
         """
-        env_name = (os.getenv('ASC_ENV') or os.getenv('RUN_MODE') or '').strip().lower()
-        if env_name != 'test':
-            await ctx.reply("❌ test 모드에서만 실행 가능합니다. (`ASC_ENV=test`)")
+        if not ctx.guild:
+            await ctx.reply("❌ 길드 채널에서만 실행 가능합니다.")
             return
 
-        test_guild_raw = (os.getenv('TEST_DISCORD_GUILD_ID') or '').strip()
-        if not test_guild_raw:
-            await ctx.reply("❌ `TEST_DISCORD_GUILD_ID` 환경변수가 설정되지 않았습니다.")
-            return
-        try:
-            test_guild_id = int(test_guild_raw)
-        except ValueError:
-            await ctx.reply(f"❌ `TEST_DISCORD_GUILD_ID` 값이 숫자가 아닙니다: `{test_guild_raw}`")
-            return
-
-        if ctx.guild is None or ctx.guild.id != test_guild_id:
+        raw_cohort = (cohort or '').strip().replace('기', '')
+        if not raw_cohort.isdigit():
             await ctx.reply(
-                f"❌ 이 서버({ctx.guild.id if ctx.guild else 'DM'}) 는 "
-                f"TEST_DISCORD_GUILD_ID(`{test_guild_id}`) 와 일치하지 않습니다. 안전을 위해 거부합니다."
+                "❌ 기수를 숫자로 지정해주세요. 예: `!채널삭제 8` (8기 트랙 채널·역할 삭제)"
+            )
+            return
+        cohort_num = raw_cohort  # 문자열로 유지 — `-{cohort}기-` 매칭에 그대로 사용
+
+        # 현재 매핑된 트랙 prefix + 과거 사용된 레거시 prefix
+        _LEGACY_TRACK_PREFIXES = [
+            "나-다움",          # 옛 이름 (현재: 나탐구)
+            "빌더-라이트",
+            "크리에이터-라이트",
+            "AI에이전트",       # 'AI에이전트-실전' 의 짧은 변형
+        ]
+        track_short_prefixes = sorted(
+            set(list(_TRACK_DISCORD_PREFIX.values()) + _LEGACY_TRACK_PREFIXES),
+            key=len,
+            reverse=True,
+        )
+
+        cohort_marker = f"-{cohort_num}기"
+
+        def _is_track_category(category: Optional[discord.CategoryChannel]) -> bool:
+            if not category or not category.name:
+                return False
+            return category.name.startswith('=====') and category.name.endswith('=====')
+
+        def _name_matches_cohort_track(name: str) -> bool:
+            """이름이 `{prefix}-{cohort}기` 또는 `{prefix}-{cohort}기-...` 인지."""
+            if not name:
+                return False
+            for prefix in track_short_prefixes:
+                head = f"{prefix}{cohort_marker}"
+                if name == head or name.startswith(f"{head}-"):
+                    return True
+            return False
+
+        def _is_cohort_track_channel(channel: discord.abc.GuildChannel) -> bool:
+            """채널 삭제 후보:
+              - 부모가 `=====...=====` 트랙 카테고리
+              - 이름이 `{prefix}-{cohort}기` 패턴
+              - `-공지` 로 끝나지 않음
+            """
+            if isinstance(channel, discord.CategoryChannel):
+                return False
+            if not _is_track_category(getattr(channel, 'category', None)):
+                return False
+            name = channel.name or ''
+            if name.endswith('-공지'):
+                return False
+            return _name_matches_cohort_track(name)
+
+        def _is_cohort_track_role(role: discord.Role) -> bool:
+            """역할 삭제 후보:
+              - 시스템/봇 통합 역할 / @everyone 아님
+              - 이름이 `{prefix}-{cohort}기` 패턴
+            """
+            if role.managed or role.is_default():
+                return False
+            return _name_matches_cohort_track(role.name or '')
+
+        guild = ctx.guild
+        channel_candidates: List[discord.abc.GuildChannel] = [
+            ch for ch in guild.channels if _is_cohort_track_channel(ch)
+        ]
+        role_candidates: List[discord.Role] = [
+            r for r in guild.roles if _is_cohort_track_role(r)
+        ]
+
+        if not channel_candidates and not role_candidates:
+            await ctx.reply(
+                f"ℹ️ {cohort_num}기 트랙 채널·역할 중 삭제 대상이 없습니다. "
+                f"(공지 채널 제외, `=====...=====` 카테고리 내 `{{prefix}}-{cohort_num}기-...` 채널 + "
+                f"`{{prefix}}-{cohort_num}기-...` 역할 기준)"
             )
             return
 
-        # 🛑 절대 가드: 길드 ID 가 prod 블랙리스트면 무조건 거부
-        if is_prod_guild_blacklisted(ctx.guild.id):
-            await ctx.reply(
-                f"⛔ **거부됨** — 길드 `{ctx.guild.id}` 는 PROD 블랙리스트입니다. "
-                "이 명령은 prod 서버에서 절대 실행될 수 없습니다."
-            )
-            return
+        preview_lines = []
+        if channel_candidates:
+            preview_lines.append(f"**채널 ({len(channel_candidates)}개)**")
+            for ch in channel_candidates[:15]:
+                kind = '음성' if isinstance(ch, discord.VoiceChannel) else '텍스트'
+                cat_name = ch.category.name if ch.category else '(없음)'
+                preview_lines.append(f"  • [{kind}] `{ch.name}` — `{cat_name}`")
+            ch_more = len(channel_candidates) - min(15, len(channel_candidates))
+            if ch_more > 0:
+                preview_lines.append(f"  … 외 {ch_more}개")
+        if role_candidates:
+            preview_lines.append(f"**역할 ({len(role_candidates)}개)**")
+            for r in role_candidates[:15]:
+                preview_lines.append(f"  • `{r.name}` (멤버 {len(r.members)}명)")
+            r_more = len(role_candidates) - min(15, len(role_candidates))
+            if r_more > 0:
+                preview_lines.append(f"  … 외 {r_more}개")
 
         await ctx.reply(
-            "⚠️ **테스트 서버 초기화** — 다음을 영구 삭제합니다:\n"
-            "• 이름이 `=====...=====` 인 카테고리\n"
-            "• 그 카테고리 안의 모든 채널\n"
-            "• 트랙 관련 역할 (예: `세일즈-실전-9기-조장`, `빌더-기초-9기-1조`)\n\n"
-            "**30초 안에 `확인`** 이라고 답글 주시면 진행, 아니면 취소됩니다."
+            f"⚠️ **{cohort_num}기 트랙 정리** — 채널 **{len(channel_candidates)}개** + "
+            f"역할 **{len(role_candidates)}개** 삭제 예정\n"
+            f"공지(`-공지`) 채널 · 트랙 카테고리(`=====...=====`) · 카테고리 밖 채널 · "
+            f"시스템 역할은 보존됩니다.\n\n"
+            + "\n".join(preview_lines)
+            + f"\n\n**30초 안에 `확인`** 이라고 답글 주시면 진행, 아니면 취소됩니다."
         )
 
         def _confirm_check(m):
@@ -1265,90 +1349,50 @@ class AdminCog(commands.Cog):
         try:
             await self.bot.wait_for('message', check=_confirm_check, timeout=30.0)
         except asyncio.TimeoutError:
-            await ctx.reply("❌ 30초 초과. 초기화 취소됨.")
+            await ctx.reply("❌ 30초 초과. 삭제 취소됨.")
             return
 
-        status = await ctx.reply("🗑️ 초기화 진행 중...")
+        status = await ctx.reply(f"🗑️ {cohort_num}기 트랙 채널·역할 삭제 진행 중...")
 
-        guild = ctx.guild
         deleted_channels = 0
-        deleted_categories = 0
         deleted_roles = 0
         errors = 0
+        reason = f"{cohort_num}기 트랙 정리 (공지·카테고리 보존)"
 
-        # 현재 매핑된 트랙 prefix + 과거 사용된 레거시 prefix 까지 모두 포함
-        _LEGACY_TRACK_PREFIXES = [
-            "나-다움",          # 옛 이름 (현재: 나탐구)
-            "빌더-라이트",      # 라이트 트랙 (현재: 부모 트랙 카테고리에 통합)
-            "크리에이터-라이트",
-            "AI에이전트",       # 'AI에이전트-실전' 의 짧은 변형
-        ]
-        track_short_prefixes = sorted(
-            set(list(_TRACK_DISCORD_PREFIX.values()) + _LEGACY_TRACK_PREFIXES),
-            key=len,
-            reverse=True,
-        )
-
-        def _matches_track_resource(name: str) -> bool:
-            """트랙 카테고리/채널/역할 이름인지 판별.
-            매칭:
-              - `=====...=====` 형식 (신 명명 규칙)
-              - `{track_short}-...` 형식 (구 per-기수 명명 규칙: '세일즈-실전-9기-공지' 등)
-              - `{track_short}` 단독 (정확히 일치)
-              - 레거시 prefix (`나-다움-`, `빌더-라이트-`, `크리에이터-라이트-`, `AI에이전트-`)
-            """
-            if not name:
-                return False
-            if name.startswith('=====') and name.endswith('====='):
-                return True
-            for prefix in track_short_prefixes:
-                if name == prefix or name.startswith(f"{prefix}-"):
-                    return True
-            return False
-
-        # 1) 매칭되는 모든 채널 (텍스트/보이스/스레드 부모 등) 삭제 — 카테고리는 제외하고 먼저
-        for channel in list(guild.channels):
-            if isinstance(channel, discord.CategoryChannel):
+        # 1) 채널 삭제 — 직전 재검사 (동시 변경 방어)
+        for channel in channel_candidates:
+            if not _is_cohort_track_channel(channel):
+                logger.warning(
+                    f"[Cleanup] 채널 {channel.name} 재검사 실패 — 카테고리/이름 변경 감지, skip"
+                )
                 continue
-            # 채널 이름 자체가 매칭되거나, 매칭되는 카테고리 안에 있으면 삭제
-            in_track_category = bool(channel.category and _matches_track_resource(channel.category.name))
-            if _matches_track_resource(channel.name) or in_track_category:
-                try:
-                    await channel.delete(reason='테스트 서버 초기화')
-                    deleted_channels += 1
-                except Exception as e:
-                    logger.warning(f"[Cleanup] 채널 삭제 실패 {channel.name}: {e}")
-                    errors += 1
+            try:
+                await channel.delete(reason=reason)
+                deleted_channels += 1
+            except Exception as e:
+                logger.warning(f"[Cleanup] 채널 삭제 실패 {channel.name}: {e}")
+                errors += 1
 
-        # 2) 카테고리 삭제 (안의 채널이 다 빠진 후)
-        for category in list(guild.categories):
-            if _matches_track_resource(category.name):
-                try:
-                    await category.delete(reason='테스트 서버 초기화')
-                    deleted_categories += 1
-                except Exception as e:
-                    logger.warning(f"[Cleanup] 카테고리 삭제 실패 {category.name}: {e}")
-                    errors += 1
-
-        # 3) 트랙 관련 역할 삭제
-        for role in list(guild.roles):
-            # 시스템 역할 / 봇 자동 생성 역할 / @everyone 보호
-            if role.managed or role.is_default():
+        # 2) 역할 삭제 — 직전 재검사
+        for role in role_candidates:
+            if not _is_cohort_track_role(role):
+                logger.warning(
+                    f"[Cleanup] 역할 {role.name} 재검사 실패 — 이름 변경/managed 전환, skip"
+                )
                 continue
-            if _matches_track_resource(role.name):
-                try:
-                    await role.delete(reason='테스트 서버 초기화')
-                    deleted_roles += 1
-                except Exception as e:
-                    logger.warning(f"[Cleanup] 역할 삭제 실패 {role.name}: {e}")
-                    errors += 1
+            try:
+                await role.delete(reason=reason)
+                deleted_roles += 1
+            except Exception as e:
+                logger.warning(f"[Cleanup] 역할 삭제 실패 {role.name}: {e}")
+                errors += 1
 
         await status.edit(content=(
-            f"✅ 테스트 서버 초기화 완료\n"
-            f"• 카테고리 삭제: **{deleted_categories}**\n"
-            f"• 채널 삭제: **{deleted_channels}**\n"
-            f"• 역할 삭제: **{deleted_roles}**\n"
-            f"• 실패: {errors}"
+            f"✅ {cohort_num}기 트랙 정리 완료\n"
+            f"• 채널 삭제: **{deleted_channels}**개\n"
+            f"• 역할 삭제: **{deleted_roles}**개\n"
+            f"• 실패: {errors}개\n"
+            f"• 보존: 공지 채널 / 카테고리 / 카테고리 밖 채널 / 시스템·다른 기수 역할"
         ))
 
 

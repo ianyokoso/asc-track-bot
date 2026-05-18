@@ -5,7 +5,7 @@ Responsibilities:
   - Listen for IPC commands from admin_server.py (track-apply Flask backend)
   - Create Discord categories / channels / roles per track / group
   - Manage light track member access to parent track channels
-  - Provide cleanup commands (e.g., !테스트초기화) for the test guild
+  - Provide cleanup commands (e.g., !채널삭제 <cohort>) — deletes a cohort's track channels, preserving 공지 channels / categories / roles
 
 Loads only cogs.ipc + cogs.admin so no scheduler / announcement / notion_sync
 background tasks ever run inside this process.
