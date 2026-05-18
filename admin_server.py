@@ -1271,13 +1271,17 @@ def _build_track_application_member_list(cohort_label):
 
 
 TRACK_APPLICATION_WEEKDAY_TRACK_MAP = {
+    # 9기 개편 (2026-05-18): self_inquiry 월→수 이동, ai_agent 수→화 이동.
+    # 노션 트랙신청 DB 의 요일별 select property 에 어떤 요일 슬롯으로 값 넣을지 결정.
     'sales_real': ('monday', '세일즈 실전 트랙'),
-    'self_inquiry': ('monday', '나 탐구 트랙'),
+    'ai_agent': ('tuesday', 'AI 에이전트 트랙'),
+    'self_inquiry': ('wednesday', '나 탐구 트랙'),
+    'creator': ('wednesday', '크리에이터 트랙'),
+    'app_dev': ('thursday', '앱 개발 트랙'),
+    # 빌더 정규 (advanced/basic) — 9기 폼에선 선택 불가. legacy 데이터 (이전 기수 신청자) 호환을
+    # 위해 매핑은 유지 (화요일 슬롯). 7월 재오픈 시 그대로 재활용 가능.
     'builder_advanced': ('tuesday', '빌더 심화 트랙'),
     'builder_basic': ('tuesday', '빌더 기초 트랙'),
-    'creator': ('wednesday', '크리에이터 트랙'),
-    'ai_agent': ('wednesday', 'AI 에이전트 트랙'),
-    'app_dev': ('thursday', '앱 개발 트랙'),
 }
 
 TRACK_APPLICATION_LIGHT_TRACK_MAP = {
@@ -1388,6 +1392,10 @@ def _resolve_track_application_db_fields(db_obj):
     properties = (db_obj or {}).get('properties', {})
     return {
         'title': _pick_db_property(properties, 'title', ['이름', 'Name']),
+        # `사용자 ID` — Discord snowflake (numeric). 디스코드 ID(핸들) 와 별개의 unique
+        # identifier. 핸들은 사용자가 바꿀 수 있지만 snowflake 는 영구. 매칭/조회 시
+        # 더 신뢰할 수 있는 키 (특히 master DB 미등록 신청자도 보존됨).
+        'user_id': _pick_db_property(properties, 'rich_text', ['사용자 ID', 'User ID']),
         'discord_id': _pick_db_property(properties, 'rich_text', ['디스코드 ID', 'Discord ID', 'Handle']),
         'discord_nickname': _pick_db_property(properties, 'rich_text', ['디스코드 닉네임', 'Discord Nickname', 'Display Name']),
         'cohort': _pick_db_property(properties, 'rich_text', ['기수', 'Cohort']),
@@ -1580,6 +1588,16 @@ def _build_track_application_notion_properties(
         properties[fields['title']] = {
             "title": [{"text": {"content": str(record.get('name') or record.get('userId') or 'unknown')[:2000]}}]
         }
+    if fields.get('user_id'):
+        # Discord snowflake (numeric) — 신청자 본인의 영구 unique identifier.
+        # 코드는 record['userId'] 에 OAuth 세션의 discord_user.get('id') 를 그대로 담는다
+        # (_build_track_application_record / _build_admin_track_application_record).
+        user_id_text = str(record.get('userId') or record.get('id') or '').strip()
+        properties[fields['user_id']] = (
+            {"rich_text": [{"text": {"content": user_id_text[:2000]}}]}
+            if user_id_text
+            else {"rich_text": []}
+        )
     if fields.get('discord_id'):
         discord_handle = str(record.get('handle') or '').strip()
         properties[fields['discord_id']] = (
