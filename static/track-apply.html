@@ -240,6 +240,43 @@
       color: #141E3C;
     }
 
+    /* ── 빌더 트랙 리뉴얼 안내 섹션 (정규/라이트 사이) ─────────────
+       라디오 없음, 정보 전달용. 라이트 트랙으로 자연 유도. */
+    .builder-renewal-section { /* layout 만 */ }
+    .builder-renewal-card {
+      background: #F4F6F8;
+      border-radius: 12px;
+      padding: 28px 24px;
+      text-align: center;
+    }
+    .builder-renewal-badge {
+      display: inline-block;
+      background: #EEF0F6;
+      color: #1E2A4A;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 999px;
+      letter-spacing: 0;
+      margin-bottom: 14px;
+    }
+    .builder-renewal-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #141E3C;
+      letter-spacing: -0.01em;
+      margin-bottom: 12px;
+    }
+    .builder-renewal-desc {
+      font-size: 13.5px;
+      color: #4B5563;
+      line-height: 1.7;
+      margin: 0;
+      max-width: 540px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
     /* ── 트랙 옵션 헤더: 라디오 + 라벨 한 줄 ───── */
     .track-option-header {
       display: flex;
@@ -1205,7 +1242,7 @@
         <p class="track-category-desc">
           요일별로 하나씩, <strong class="text-ink">최대 2개 트랙</strong>까지 골라 신청합니다.
           <br class="hidden md:block">
-          여태껏 3개 이상 신청해서 완주한 분이 없어서 2개로 제한했어요. 꼭 3개 이상 들으셔야 한다면 커뮤니티 매니저에게 문의해주세요.
+          4주 동안 깊게 몰입할 수 있도록 2개로 제한해두었어요. 3개 이상 들으셔야 한다면 커뮤니티 매니저에게 먼저 문의해주세요.
         </p>
       </div>
 
@@ -1288,16 +1325,6 @@
 </tbody></table></div></details>
 <!-- /NOTION_SCHEDULE:ai_agent -->
                 </div>
-              </div>
-              <!-- 빌더 정규 트랙 placeholder — 라디오 없음, 신청 불가. 7월 개편 오픈 예정. -->
-              <div class="track-placeholder">
-                <div class="track-placeholder-header">
-                  <span class="track-placeholder-badge">개편중 · 2026년 7월 오픈 예정</span>
-                  <span class="track-placeholder-title">빌더 실전 트랙</span>
-                </div>
-                <p class="track-placeholder-desc">
-                  더 깊은 빌더 커리큘럼으로 다듬는 중이에요. 지금은 <a href="#light-tracks-block" class="track-placeholder-link">빌더 라이트 ↓</a> 로 빌딩 워밍업을 시작해보세요.
-                </p>
               </div>
             </div>
           </div>
@@ -1494,6 +1521,21 @@
         <p class="leader-options-hint">
           ※ 위 정규 트랙을 선택해야 해당 트랙의 조장 지원이 활성화됩니다. 선택하지 않은 트랙은 회색 처리됩니다.
         </p>
+      </section>
+
+      <!-- ═════════════════ 빌더 트랙 리뉴얼 안내 ═════════════════
+           정규 트랙과 라이트 트랙 사이. 라디오 없음, 신청 불가.
+           라이트 트랙 (바로 아래) 으로 자연 유도. -->
+      <section class="builder-renewal-section mb-10">
+        <div class="builder-renewal-card">
+          <span class="builder-renewal-badge">리뉴얼 중</span>
+          <h2 class="builder-renewal-title">빌더 트랙</h2>
+          <p class="builder-renewal-desc">
+            <strong class="text-ink">빌더 기초·실전 트랙</strong>은 더 좋은 모습으로 찾아뵙기 위해 리뉴얼 중이에요.
+            <br class="hidden md:block">
+            지금은 아래 <strong class="text-ink">빌더 라이트</strong> 로 빌딩 워밍업을 시작해보세요.
+          </p>
+        </div>
       </section>
 
       <!-- 카테고리 구분선 -->
@@ -3106,11 +3148,10 @@
       return WEEKDAY_NAMES.filter(d => document.querySelector(`input[type="radio"][name="${d}"]:checked`));
     }
     function showMaxTrackAlert() {
-      // 운영자가 3개 이상 들으려고 하면 커뮤니티 매니저 문의 안내.
       alert(
         '정규 트랙은 최대 2개까지 선택 가능합니다.\n\n' +
-        '여태까지 3개 이상 신청해서 완주한 분이 없어서 2개로 제한했어요.\n' +
-        '꼭 3개 이상 들으셔야 한다면 커뮤니티 매니저에게 먼저 문의해주세요.'
+        '4주 동안 깊게 몰입할 수 있도록 2개로 제한해두었어요.\n' +
+        '3개 이상 들으셔야 한다면 커뮤니티 매니저에게 먼저 문의해주세요.'
       );
     }
 
@@ -5305,11 +5346,11 @@
         ],
       },
       {
-        id: 'builder_advanced', label: '빌더 실전 트랙', weekday: '화요일',
+        id: 'builder_advanced', label: '빌더 트랙', weekday: '리뉴얼 중',
         comingSoon: true,
-        comingSoonNote: '2026년 7월 정식 오픈 예정',
-        tagline: '더 깊은 빌더 커리큘럼으로 다듬는 중입니다. 지금은 빌더 라이트로 빌딩 워밍업을 시작해보세요.',
-        target: '본인의 MVP·SaaS를 본격적으로 출시하고 싶은 분 (정식 오픈 시 안내)',
+        comingSoonNote: '리뉴얼 중',
+        tagline: '빌더 기초·실전 트랙은 더 좋은 모습으로 찾아뵙기 위해 리뉴얼 중이에요. 지금은 빌더 라이트로 빌딩 워밍업을 시작해보세요.',
+        target: '',
         weeks: [],
       },
       {
