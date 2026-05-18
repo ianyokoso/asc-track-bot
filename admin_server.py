@@ -624,6 +624,120 @@ def _get_authenticated_discord_user():
     return user
 
 
+def _fetch_guild_nickname(user_id):
+    """
+    Discord REST API 로 길드 멤버의 서버별 nickname 조회.
+
+    GET /guilds/{guild_id}/members/{user_id} → response.get('nick') 반환.
+    Bot token 인증 (admin_server 가 이미 다른 API 호출에 사용 중).
+
+    반환:
+      - 사용자가 길드 멤버이고 서버 닉네임을 설정했으면 str (예: "오케이/ASC 커뮤니티 매니저")
+      - 닉네임 없음 (글로벌 그대로 사용 케이스) → None
+      - 길드 비멤버 (404) / 토큰 누락 / 네트워크 에러 → None (best-effort)
+
+    실패 시 silent: 호출자가 None 폴백으로 글로벌 displayName 그대로 쓰면 됨.
+    """
+    user_id = str(user_id or '').strip()
+    if not user_id:
+        return None
+    bot_token = str(os.getenv('DISCORD_BOT_TOKEN', '')).strip()
+    guild_id = _get_admin_guild_id()
+    if not bot_token or not guild_id:
+        return None
+    try:
+        r = requests.get(
+            f'https://discord.com/api/v10/guilds/{guild_id}/members/{user_id}',
+            headers={'Authorization': f'Bot {bot_token}'},
+            timeout=10,
+        )
+        if r.status_code == 404:
+            # 사용자가 해당 길드 멤버 아님 — 글로벌로 폴백.
+            return None
+        r.raise_for_status()
+        data = r.json() or {}
+        nick = data.get('nick')
+        if isinstance(nick, str):
+            nick = nick.strip()
+            return nick or None
+        return None
+    except requests.RequestException as e:
+        print(f"[WARN] _fetch_guild_nickname({user_id}) network error: {e}")
+        return None
+    except Exception as e:
+        print(f"[WARN] _fetch_guild_nickname({user_id}) unexpected error: {e}")
+        return None
+
+
+def _refresh_session_discord_user(force=False, ttl_seconds=60):
+    """
+    Discord API 를 호출해서 session['discord_user'] 의 username / displayName /
+    globalName / avatarUrl 을 최신값으로 갱신.
+
+    - OAuth callback 에서 함께 저장한 session['discord_access_token'] 이 있어야 작동.
+    - 옛 세션 (access_token 미저장) 은 그대로 두고 silent skip.
+    - 동일 세션 내에서 ttl_seconds (기본 60s) 이내 호출은 캐시처럼 skip.
+      신청서 제출(POST) 시점에는 force=True 로 무조건 갱신.
+    - Discord 401 (token 만료/취소) → 갱신 포기. 다음 OAuth 까지 stale 유지.
+
+    실패해도 예외 던지지 않음 — 갱신은 best-effort.
+    """
+    import time
+
+    if not session.get('discord_user'):
+        return
+    access_token = session.get('discord_access_token')
+    if not access_token:
+        return
+
+    now = time.time()
+    if not force:
+        last = session.get('discord_user_refreshed_at')
+        if last and (now - float(last)) < ttl_seconds:
+            return
+
+    try:
+        response = requests.get(
+            f'{DISCORD_API_BASE}/users/@me',
+            headers={'Authorization': f'Bearer {access_token}'},
+            timeout=10,
+        )
+        if response.status_code == 401:
+            print('[INFO] Discord access token expired — skip refresh, wait for next OAuth')
+            return
+        response.raise_for_status()
+        user_data = response.json() or {}
+        existing = dict(session.get('discord_user') or {})
+        # 안전장치: refresh 결과 user.id 가 다르면 세션 덮어쓰기 거부 (예상 못 한 케이스).
+        new_id = str(user_data.get('id') or '').strip()
+        if new_id and new_id != str(existing.get('id') or '').strip():
+            print(f"[WARN] Discord refresh ID mismatch (session={existing.get('id')} vs api={new_id}) — keep session")
+            return
+
+        username = user_data.get('username') or existing.get('username') or ''
+        global_name = user_data.get('global_name')
+
+        # 서버별 닉네임 (guild nickname) 우선 사용 — 운영자가 길드에서 설정한 표시명.
+        # 예: "오케이/ASC 커뮤니티 매니저" (global "케이" 보다 운영 컨텍스트 풍부).
+        # 길드 비멤버거나 닉네임 미설정 시 None → 글로벌 폴백.
+        guild_nick = _fetch_guild_nickname(new_id or existing.get('id'))
+
+        existing.update({
+            'username': username,
+            # displayName 우선순위: guildNickname > globalName > username > 기존 값.
+            'displayName': guild_nick or global_name or username or existing.get('displayName') or '',
+            'globalName': global_name if global_name is not None else existing.get('globalName'),
+            'guildNickname': guild_nick if guild_nick is not None else existing.get('guildNickname'),
+            'avatarUrl': _build_discord_avatar_url(user_data) or existing.get('avatarUrl'),
+        })
+        session['discord_user'] = existing
+        session['discord_user_refreshed_at'] = now
+    except requests.RequestException as e:
+        print(f'[WARN] Discord user refresh failed: {e}')
+    except Exception as e:
+        print(f'[WARN] Discord user refresh unexpected error: {e}')
+
+
 def _get_admin_discord_ids():
     """
     운영진 Discord ID 집합. ADMIN_DISCORD_IDS (복수, 콤마구분) 우선,
@@ -1110,15 +1224,18 @@ def _build_track_application_record(discord_user, payload, existing=None):
     submitted_at = _get_kst_now()
     user_id = str(discord_user.get('id') or '').strip()
     username = str(discord_user.get('username') or '').strip()
+    # Priority: session(Discord API) > payload(client JS cache) > existing > fallback.
+    # 이전 동작: payload 가 우선이라 클라가 옛 닉네임을 보내면 그대로 stale 저장됨.
+    # session 은 OAuth callback 또는 _refresh_session_discord_user 로 최신화돼 있어 신뢰 가능.
     display_name = (
-        str(payload.get('displayName') or '').strip()
-        or str(discord_user.get('displayName') or '').strip()
+        str(discord_user.get('displayName') or '').strip()
         or str(discord_user.get('globalName') or '').strip()
         or username
+        or str(payload.get('displayName') or '').strip()
         or str(existing.get('name') or '').strip()
         or user_id
     )
-    handle = str(payload.get('handle') or '').strip() or (f'@{username}' if username else '')
+    handle = (f'@{username}' if username else '') or str(payload.get('handle') or '').strip()
     if handle and not handle.startswith('@'):
         handle = f'@{handle}'
 
@@ -1987,14 +2104,24 @@ def discord_oauth_callback():
         user_data = user_response.json()
 
         session.permanent = True
+        user_id = str(user_data.get('id', '')).strip()
+        # 서버별 닉네임 (guild nickname) 우선 — global "케이" 보다 운영 컨텍스트 풍부.
+        # 길드 비멤버거나 닉네임 미설정 시 None → globalName/username 폴백.
+        guild_nick = _fetch_guild_nickname(user_id)
         discord_user_info = {
-            'id': str(user_data.get('id', '')).strip(),
+            'id': user_id,
             'username': user_data.get('username', ''),
-            'displayName': user_data.get('global_name') or user_data.get('username', ''),
+            'displayName': guild_nick or user_data.get('global_name') or user_data.get('username', ''),
             'globalName': user_data.get('global_name'),
+            'guildNickname': guild_nick,
             'avatarUrl': _build_discord_avatar_url(user_data),
         }
         session['discord_user'] = discord_user_info
+        # access_token 을 세션에 저장해 _refresh_session_discord_user 가 추후
+        # Discord API 로 닉네임 변경을 감지할 수 있게 함 (만료 시 401 → silent skip).
+        session['discord_access_token'] = access_token
+        import time as _time
+        session['discord_user_refreshed_at'] = _time.time()
         # Standalone /apply (Flask 가 직접 서빙) 에서 viewer 정보를 query param 으로 전달.
         # Wrapper(React) 가 사라져 /api/auth/me 호출 단계가 없으므로, callback 시 URL 에 박아 보낸다.
         is_admin = _is_admin_user(discord_user_info['id'])
@@ -2021,6 +2148,8 @@ def get_authenticated_dashboard_data():
     if not _is_oauth_enabled_for_path(next_path):
         return jsonify(_build_auth_disabled_payload(next_path)), 403
     login_url = _append_query_value(f'{_get_public_api_base_url()}/api/auth/discord', 'next', next_path)
+    # 페이지 로드마다 Discord 닉네임/아바타 최신화 (TTL 60s).
+    _refresh_session_discord_user()
     discord_user = _get_authenticated_discord_user()
 
     if not discord_user:
@@ -2118,6 +2247,9 @@ def _check_track_application_window():
 
 @app.route('/api/track-applications', methods=['POST'])
 def save_track_application():
+    # 신청서 저장 직전 무조건 Discord API 재조회 → 닉네임 변경이 즉시 노션에 반영되도록.
+    # force=True 라 TTL 무시.
+    _refresh_session_discord_user(force=True)
     discord_user = _get_authenticated_discord_user()
     if not discord_user:
         return jsonify({"status": "error", "message": "Discord authentication required."}), 401
