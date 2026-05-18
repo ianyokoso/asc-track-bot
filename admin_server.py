@@ -1418,7 +1418,13 @@ def _resolve_track_application_db_fields(db_obj):
             'multi_select' if _pick_db_property(properties, 'multi_select', ['조장 지원 여부', 'Leader Apply'])
             else ('select' if _pick_db_property(properties, 'select', ['조장 지원 여부', 'Leader Apply']) else None)
         ),
-        'notes': _pick_db_property(properties, 'rich_text', ['기타', 'Notes']),
+        'notes': _pick_db_property(
+            properties,
+            'rich_text',
+            # 운영자가 노션 DB 컬럼명을 어떻게 정해도 매핑되도록 후보 확장.
+            # '기타' 가 정식 컬럼명. 나머지는 legacy / 별칭.
+            ['기타', '기타사항', '메모', 'Notes', 'ASC 9기 활동에서 기대하는 점', '기대하는 점'],
+        ),
         'processed': _pick_db_property(properties, 'checkbox', ['봇 처리 완료', 'Processed']),
         'handled': _pick_db_property(properties, 'checkbox', ['조치 여부', 'Handled']),
         'group': _pick_db_property(properties, 'select', ['조', 'Group']),
