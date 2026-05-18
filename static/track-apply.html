@@ -3155,33 +3155,34 @@
       );
     }
 
+    // max-2 가드: change 이벤트 시점에 검사 (이때 이미 새 라디오 checked 반영됨).
+    //   - 직전 click 이벤트 시점 검사 버그: click 시점엔 이미 radio.checked=true 라
+    //     `checkedDaysBefore.includes(day)` 가 항상 true → 가드 무력화 → 3개 이상 통과.
+    //   - change 에서 checked 요일 수 > MAX 면 그 라디오만 즉시 revert + alert.
+    //   - 라이트 트랙 (체크박스) 은 별개 핸들러라 영향 없음 (사용자 요구: "라이트는 제외하고").
     WEEKDAY_NAMES.forEach(day => {
       document.querySelectorAll(`input[type="radio"][name="${day}"]`).forEach(radio => {
-        radio.addEventListener('change', () => syncLeaderApply());
-        // 이미 선택된 라디오를 다시 클릭하면 해제 (기본 HTML 동작 우회).
+        radio.addEventListener('change', () => {
+          const checkedDays = getCheckedWeekdayDays();
+          if (checkedDays.length > MAX_WEEKDAY_TRACKS) {
+            // 3개째 (또는 그 이상) 선택 — 이 라디오만 revert.
+            radio.checked = false;
+            showMaxTrackAlert();
+          }
+          // 정상 통과 / revert 후 — 둘 다 leader 옵션 활성 상태 동기화.
+          syncLeaderApply();
+        });
+        // toggle-off: 이미 선택된 라디오를 다시 클릭하면 해제.
         // mousedown 시점에 직전 상태를 기억 → click 후 같으면 해제.
-        // 동시에 max-2 가드: 이 클릭으로 3개째 트랙을 선택하려는 거면 차단.
         radio.addEventListener('mousedown', () => {
           radio.dataset.wasChecked = radio.checked ? '1' : '';
         });
-        radio.addEventListener('click', (e) => {
-          // toggle-off (같은 라디오 재클릭으로 해제) — 가드 통과시켜야 함.
+        radio.addEventListener('click', () => {
           if (radio.dataset.wasChecked === '1') {
             radio.checked = false;
             radio.dataset.wasChecked = '';
-            syncLeaderApply();
+            // change 재발화 — 가드 검사 통과 (length 감소).
             radio.dispatchEvent(new Event('change', { bubbles: true }));
-            return;
-          }
-          // 새 트랙 선택: 이 클릭으로 활성 요일이 max 초과면 차단.
-          // 같은 요일 내 트랙 교체는 OK (선택 개수 변화 없음).
-          const checkedDaysBefore = getCheckedWeekdayDays();
-          const willBeChecked = checkedDaysBefore.includes(day) || checkedDaysBefore.length < MAX_WEEKDAY_TRACKS;
-          if (!willBeChecked) {
-            e.preventDefault();
-            radio.checked = false;
-            radio.dataset.wasChecked = '';
-            showMaxTrackAlert();
           }
         });
       });
@@ -5346,14 +5347,6 @@
         ],
       },
       {
-        id: 'builder_advanced', label: '빌더 트랙', weekday: '리뉴얼 중',
-        comingSoon: true,
-        comingSoonNote: '리뉴얼 중',
-        tagline: '빌더 기초·실전 트랙은 더 좋은 모습으로 찾아뵙기 위해 리뉴얼 중이에요. 지금은 빌더 라이트로 빌딩 워밍업을 시작해보세요.',
-        target: '',
-        weeks: [],
-      },
-      {
         id: 'ai_agent', label: 'AI 에이전트 트랙', weekday: '화요일',
         tagline: 'Claude Code의 스킬·MCP·서브에이전트로 만드는 100% 자동화 시스템',
         target: '반복 업무를 AI로 자동화하고 싶은 분, 멀티 에이전트 시스템 입문',
@@ -5413,6 +5406,14 @@
           { week: '4주차', date: '6/19 (금)', time: '7:00-10:00PM', title: '외부 연사 오프라인 특강 (북토크님)', optional: true },
           { week: '4주차', date: '6/24 (수)', time: '당일까지', title: '최종 과제 제출 데드라인' },
         ],
+      },
+      {
+        id: 'builder_advanced', label: '빌더 트랙', weekday: '리뉴얼 중',
+        comingSoon: true,
+        comingSoonNote: '리뉴얼 중',
+        tagline: '빌더 기초·실전 트랙은 더 좋은 모습으로 찾아뵙기 위해 리뉴얼 중이에요. 지금은 빌더 라이트로 빌딩 워밍업을 시작해보세요.',
+        target: '',
+        weeks: [],
       },
     ];
 
