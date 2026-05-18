@@ -190,11 +190,10 @@
       padding-bottom: 0;
     }
 
-    /* ── 트랙 옵션 헤더: [라디오 + 라벨]  ·  [조장 지원 pill] 한 줄 ───── */
+    /* ── 트랙 옵션 헤더: 라디오 + 라벨 한 줄 ───── */
     .track-option-header {
       display: flex;
       align-items: center;
-      justify-content: space-between;
       gap: 12px;
       flex-wrap: wrap;
     }
@@ -208,65 +207,152 @@
       cursor: pointer;
     }
 
-    /* ── 조장 지원 (Leader Apply) ─ Pill toggle, 확실한 시각적 강조 ─────
-       트랙을 선택한 상태에서만 활성. 체크 시 navy 배경 + 노란 별로
-       "내가 조장 지원함" 을 즉시 식별. 관리자 테이블에서도 동일 배지 재사용. */
-    .leader-apply {
-      flex-shrink: 0;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 5px 12px;
-      border: 1px solid #D1D5DB;
-      border-radius: 999px;
+    /* ── 조장 지원 (Leader Apply) ─ 정규 트랙 아래 별도 섹션 ──────────
+       탈리폼 스타일 참고. 단일 라디오 선택 + 모티베이션 카피 카드.
+       선택한 정규 트랙에 한해 활성, 그 외는 disabled. */
+    .leader-apply-section {
+      background: linear-gradient(180deg, #FFFBEB 0%, #FFFFFF 100%);
+      border: 1px solid #FDE68A;
+      border-radius: 12px;
+      padding: 24px 22px 26px;
+      margin-bottom: 40px;
+    }
+    .leader-section-eyebrow {
+      display: inline-block;
+      background: #FEF3C7;
+      color: #92400E;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-right: 8px;
+      letter-spacing: 0;
+      vertical-align: middle;
+    }
+    .leader-section-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #141E3C;
+      letter-spacing: -0.01em;
+      margin-bottom: 16px;
+    }
+    .leader-pitch-card {
       background: #FFFFFF;
-      font-size: 12px;
-      font-weight: 500;
+      border: 1px solid #FDE68A;
+      border-radius: 8px;
+      padding: 16px 18px 18px;
+      margin-bottom: 20px;
+    }
+    .leader-pitch-headline {
+      display: inline-block;
+      background: #FEE2E2;
+      color: #141E3C;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+    .leader-pitch-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.85;
       color: #4B5563;
+    }
+    .leader-pitch-list li {
+      position: relative;
+      padding-left: 12px;
+    }
+    .leader-pitch-list li::before {
+      content: '-';
+      position: absolute;
+      left: 0;
+      color: #9CA3AF;
+    }
+    .leader-pitch-list strong {
+      color: #141E3C;
+      font-weight: 700;
+      border-bottom: 1px solid #141E3C;
+      padding-bottom: 1px;
+    }
+    .leader-options {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .leader-option {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 14px;
+      background: #FFFFFF;
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
       cursor: pointer;
       transition: background-color 150ms, border-color 150ms, color 150ms;
-      user-select: none;
-      white-space: nowrap;
-      width: fit-content;
-      max-width: 100%;
-      align-self: flex-start;  /* flex-wrap 시 row 가득 채우지 않도록 명시 */
-    }
-    .leader-apply input[type="checkbox"] {
-      /* 체크박스는 숨기고 pill 전체가 토글 UI */
-      position: absolute;
-      width: 1px; height: 1px;
-      padding: 0; margin: -1px; overflow: hidden;
-      clip: rect(0,0,0,0); border: 0;
-    }
-    .leader-apply:not(.is-disabled):hover {
-      border-color: #1E2A4A;
+      font-size: 13.5px;
       color: #141E3C;
     }
-    .leader-apply.is-checked {
+    .leader-option:not(.is-disabled):hover {
+      border-color: #1E2A4A;
+      background: #FAFAFA;
+    }
+    .leader-option input[type="radio"] {
+      accent-color: #1E2A4A;
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+    .leader-option.is-checked {
+      background: #EEF0F6;
+      border-color: #1E2A4A;
+      font-weight: 600;
+    }
+    .leader-option-key {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      background: #F4F6F8;
+      border: 1px solid #E5E7EB;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #4B5563;
+      flex-shrink: 0;
+    }
+    .leader-option.is-checked .leader-option-key {
       background: #1E2A4A;
       border-color: #1E2A4A;
       color: #FFFFFF;
     }
-    /* 모바일 일부 브라우저는 <label> color 가 자식 <span> 으로 상속되지 않아
-       체크 시 텍스트가 안 보이는 현상 — 명시적으로 강제. */
-    .leader-apply.is-checked span:not(.leader-star) {
-      color: #FFFFFF;
+    .leader-option-label {
+      flex: 1;
+      line-height: 1.4;
     }
-    .leader-apply.is-checked:hover {
-      background: #141E3C;
-    }
-    .leader-apply .leader-star {
-      font-size: 12px;
+    .leader-option.is-disabled {
+      background: #F9FAFB;
       color: #9CA3AF;
-      transition: color 150ms;
-    }
-    .leader-apply:not(.is-disabled):hover .leader-star { color: #D97706; }
-    .leader-apply.is-checked .leader-star { color: #FBBF24; }
-    .leader-apply.is-disabled {
-      opacity: 0.45;
       cursor: not-allowed;
-      background: #F4F6F8;
-      border-color: #E5E7EB;
+      opacity: 0.6;
+    }
+    .leader-option.is-disabled input[type="radio"] {
+      cursor: not-allowed;
+    }
+    .leader-option-none {
+      margin-top: 4px;
+    }
+    .leader-options-hint {
+      font-size: 11.5px;
+      color: #9CA3AF;
+      margin-top: 14px;
+      padding-left: 2px;
+      line-height: 1.5;
     }
 
     /* ── 트랙 주차별 일정 (노션 실데이터 — details 드롭다운 + 4열 테이블) ───
@@ -1032,7 +1118,7 @@
         <p class="track-category-label">Category 1</p>
         <h2 class="track-category-title">정규 트랙</h2>
         <p class="track-category-desc">
-          요일별로 하나씩, 원하는 요일만 골라 신청합니다. 각 트랙의 <strong class="text-ink">조장 지원</strong>도 함께 체크할 수 있습니다.
+          요일별로 하나씩, 원하는 요일만 골라 신청합니다. <strong class="text-ink">조장 지원</strong>은 아래 별도 섹션에서 선택합니다.
         </p>
       </div>
 
@@ -1056,10 +1142,6 @@
                   <label class="track-radio-label">
                     <input type="radio" name="mon"> 세일즈 실전 트랙
                   </label>
-                  <label class="leader-apply is-disabled">
-                    <input type="checkbox" disabled>
-<span class="leader-star">★</span><span>조장 지원</span>
-                  </label>
                 </div>
                 <div class="track-schedule" data-track="sales_real">
                   <!-- NOTION_SCHEDULE:sales_real -->
@@ -1080,10 +1162,6 @@
                 <div class="track-option-header">
                   <label class="track-radio-label">
                     <input type="radio" name="mon"> 나 탐구 트랙
-                  </label>
-                  <label class="leader-apply is-disabled">
-                    <input type="checkbox" disabled>
-<span class="leader-star">★</span><span>조장 지원</span>
                   </label>
                 </div>
                 <div class="track-schedule" data-track="self_inquiry">
@@ -1111,10 +1189,6 @@
                   <label class="track-radio-label">
                     <input type="radio" name="tue"> 빌더 심화 트랙
                   </label>
-                  <label class="leader-apply is-disabled">
-                    <input type="checkbox" disabled>
-<span class="leader-star">★</span><span>조장 지원</span>
-                  </label>
                 </div>
                 <div class="track-schedule" data-track="builder_advanced">
                   <!-- NOTION_SCHEDULE:builder_advanced -->
@@ -1138,10 +1212,6 @@
                 <div class="track-option-header">
                   <label class="track-radio-label">
                     <input type="radio" name="tue"> 빌더 기초 트랙
-                  </label>
-                  <label class="leader-apply is-disabled">
-                    <input type="checkbox" disabled>
-<span class="leader-star">★</span><span>조장 지원</span>
                   </label>
                 </div>
                 <div class="track-schedule" data-track="builder_basic">
@@ -1174,10 +1244,6 @@
                   <label class="track-radio-label">
                     <input type="radio" name="wed" id="wed-ai"> AI 에이전트 트랙
                   </label>
-                  <label class="leader-apply is-disabled">
-                    <input type="checkbox" disabled>
-<span class="leader-star">★</span><span>조장 지원</span>
-                  </label>
                 </div>
                 <div class="track-schedule" data-track="ai_agent">
                   <!-- NOTION_SCHEDULE:ai_agent -->
@@ -1195,10 +1261,6 @@
                 <div class="track-option-header">
                   <label class="track-radio-label">
                     <input type="radio" name="wed" id="wed-creator"> 크리에이터 트랙
-                  </label>
-                  <label class="leader-apply is-disabled" title="숏폼/롱폼 구분 없이 통합 운영">
-                    <input type="checkbox" disabled>
-<span class="leader-star">★</span><span>조장 지원</span>
                   </label>
                 </div>
                 <div class="track-schedule" data-track="creator">
@@ -1235,10 +1297,6 @@
                   <label class="track-radio-label">
                     <input type="radio" name="thu"> 앱 개발 트랙
                   </label>
-                  <label class="leader-apply is-disabled">
-                    <input type="checkbox" disabled>
-<span class="leader-star">★</span><span>조장 지원</span>
-                  </label>
                 </div>
                 <div class="track-schedule" data-track="app_dev">
                   <!-- NOTION_SCHEDULE:app_dev -->
@@ -1266,6 +1324,73 @@
         <span class="text-ink-soft">·</span>
         주차별 <strong class="text-ink">과제 제출</strong>(자정까지) 포함
       </div>
+
+      <!-- ═════════════════ [필수] 조장 지원 여부 ═════════════════
+           정규 트랙 직속 섹션. 단일 라디오 (선택한 트랙만 활성) + 모티베이션 카피.
+           기본값 = "지원에 희망하지 않습니다." 라 사용자가 의식하지 않아도 폼은 valid. -->
+      <section id="leader-apply-block" class="leader-apply-section">
+        <div class="leader-section-title">
+          <span class="leader-section-eyebrow">필수</span>조장 지원 여부
+        </div>
+
+        <div class="leader-pitch-card">
+          <div class="leader-pitch-headline">"조장이 되어 ASC를 보다 더 깊게 경험하세요!"</div>
+          <ul class="leader-pitch-list">
+            <li>조장 95% 이상이 트랙을 <strong>성공적으로 완주</strong>했습니다.</li>
+            <li>조장 출신 멤버가 <strong>남다른 퍼포먼스</strong>를 발휘하고 있습니다.</li>
+            <li>조장으로 트랙 완주 시, 소정의 사례금 <strong>3만원</strong>을 지급합니다.</li>
+            <li><strong>누구나 가능한</strong> 조장 업무 — 조별 모임 리딩, 출결 및 과제 체크, 간단 회의록 작성</li>
+            <li>선정되신 조장 님께는 <strong>상세 가이드</strong>가 제공됩니다.</li>
+          </ul>
+        </div>
+
+        <div class="leader-options" role="radiogroup" aria-labelledby="leader-apply-block">
+          <label class="leader-option is-disabled" data-leader-track="sales_real">
+            <input type="radio" name="leader-apply" value="sales_real" disabled>
+            <span class="leader-option-key">A</span>
+            <span class="leader-option-label">[세일즈 실전 트랙] 조장에 지원하겠습니다.</span>
+          </label>
+          <label class="leader-option is-disabled" data-leader-track="self_inquiry">
+            <input type="radio" name="leader-apply" value="self_inquiry" disabled>
+            <span class="leader-option-key">B</span>
+            <span class="leader-option-label">[나 탐구 트랙] 조장에 지원하겠습니다.</span>
+          </label>
+          <label class="leader-option is-disabled" data-leader-track="builder_advanced">
+            <input type="radio" name="leader-apply" value="builder_advanced" disabled>
+            <span class="leader-option-key">C</span>
+            <span class="leader-option-label">[빌더 심화 트랙] 조장에 지원하겠습니다.</span>
+          </label>
+          <label class="leader-option is-disabled" data-leader-track="builder_basic">
+            <input type="radio" name="leader-apply" value="builder_basic" disabled>
+            <span class="leader-option-key">D</span>
+            <span class="leader-option-label">[빌더 기초 트랙] 조장에 지원하겠습니다.</span>
+          </label>
+          <label class="leader-option is-disabled" data-leader-track="ai_agent">
+            <input type="radio" name="leader-apply" value="ai_agent" disabled>
+            <span class="leader-option-key">E</span>
+            <span class="leader-option-label">[AI 에이전트 트랙] 조장에 지원하겠습니다.</span>
+          </label>
+          <label class="leader-option is-disabled" data-leader-track="creator">
+            <input type="radio" name="leader-apply" value="creator" disabled>
+            <span class="leader-option-key">F</span>
+            <span class="leader-option-label">[크리에이터 트랙] 조장에 지원하겠습니다.</span>
+          </label>
+          <label class="leader-option is-disabled" data-leader-track="app_dev">
+            <input type="radio" name="leader-apply" value="app_dev" disabled>
+            <span class="leader-option-key">G</span>
+            <span class="leader-option-label">[앱 개발 트랙] 조장에 지원하겠습니다.</span>
+          </label>
+          <label class="leader-option leader-option-none is-checked" data-leader-track="none">
+            <input type="radio" name="leader-apply" value="none" checked>
+            <span class="leader-option-key">H</span>
+            <span class="leader-option-label">지원에 희망하지 않습니다.</span>
+          </label>
+        </div>
+
+        <p class="leader-options-hint">
+          ※ 위 정규 트랙을 선택해야 해당 트랙의 조장 지원이 활성화됩니다. 선택하지 않은 트랙은 회색 처리됩니다.
+        </p>
+      </section>
 
       <!-- 카테고리 구분선 -->
       <div class="track-category-divider"></div>
@@ -2551,7 +2676,7 @@
           <button type="button" class="btn-ghost" id="admin-fill-mock" title="목업 멤버 N명 (기본 120, 클릭 시 직접 입력) 으로 복원 — N<120 trim, N>120 clone 확장">📋 목업 채우기</button>
           <button type="button" class="btn-ghost" id="admin-fill-mock-random" title="현재 목업 멤버 풀은 그대로, 트랙·조장·sub-form 을 매번 다른 랜덤 분배로 셔플">🎲 랜덤 채우기</button>
           <button type="button" class="btn-ghost" id="admin-clear-mock" title="목업 멤버 전부 리스트에서 완전히 제거 (실 OAuth 사용자만 남김)">🧹 목업 지우기</button>
-          <button type="button" class="btn-ghost text-bad" id="admin-full-reset" title="신청 데이터 초기화 (서버 캐시 + 브라우저). Discord 채널/역할은 봇 !테스트초기화 별도 실행 필요.">🗑️ 전체 초기화</button>
+          <button type="button" class="btn-ghost text-bad" id="admin-full-reset" title="신청 데이터 초기화 (서버 캐시 + 브라우저). 이전 기수 Discord 트랙 채널은 봇 `!채널삭제 <기수>` 별도 실행 필요.">🗑️ 전체 초기화</button>
           <button class="btn-ghost" id="admin-track-apply-sync">Full Sync</button>
           <button class="btn-navy" id="admin-track-apply-refresh">Refresh</button>`;
         requestAnimationFrame(() => {
@@ -2806,27 +2931,69 @@
     }));
 
     // ── 조장 지원 (leader-apply) 상태 동기화 ────────────────────────────
-    // 요일 라디오가 선택된 트랙만 조장 지원 활성. 다른 트랙은 자동 is-disabled.
-    function syncLeaderApply(dayName) {
-      document.querySelectorAll(`input[type="radio"][name="${dayName}"]`).forEach(radio => {
-        const option = radio.closest('.track-option');
-        const label = option?.querySelector('.leader-apply');
-        const input = label?.querySelector('input[type="checkbox"]');
-        if (!label || !input) return;
-        if (radio.checked) {
-          label.classList.remove('is-disabled');
+    // 정규 트랙 직속 단일 라디오 섹션 (#leader-apply-block). 사용자가 선택한
+    // 정규 트랙에 한해 해당 옵션이 활성. 그 외 옵션은 is-disabled (회색).
+    //
+    // 트랙 id → 요일 라디오 input name + value(트랙 id) 매핑.
+    // 라디오 value="creator" 같이 사용 (track-schedule data-track 과 동일).
+    const LEADER_TRACK_IDS = ['sales_real', 'self_inquiry', 'builder_advanced', 'builder_basic', 'ai_agent', 'creator', 'app_dev'];
+
+    /** 현재 사용자가 정규 트랙 중 어떤 id 들을 라디오로 선택했는지 set 으로 반환. */
+    function getSelectedWeekdayTrackIds() {
+      const ids = new Set();
+      document.querySelectorAll('.track-option').forEach(opt => {
+        const radio = opt.querySelector('input[type="radio"]');
+        if (!radio || !radio.checked) return;
+        const trackId = opt.querySelector('.track-schedule')?.dataset.track;
+        if (trackId) ids.add(trackId);
+      });
+      return ids;
+    }
+
+    /** #leader-apply-block 의 각 옵션 enable/disable + 선택 라디오 fallback 처리. */
+    function syncLeaderApply() {
+      const selectedIds = getSelectedWeekdayTrackIds();
+      const options = document.querySelectorAll('.leader-options .leader-option');
+      let currentlyChecked = null;
+      options.forEach(opt => {
+        const trackId = opt.dataset.leaderTrack;
+        const input = opt.querySelector('input[type="radio"]');
+        if (!input) return;
+        if (input.checked) currentlyChecked = trackId;
+        if (trackId === 'none') {
+          opt.classList.remove('is-disabled');
+          input.disabled = false;
+          return;
+        }
+        if (selectedIds.has(trackId)) {
+          opt.classList.remove('is-disabled');
           input.disabled = false;
         } else {
-          label.classList.add('is-disabled');
-          label.classList.remove('is-checked');
+          opt.classList.add('is-disabled');
           input.disabled = true;
-          input.checked = false;
+          if (input.checked) {
+            // 트랙 선택이 풀렸으면 조장 선택도 자동 해제 → "지원하지 않음" 으로 폴백.
+            input.checked = false;
+            opt.classList.remove('is-checked');
+            const noneInput = document.querySelector('.leader-option[data-leader-track="none"] input[type="radio"]');
+            const noneLabel = document.querySelector('.leader-option[data-leader-track="none"]');
+            if (noneInput) noneInput.checked = true;
+            if (noneLabel) noneLabel.classList.add('is-checked');
+          }
         }
       });
+      // 어떤 라디오도 안 잡혀있으면 (resetFormState 직후 등) "지원하지 않음" 기본화.
+      if (!document.querySelector('input[name="leader-apply"]:checked')) {
+        const noneInput = document.querySelector('.leader-option[data-leader-track="none"] input[type="radio"]');
+        const noneLabel = document.querySelector('.leader-option[data-leader-track="none"]');
+        if (noneInput) noneInput.checked = true;
+        if (noneLabel) noneLabel.classList.add('is-checked');
+      }
     }
+
     ['mon', 'tue', 'wed', 'thu'].forEach(day => {
       document.querySelectorAll(`input[type="radio"][name="${day}"]`).forEach(radio => {
-        radio.addEventListener('change', () => syncLeaderApply(day));
+        radio.addEventListener('change', () => syncLeaderApply());
         // 이미 선택된 라디오를 다시 클릭하면 해제 (기본 HTML 동작 우회).
         // mousedown 시점에 직전 상태를 기억 → click 후 같으면 해제.
         radio.addEventListener('mousedown', () => {
@@ -2836,18 +3003,20 @@
           if (radio.dataset.wasChecked === '1') {
             radio.checked = false;
             radio.dataset.wasChecked = '';
-            syncLeaderApply(day);
+            syncLeaderApply();
             radio.dispatchEvent(new Event('change', { bubbles: true }));
           }
         });
       });
     });
 
-    // 조장 지원 체크박스 toggle → 부모 label 의 is-checked 클래스 동기화 (강조 스타일 트리거)
-    document.querySelectorAll('.leader-apply input[type="checkbox"]').forEach(cb => {
-      cb.addEventListener('change', () => {
-        const label = cb.closest('.leader-apply');
-        if (label) label.classList.toggle('is-checked', cb.checked);
+    // 조장 지원 라디오 change → is-checked 클래스 동기화 (선택 시 강조 스타일)
+    document.querySelectorAll('.leader-options input[name="leader-apply"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.querySelectorAll('.leader-options .leader-option').forEach(opt => {
+          const input = opt.querySelector('input[type="radio"]');
+          opt.classList.toggle('is-checked', !!input && input.checked);
+        });
       });
     });
 
@@ -2909,8 +3078,16 @@
       renderAdminTable(nextTrackId);
     }
 
+    /** #leader-apply-block 에서 선택된 트랙 id ('none' 또는 7개 정규 트랙 중 하나). */
+    function getSelectedLeaderTrackId() {
+      const checked = document.querySelector('input[name="leader-apply"]:checked');
+      const value = checked?.value || 'none';
+      return value === 'none' ? null : value;
+    }
+
     function collectNormalizedTracks() {
       const tracks = [];
+      const leaderTrackId = getSelectedLeaderTrackId();
 
       document.querySelectorAll('.track-option').forEach(option => {
         const radio = option.querySelector('input[type="radio"]');
@@ -2922,7 +3099,7 @@
         const track = {
           type: 'weekday',
           id: trackId,
-          leader: !!option.querySelector('.leader-apply input[type="checkbox"]')?.checked,
+          leader: leaderTrackId === trackId,
         };
 
         if (trackId === 'creator') {
@@ -3140,7 +3317,8 @@
      * - 새로고침
      *
      * Discord 채널/역할 / Notion 트랙 페이지는 이 함수가 안 건드림.
-     * 디스코드 봇에 `!테스트초기화` 입력해서 별도 정리해야 함.
+     * 이전 기수 트랙 채널 정리는 디스코드 봇에 `!채널삭제 <기수>` 입력해서 별도 실행
+     * (공지·카테고리·역할은 보존됨).
      */
     /**
      * [관리자] 목업 멤버 120명 복원.
@@ -3349,7 +3527,7 @@
         '  • 브라우저: 모든 멤버의 tracks/edits/submitted 초기화\n' +
         '  • 조 배정 상태(localStorage) 제거\n\n' +
         '※ Discord 채널·역할 / Notion 트랙 페이지는 이 작업이 건드리지 않습니다.\n' +
-        '   디스코드 테스트 길드에서 `!테스트초기화` 명령으로 별도 정리하세요.\n\n' +
+        '   이전 기수 트랙 채널은 디스코드에서 `!채널삭제 <기수>` 명령으로 별도 정리 (공지·카테고리·역할 보존).\n\n' +
         '진행할까요?'
       );
       if (!confirmed) return;
@@ -3392,7 +3570,7 @@
           `✅ 초기화 완료\n` +
           `  • 서버 캐시 ${result.clearedMembers || 0}명 제거\n` +
           `  • 브라우저 멤버 ${MOCK_MEMBERS.length}명 모두 미신청 상태\n\n` +
-          `Discord/Notion 정리 필요 시 디스코드에서 \`!테스트초기화\` 실행하세요.`
+          `이전 기수 트랙 채널 정리 필요 시 디스코드에서 \`!채널삭제 <기수>\` 실행하세요 (공지·카테고리·역할 보존).`
         );
         _markAdminReloadIfApplicable();
         location.reload();
@@ -3586,16 +3764,23 @@
       return label ? label.textContent.trim() : null;
     }
 
-    /** 조장 지원 트랙 id 집합. track-option 내 checked 체크박스를 기준으로 판정. */
+    /** 조장 지원 트랙 라벨. #leader-apply-block 의 라디오 선택값 기준으로 판정.
+     *  단일 선택 모델이라 항상 0 또는 1개 요소. 폼이 아닌 서버 로드 경로
+     *  (memberToSubmissionData) 와 라벨 형태(트랙 suffix 포함) 가 다르지만
+     *  summary 렌더의 `leaderBadgeHtml` 은 같은 경로 내 일관성만 보면 됨. */
     function getLeaderApplyTrackLabels() {
-      const labels = [];
-      document.querySelectorAll('.track-option').forEach(opt => {
-        const leaderCb = opt.querySelector('.leader-apply input[type="checkbox"]');
-        if (!leaderCb || !leaderCb.checked) return;
-        const trackRadioLabel = opt.querySelector('.track-radio-label');
-        if (trackRadioLabel) labels.push(trackRadioLabel.textContent.trim());
-      });
-      return labels;
+      const trackId = getSelectedLeaderTrackId();
+      if (!trackId) return [];
+      const option = document.querySelector(`.leader-option[data-leader-track="${trackId}"]`);
+      // 매칭되는 정규 트랙 라디오 라벨 텍스트 (e.g., "세일즈 실전 트랙") 추출.
+      // weekday 값 (getSelectedWeekdayTrack) 과 동일 origin 이라 badge 매칭 가능.
+      const trackOption = document.querySelector(`.track-schedule[data-track="${trackId}"]`)?.closest('.track-option');
+      const trackLabel = trackOption?.querySelector('.track-radio-label')?.textContent.trim();
+      if (trackLabel) return [trackLabel];
+      // 폴백: leader-option 라벨에서 대괄호 안 트랙명 추출.
+      const fallback = option?.querySelector('.leader-option-label')?.textContent.trim()
+        .match(/^\[(.+?)\]/)?.[1];
+      return fallback ? [fallback] : [];
     }
 
     function getSelectedLightTracks() {
@@ -3817,14 +4002,20 @@
     }
 
     function resetFormState() {
-      // 라디오 전부 해제
-      document.querySelectorAll('#view-open-new input[type="radio"]').forEach(r => { r.checked = false; });
-      // 조장 체크박스 해제 + 클래스 리셋
-      document.querySelectorAll('#view-open-new .leader-apply').forEach(l => {
-        l.classList.remove('is-checked');
-        l.classList.add('is-disabled');
-        const cb = l.querySelector('input[type="checkbox"]');
-        if (cb) { cb.checked = false; cb.disabled = true; }
+      // 요일 트랙 라디오 해제 — leader-apply 는 별도 처리 (none 기본값 유지).
+      document.querySelectorAll('#view-open-new input[type="radio"]').forEach(r => {
+        if (r.name === 'leader-apply') return;
+        r.checked = false;
+      });
+      // 조장 지원 옵션 리셋: 트랙 옵션 전부 disabled, "지원하지 않음" 만 활성 + 체크.
+      document.querySelectorAll('.leader-options .leader-option').forEach(opt => {
+        const input = opt.querySelector('input[type="radio"]');
+        if (!input) return;
+        const isNone = opt.dataset.leaderTrack === 'none';
+        input.checked = isNone;
+        input.disabled = !isNone;
+        opt.classList.toggle('is-checked', isNone);
+        opt.classList.toggle('is-disabled', !isNone);
       });
       // 크리에이터 sub radio disabled
       document.querySelectorAll('input[name="creator-sub"]').forEach(s => { s.disabled = true; s.checked = false; });
