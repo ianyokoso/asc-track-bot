@@ -1203,7 +1203,9 @@
         <p class="track-category-label">Category 1</p>
         <h2 class="track-category-title">정규 트랙</h2>
         <p class="track-category-desc">
-          요일별로 하나씩, 원하는 요일만 골라 신청합니다. <strong class="text-ink">조장 지원</strong>은 아래 별도 섹션에서 선택합니다.
+          요일별로 하나씩, <strong class="text-ink">최대 2개 트랙</strong>까지 골라 신청합니다.
+          <br class="hidden md:block">
+          여태껏 3개 이상 신청해서 완주한 분이 없어서 2개로 제한했어요. 꼭 3개 이상 들으셔야 한다면 커뮤니티 매니저에게 문의해주세요.
         </p>
       </div>
 
@@ -2071,6 +2073,21 @@
 
     <!-- Light tracks — JS로 렌더 -->
     <div id="tracks-light"></div>
+
+    <!-- 신청하러 가기 CTA (트랙 미리보기 → 신청 폼 복귀) -->
+    <div class="bg-canvas border-t border-border-hair">
+      <div class="max-w-4xl mx-auto px-5 md:px-8 py-12 md:py-16 text-center">
+        <p class="text-eyebrow mb-3">Ready?</p>
+        <h2 class="text-2xl md:text-3xl font-bold tracking-tight text-ink mb-3">관심 가는 트랙을 확인하셨다면</h2>
+        <p class="text-[14px] text-ink-muted mb-8 leading-relaxed">
+          요일별로 트랙을 선택하고 조장 지원 여부를 결정해주세요.<br class="hidden md:block">
+          신청은 언제든 마감 전까지 수정할 수 있습니다.
+        </p>
+        <button type="button" class="btn-navy h-11 px-7 text-[14px]" data-back-from-tracks>
+          신청하러 가기 →
+        </button>
+      </div>
+    </div>
 
     <!-- Footer note -->
     <div class="bg-canvas">
@@ -3081,20 +3098,49 @@
       });
     }
 
-    ['mon', 'tue', 'wed', 'thu'].forEach(day => {
+    // 9기 정책: 정규 트랙은 최대 2개까지 선택 가능 (3개 이상 완주자 0명).
+    // 3개째 클릭 시도 → 자동 해제 + 안내 toast/alert.
+    const MAX_WEEKDAY_TRACKS = 2;
+    const WEEKDAY_NAMES = ['mon', 'tue', 'wed', 'thu'];
+    function getCheckedWeekdayDays() {
+      return WEEKDAY_NAMES.filter(d => document.querySelector(`input[type="radio"][name="${d}"]:checked`));
+    }
+    function showMaxTrackAlert() {
+      // 운영자가 3개 이상 들으려고 하면 커뮤니티 매니저 문의 안내.
+      alert(
+        '정규 트랙은 최대 2개까지 선택 가능합니다.\n\n' +
+        '여태까지 3개 이상 신청해서 완주한 분이 없어서 2개로 제한했어요.\n' +
+        '꼭 3개 이상 들으셔야 한다면 커뮤니티 매니저에게 먼저 문의해주세요.'
+      );
+    }
+
+    WEEKDAY_NAMES.forEach(day => {
       document.querySelectorAll(`input[type="radio"][name="${day}"]`).forEach(radio => {
         radio.addEventListener('change', () => syncLeaderApply());
         // 이미 선택된 라디오를 다시 클릭하면 해제 (기본 HTML 동작 우회).
         // mousedown 시점에 직전 상태를 기억 → click 후 같으면 해제.
+        // 동시에 max-2 가드: 이 클릭으로 3개째 트랙을 선택하려는 거면 차단.
         radio.addEventListener('mousedown', () => {
           radio.dataset.wasChecked = radio.checked ? '1' : '';
         });
-        radio.addEventListener('click', () => {
+        radio.addEventListener('click', (e) => {
+          // toggle-off (같은 라디오 재클릭으로 해제) — 가드 통과시켜야 함.
           if (radio.dataset.wasChecked === '1') {
             radio.checked = false;
             radio.dataset.wasChecked = '';
             syncLeaderApply();
             radio.dispatchEvent(new Event('change', { bubbles: true }));
+            return;
+          }
+          // 새 트랙 선택: 이 클릭으로 활성 요일이 max 초과면 차단.
+          // 같은 요일 내 트랙 교체는 OK (선택 개수 변화 없음).
+          const checkedDaysBefore = getCheckedWeekdayDays();
+          const willBeChecked = checkedDaysBefore.includes(day) || checkedDaysBefore.length < MAX_WEEKDAY_TRACKS;
+          if (!willBeChecked) {
+            e.preventDefault();
+            radio.checked = false;
+            radio.dataset.wasChecked = '';
+            showMaxTrackAlert();
           }
         });
       });
