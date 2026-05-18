@@ -190,6 +190,56 @@
       padding-bottom: 0;
     }
 
+    /* ── 트랙 placeholder (개편중·예정) ─ 라디오 없음, 안내 카드.
+       정규 트랙 슬롯 안에 비활성 카드로 등장. 사용자가 라이트 트랙으로 자연 유도. */
+    .track-placeholder {
+      background: #F9FAFB;
+      border: 1px dashed #D1D5DB;
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .track-placeholder-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .track-placeholder-badge {
+      display: inline-flex;
+      align-items: center;
+      background: #EEF0F6;
+      color: #1E2A4A;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0;
+      flex-shrink: 0;
+    }
+    .track-placeholder-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #4B5563;
+    }
+    .track-placeholder-desc {
+      font-size: 12.5px;
+      color: #6B7280;
+      line-height: 1.6;
+      margin: 0;
+    }
+    .track-placeholder-link {
+      color: #1E2A4A;
+      font-weight: 600;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .track-placeholder-link:hover {
+      color: #141E3C;
+    }
+
     /* ── 트랙 옵션 헤더: 라디오 + 라벨 한 줄 ───── */
     .track-option-header {
       display: flex;
@@ -1192,23 +1242,6 @@
 <!-- /NOTION_SCHEDULE:sales_real -->
                 </div>
               </div>
-              <div class="track-option">
-                <div class="track-option-header">
-                  <label class="track-radio-label">
-                    <input type="radio" name="mon"> 나 탐구 트랙
-                  </label>
-                </div>
-                <div class="track-schedule" data-track="self_inquiry">
-                  <!-- NOTION_SCHEDULE:self_inquiry -->
-<details class="schedule-details"><summary class="schedule-summary">일정 확인하기</summary><div class="schedule-body"><table><thead><tr><th class="col-week">주차</th><th class="col-date">날짜</th><th class="col-time">시간</th><th class="col-session">세션</th></tr></thead><tbody>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">4/20 (월)</td><td class="col-time">8:00-9:30PM</td><td class="col-session"><div class="sched-title">발견</div><div class="sched-detail">나다움 찾기 (라이브) · 진단 결과 리뷰 및 가치 단어 정리 · 이키가이 분석(좋아하는 것 × 잘하는 것 × 세상이 필요로 하는 것 × 돈 버는 것)</div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">2주차</span></td><td class="col-date">4/27 (월)</td><td class="col-time">8:00-9:30PM</td><td class="col-session"><div class="sched-title">실행</div><div class="sched-detail">브랜딩과 콘텐츠 설계 (라이브) · 퍼스널 브랜딩 작업(나만의 슬로건, 프로필 정립) · 콘텐츠 기획서 작성 및 강연 자료 제작 (젠스파크 / 미리캔버스 등)</div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">3주차</span></td><td class="col-date">5/6 (수)</td><td class="col-time">8:00-10:00PM</td><td class="col-session"><div class="sched-title">기록</div><div class="sched-detail">강연 발표 및 피드백 (라이브) · 강연 자료 실제 발표 (발표 연습) · 체크리스트 기반 피드백 및 수정 · 강연 확정본 완성</div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">5/11 (월)</td><td class="col-time">7:30-9:30PM</td><td class="col-session"><div class="sched-title">공명</div><div class="sched-detail">최종 발표와 회고 · 최종 강연 발표 (외부 강연장)</div></td></tr>
-</tbody></table></div></details>
-<!-- /NOTION_SCHEDULE:self_inquiry -->
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -1221,48 +1254,37 @@
               <div class="track-option">
                 <div class="track-option-header">
                   <label class="track-radio-label">
-                    <input type="radio" name="tue"> 빌더 심화 트랙
+                    <input type="radio" name="tue" id="tue-ai"> AI 에이전트 트랙
                   </label>
                 </div>
-                <div class="track-schedule" data-track="builder_advanced">
-                  <!-- NOTION_SCHEDULE:builder_advanced -->
+                <div class="track-schedule" data-track="self_inquiry">
+                  <!-- NOTION_SCHEDULE:self_inquiry -->
 <details class="schedule-details"><summary class="schedule-summary">일정 확인하기</summary><div class="schedule-body"><table><thead><tr><th class="col-week">주차</th><th class="col-date">날짜</th><th class="col-time">시간</th><th class="col-session">세션</th></tr></thead><tbody>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">4/21 (화)</td><td class="col-time">8:00-9:00PM</td><td class="col-session"><div class="sched-title">바이브코딩 중급자의 환경 설정하기</div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">4/23 (목)</td><td class="col-time">8:00~10:00PM</td><td class="col-session"><div class="sched-title">1:1 컨설팅 및 QnA (w/성구님)<span class="sched-participation">선택</span></div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">4/23 (목)</td><td class="col-time">10:00~12:00AM</td><td class="col-session"><div class="sched-title">모여서 각자 코딩 세션<span class="sched-participation">선택</span></div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">2주차</span></td><td class="col-date">4/28 (화)</td><td class="col-time">8:00-9:00PM</td><td class="col-session"><div class="sched-title">Cursor, Vooster로 나만의 MVP 만들기</div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">2주차</span></td><td class="col-date">4/30 (목)</td><td class="col-time">8:00~10:00PM</td><td class="col-session"><div class="sched-title">1:1 컨설팅 및 QnA (w/성구님)<span class="sched-participation">선택</span></div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">2주차</span></td><td class="col-date">4/30 (목)</td><td class="col-time">10:00~12:00AM</td><td class="col-session"><div class="sched-title">모여서 각자 코딩 세션<span class="sched-participation">선택</span></div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">3주차</span></td><td class="col-date">5/5 (화)</td><td class="col-time">8:00-9:00PM</td><td class="col-session"><div class="sched-title">MVP 디버깅하기 + 출시하기</div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">3주차</span></td><td class="col-date">5/7 (목)</td><td class="col-time">10:00~12:00AM</td><td class="col-session"><div class="sched-title">모여서 각자 코딩 세션<span class="sched-participation">선택</span></div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">5/12 (화)</td><td class="col-time">8:00-9:00PM</td><td class="col-session"><div class="sched-title">Github·Vercel 배포, 도메인 구매 + 보안 검토</div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">5/14 (목)</td><td class="col-time">10:00~12:00AM</td><td class="col-session"><div class="sched-title">모여서 각자 코딩 세션<span class="sched-participation">선택</span></div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">5/15 (금)</td><td class="col-time">8:00~9:00PM</td><td class="col-session"><div class="sched-title">외부 연사 오프라인 특강(윤자동 님)<span class="sched-participation">선택</span></div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">OT</span></td><td class="col-date">5/24 (일)</td><td class="col-time">8:00-10:00PM</td><td class="col-session"><div class="sched-title">오리엔테이션 라이브 (4주간 일정 및 내용 리뷰)</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">5/27 (수)</td><td class="col-time">8:00-9:30PM</td><td class="col-session"><div class="sched-title">발견 - 나다움 찾기 (온라인 라이브)</div><div class="sched-detail">진단 결과 리뷰 및 가치 단어 정리 · 이키가이 분석 (좋아하는 것 × 잘하는 것 × 세상이 필요로 하는 것 × 돈 버는 것)</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">5/27 (수)</td><td class="col-time">9:30-11:00PM</td><td class="col-session"><div class="sched-title">조별 모임 / 피드백 세션</div><div class="sched-detail">자기소개 및 아이스브레이킹</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">5/31 (일)</td><td class="col-time">당일까지</td><td class="col-session"><div class="sched-title">1차 과제 제출</div><div class="sched-detail">경험인벤토리, 가치단어, 소명선서문, 이키가이 (4종)</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">2주차</span></td><td class="col-date">6/3 (수)</td><td class="col-time">8:00-9:00PM</td><td class="col-session"><div class="sched-title">실행 - 브랜딩과 콘텐츠 설계 (온라인 라이브)</div><div class="sched-detail">퍼스널 브랜딩 작성법 (나만의 슬로건, 프로필 정립) · 콘텐츠 기획서 작성법 (젠스파크 / 미리캔버스 등)</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">2주차</span></td><td class="col-date">6/3 (수)</td><td class="col-time">9:00-11:00PM</td><td class="col-session"><div class="sched-title">조별 모임 / 1:1 컨설팅 (인당 10분)</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">2주차</span></td><td class="col-date">6/7 (일)</td><td class="col-time">당일까지</td><td class="col-session"><div class="sched-title">2차 과제 제출</div><div class="sched-detail">브랜딩 및 콘텐츠 완성본 (양식 제공) + 강연 초안 + 기고 글 1개</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">3주차</span></td><td class="col-date">6/8 (월)</td><td class="col-time">8:00-11:00PM</td><td class="col-session"><div class="sched-title">기록 - 강연 발표 및 피드백 (오프라인, 논현역 인근)</div><div class="sched-detail">강연 자료 실제 발표 (발표 연습) · 체크리스트 기반 피드백 및 수정 · 조별 오프모임 진행 (1-2조 발표 빈 시간)</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">3주차</span></td><td class="col-date">6/14 (일)</td><td class="col-time">당일까지</td><td class="col-session"><div class="sched-title">3차 과제 제출</div><div class="sched-detail">강연 확정본 + 기고 글 작성 + 강연 티켓 판매 인증 (2장)</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">6/17 (수)</td><td class="col-time">7:30-10:30PM</td><td class="col-session"><div class="sched-title">공명 - 최종 오프라인 발표와 회고 (1조)</div><div class="sched-detail">최종 강연 발표 (외부 강연장) 및 회고 (1시간)</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">6/19 (금)</td><td class="col-time">7:00~10:00PM</td><td class="col-session"><div class="sched-title">외부 연사 오프라인 특강 (북토크님 — 조회수 말고 팬을 모으는 크리에이터가 되는 법)<span class="sched-participation">선택</span></div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">6/22 (월)</td><td class="col-time">7:30-10:30PM</td><td class="col-session"><div class="sched-title">공명 - 최종 오프라인 발표와 회고 (2조)</div><div class="sched-detail">최종 강연 발표 (외부 강연장) 및 회고 (1시간)</div></td></tr>
 </tbody></table></div></details>
-<!-- /NOTION_SCHEDULE:builder_advanced -->
+<!-- /NOTION_SCHEDULE:self_inquiry -->
                 </div>
               </div>
-              <div class="track-option">
-                <div class="track-option-header">
-                  <label class="track-radio-label">
-                    <input type="radio" name="tue"> 빌더 기초 트랙
-                  </label>
+              <!-- 빌더 정규 트랙 placeholder — 라디오 없음, 신청 불가. 7월 개편 오픈 예정. -->
+              <div class="track-placeholder">
+                <div class="track-placeholder-header">
+                  <span class="track-placeholder-badge">개편중 · 2026년 7월 오픈 예정</span>
+                  <span class="track-placeholder-title">빌더 실전 트랙</span>
                 </div>
-                <div class="track-schedule" data-track="builder_basic">
-                  <!-- NOTION_SCHEDULE:builder_basic -->
-<details class="schedule-details"><summary class="schedule-summary">일정 확인하기</summary><div class="schedule-body"><table><thead><tr><th class="col-week">주차</th><th class="col-date">날짜</th><th class="col-time">시간</th><th class="col-session">세션</th></tr></thead><tbody>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">4/21 (화)</td><td class="col-time">8:00-9:00PM</td><td class="col-session"><div class="sched-title">바이브코딩 아이디어 선정 &amp; 초기 세팅</div><div class="sched-detail">아이디어 선정 &amp; 시장 검증 (Deep Research) · PRD 작성 &amp; Lovable 첫 페이지 제작 · 필수 툴 세팅 (GitHub, Vercel, Supabase, API Key)</div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">4/23 (목)</td><td class="col-time">8:00~10:00PM</td><td class="col-session"><div class="sched-title">무엇이든 물어보세요 (w/빌더 코치 인디해커 성구님)<span class="sched-participation">선택</span></div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">2주차</span></td><td class="col-date">4/28 (화)</td><td class="col-time">8:00-9:00PM</td><td class="col-session"><div class="sched-title">핵심 기능 구현 (로그인 + AI)</div><div class="sched-detail">Supabase DB 구조 + 로그인(이메일/구글) 구현 · AI API 연동(OpenAI 또는 Gemini) · 무료 &amp; 유료 티어 설계 및 가격 페이지 제작 · 버그 디버깅 &amp; 코드 구조 개선</div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">2주차</span></td><td class="col-date">4/30 (목)</td><td class="col-time">8:00~10:00PM</td><td class="col-session"><div class="sched-title">무엇이든 물어보세요 (w/빌더 코치 인디해커 성구님)<span class="sched-participation">선택</span></div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">3주차</span></td><td class="col-date">5/5 (화)</td><td class="col-time">8:00-9:00PM</td><td class="col-session"><div class="sched-title">디자인 업그레이드 + 결제 연동</div><div class="sched-detail">Magic MCP로 페이지 디자인 업그레이드 · Toss Payments 결제 연동 (+Supabase) · 결제 완료 후 DB 반영 &amp; 기능 제어 로직 구현</div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">3주차</span></td><td class="col-date">5/7 (목)</td><td class="col-time">8:00~10:00PM</td><td class="col-session"><div class="sched-title">무엇이든 물어보세요 (w/빌더 코치 인디해커 성구님)<span class="sched-participation">선택</span></div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">5/12 (화)</td><td class="col-time">8:00-9:00PM</td><td class="col-session"><div class="sched-title">배포, 런칭 전 준비사항</div><div class="sched-detail">SEO 설정 &amp; 메타태그 수정 · 도메인 구입 &amp; 연결 · Vercel Analytics 설치 · Cursor 로 옮겨가는 방법</div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">5/14 (목)</td><td class="col-time">8:00~10:00PM</td><td class="col-session"><div class="sched-title">무엇이든 물어보세요 (w/빌더 코치 인디해커 성구님)<span class="sched-participation">선택</span></div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">4주차</span></td><td class="col-date">5/15 (금)</td><td class="col-time">7:00~10:00PM</td><td class="col-session"><div class="sched-title">외부 연사 오프라인 특강(윤자동 님)<span class="sched-participation">선택</span></div></td></tr>
-</tbody></table></div></details>
-<!-- /NOTION_SCHEDULE:builder_basic -->
-                </div>
+                <p class="track-placeholder-desc">
+                  더 깊은 빌더 커리큘럼으로 다듬는 중이에요. 지금은 <a href="#light-tracks-block" class="track-placeholder-link">빌더 라이트 ↓</a> 로 빌딩 워밍업을 시작해보세요.
+                </p>
               </div>
             </div>
           </div>
@@ -1276,7 +1298,7 @@
               <div class="track-option">
                 <div class="track-option-header">
                   <label class="track-radio-label">
-                    <input type="radio" name="wed" id="wed-ai"> AI 에이전트 트랙
+                    <input type="radio" name="wed" id="wed-self-inquiry"> 나 탐구 트랙
                   </label>
                 </div>
                 <div class="track-schedule" data-track="ai_agent">
@@ -1411,34 +1433,24 @@
             <span class="leader-option-key">B</span>
             <span class="leader-option-label">[나 탐구 트랙] 조장에 지원하겠습니다.</span>
           </label>
-          <label class="leader-option is-disabled" data-leader-track="builder_advanced">
-            <input type="radio" name="leader-apply" value="builder_advanced" disabled>
-            <span class="leader-option-key">C</span>
-            <span class="leader-option-label">[빌더 심화 트랙] 조장에 지원하겠습니다.</span>
-          </label>
-          <label class="leader-option is-disabled" data-leader-track="builder_basic">
-            <input type="radio" name="leader-apply" value="builder_basic" disabled>
-            <span class="leader-option-key">D</span>
-            <span class="leader-option-label">[빌더 기초 트랙] 조장에 지원하겠습니다.</span>
-          </label>
           <label class="leader-option is-disabled" data-leader-track="ai_agent">
             <input type="radio" name="leader-apply" value="ai_agent" disabled>
-            <span class="leader-option-key">E</span>
+            <span class="leader-option-key">C</span>
             <span class="leader-option-label">[AI 에이전트 트랙] 조장에 지원하겠습니다.</span>
           </label>
           <label class="leader-option is-disabled" data-leader-track="creator">
             <input type="radio" name="leader-apply" value="creator" disabled>
-            <span class="leader-option-key">F</span>
+            <span class="leader-option-key">D</span>
             <span class="leader-option-label">[크리에이터 트랙] 조장에 지원하겠습니다.</span>
           </label>
           <label class="leader-option is-disabled" data-leader-track="app_dev">
             <input type="radio" name="leader-apply" value="app_dev" disabled>
-            <span class="leader-option-key">G</span>
+            <span class="leader-option-key">E</span>
             <span class="leader-option-label">[앱 개발 트랙] 조장에 지원하겠습니다.</span>
           </label>
           <label class="leader-option leader-option-none is-checked" data-leader-track="none">
             <input type="radio" name="leader-apply" value="none" checked>
-            <span class="leader-option-key">H</span>
+            <span class="leader-option-key">F</span>
             <span class="leader-option-label">지원에 희망하지 않습니다.</span>
           </label>
         </div>
@@ -2992,7 +3004,8 @@
     //
     // 트랙 id → 요일 라디오 input name + value(트랙 id) 매핑.
     // 라디오 value="creator" 같이 사용 (track-schedule data-track 과 동일).
-    const LEADER_TRACK_IDS = ['sales_real', 'self_inquiry', 'builder_advanced', 'builder_basic', 'ai_agent', 'creator', 'app_dev'];
+    // 9기 개편: 빌더 정규 (심화/기초) 트랙은 7월 개편 오픈 예정으로 보류. 조장 지원도 비활성.
+    const LEADER_TRACK_IDS = ['sales_real', 'self_inquiry', 'ai_agent', 'creator', 'app_dev'];
 
     /** 현재 사용자가 정규 트랙 중 어떤 id 들을 라디오로 선택했는지 set 으로 반환. */
     function getSelectedWeekdayTrackIds() {
@@ -3201,10 +3214,12 @@
       tracks.forEach(track => {
         if (track.type === 'weekday') {
           if (track.id === 'sales_real') weekday.monday = TRACK_LABELS.sales_real;
-          if (track.id === 'self_inquiry') weekday.monday = TRACK_LABELS.self_inquiry;
+          // 9기 개편 (2026-05-18): self_inquiry 월→수, ai_agent 수→화.
+          // 빌더 정규는 7월 오픈 예정이지만 legacy 데이터 호환 위해 매핑은 유지 (UI 진입은 비활성).
+          if (track.id === 'self_inquiry') weekday.wednesday = TRACK_LABELS.self_inquiry;
           if (track.id === 'builder_advanced') weekday.tuesday = TRACK_LABELS.builder_advanced;
           if (track.id === 'builder_basic') weekday.tuesday = TRACK_LABELS.builder_basic;
-          if (track.id === 'ai_agent') weekday.wednesday = TRACK_LABELS.ai_agent;
+          if (track.id === 'ai_agent') weekday.tuesday = TRACK_LABELS.ai_agent;
           if (track.id === 'creator') {
             weekday.wednesday = TRACK_LABELS.creator;
             if (track.creatorSub === 'short_long') creatorSub = '숏폼 + 롱폼';
@@ -3471,10 +3486,12 @@
       );
       if (!confirmed) return;
 
-      const WEEKDAY_IDS = ['creator', 'builder_basic', 'builder_advanced', 'sales_real', 'ai_agent', 'app_dev', 'self_inquiry'];
+      // 9기 개편: 빌더 정규는 7월 오픈 예정이라 랜덤 채우기 풀에서 제외.
+      // ai_agent: 수→화, self_inquiry: 월→수 이동.
+      const WEEKDAY_IDS = ['creator', 'sales_real', 'ai_agent', 'app_dev', 'self_inquiry'];
       const WEEKDAY_TO_DAY = {
-        creator: 'wed', builder_basic: 'tue', builder_advanced: 'tue',
-        sales_real: 'mon', ai_agent: 'wed', app_dev: 'thu', self_inquiry: 'mon',
+        creator: 'wed',
+        sales_real: 'mon', ai_agent: 'tue', app_dev: 'thu', self_inquiry: 'wed',
       };
       const CREATOR_LIGHT_IDS = ['creator_light_short', 'creator_light_long'];
       const BUILDER_LIGHT_IDS = ['builder_light_basic', 'builder_light_adv'];
@@ -4632,10 +4649,15 @@
     }
 
     // 요일 ↔ 트랙 매핑 (편집 모달에서 '이 멤버가 해당 요일에 이미 트랙이 있는가' 판정용)
+    // 9기 개편 (2026-05-18):
+    //   - self_inquiry 월→수 이동, ai_agent 수→화 이동
+    //   - 빌더 정규 (advanced/basic) 는 7월 개편 오픈 예정 — UI 비활성 + 백엔드 호환을 위해
+    //     legacy 데이터 weekday 매핑은 화요일로 유지 (이전 신청자 자료 조회 시 호환).
     const WEEKDAY_OF_TRACK = {
-      sales_real: 'monday', self_inquiry: 'monday',
+      sales_real: 'monday',
+      self_inquiry: 'wednesday',
       builder_advanced: 'tuesday', builder_basic: 'tuesday',
-      ai_agent: 'wednesday', creator: 'wednesday',
+      ai_agent: 'tuesday', creator: 'wednesday',
       app_dev: 'thursday',
     };
     const LIGHT_GROUP_OF_TRACK = {
@@ -4949,12 +4971,13 @@
     let editingMemberId = null;
     let editingTracks = [];
 
+    // admin edit modal 트랙 선택지. 9기 개편: 빌더 정규는 7월 오픈 예정이라
+    // 운영자 직접 편집에서도 제외. 운영진이 만지면 안되는 트랙.
+    // ai_agent 수→화, self_inquiry 월→수 이동 반영.
     const WEEKDAY_TRACK_CHOICES = [
       { id: 'sales_real',       label: '세일즈 실전 트랙',    weekday: 'monday' },
-      { id: 'self_inquiry',     label: '나 탐구 트랙',        weekday: 'monday' },
-      { id: 'builder_advanced', label: '빌더 심화 트랙',      weekday: 'tuesday' },
-      { id: 'builder_basic',    label: '빌더 기초 트랙',      weekday: 'tuesday' },
-      { id: 'ai_agent',         label: 'AI 에이전트 트랙',    weekday: 'wednesday' },
+      { id: 'ai_agent',         label: 'AI 에이전트 트랙',    weekday: 'tuesday' },
+      { id: 'self_inquiry',     label: '나 탐구 트랙',        weekday: 'wednesday' },
       { id: 'creator',          label: '크리에이터 트랙',     weekday: 'wednesday' },
       { id: 'app_dev',          label: '앱 개발 트랙',        weekday: 'thursday' },
     ];
@@ -5184,46 +5207,34 @@
         ],
       },
       {
-        id: 'self_inquiry', label: '나 탐구 트랙', weekday: '월요일',
+        id: 'self_inquiry', label: '나 탐구 트랙', weekday: '수요일',
         tagline: '나다움 발견 → 퍼스널 브랜딩 → 실제 강연까지, 4주 만에 무대 위로',
         target: '본인의 정체성·메시지를 정리하고 싶은 분, 강연·콘텐츠 시작이 막막한 분',
         weeks: [
-          { week: '1주차', date: '4/20 (월)', time: '8:00-9:30PM', title: '발견', detail: '나다움 찾기 (라이브) · 진단 결과 리뷰 · 이키가이 분석' },
-          { week: '2주차', date: '4/27 (월)', time: '8:00-9:30PM', title: '실행', detail: '브랜딩과 콘텐츠 설계 · 퍼스널 브랜딩 · 강연 자료 제작' },
-          { week: '3주차', date: '5/6 (수)', time: '8:00-10:00PM', title: '기록', detail: '강연 발표 및 피드백 (라이브) · 발표 연습 · 강연 확정본 완성' },
-          { week: '4주차', date: '5/11 (월)', time: '7:30-9:30PM', title: '공명', detail: '최종 발표와 회고 · 외부 강연장에서 강연 발표' },
+          { week: 'OT', date: '5/24 (일)', time: '8:00-10:00PM', title: '오리엔테이션 라이브', detail: '4주간 일정 및 내용 리뷰' },
+          { week: '1주차', date: '5/27 (수)', time: '8:00-9:30PM', title: '발견 - 나다움 찾기 (온라인 라이브)', detail: '진단 결과 리뷰 및 가치 단어 정리 · 이키가이 분석' },
+          { week: '1주차', date: '5/27 (수)', time: '9:30-11:00PM', title: '조별 모임 / 피드백 세션', detail: '자기소개 및 아이스브레이킹' },
+          { week: '1주차', date: '5/31 (일)', time: '당일까지', title: '1차 과제 제출', detail: '경험인벤토리, 가치단어, 소명선서문, 이키가이 (4종)' },
+          { week: '2주차', date: '6/3 (수)', time: '8:00-9:00PM', title: '실행 - 브랜딩과 콘텐츠 설계 (온라인 라이브)', detail: '퍼스널 브랜딩 작성법 · 콘텐츠 기획서 작성법' },
+          { week: '2주차', date: '6/3 (수)', time: '9:00-11:00PM', title: '조별 모임 / 1:1 컨설팅 (인당 10분)' },
+          { week: '2주차', date: '6/7 (일)', time: '당일까지', title: '2차 과제 제출', detail: '브랜딩 + 콘텐츠 완성본 + 강연 초안 + 기고 글 1개' },
+          { week: '3주차', date: '6/8 (월)', time: '8:00-11:00PM', title: '기록 - 강연 발표 및 피드백 (오프라인, 논현역 인근)', detail: '강연 자료 실제 발표 · 체크리스트 기반 피드백 · 조별 오프모임' },
+          { week: '3주차', date: '6/14 (일)', time: '당일까지', title: '3차 과제 제출', detail: '강연 확정본 + 기고 글 + 강연 티켓 판매 인증 (2장)' },
+          { week: '4주차', date: '6/17 (수)', time: '7:30-10:30PM', title: '공명 - 최종 오프라인 발표와 회고 (1조)', detail: '최종 강연 발표 (외부 강연장) 및 회고 (1시간)' },
+          { week: '4주차', date: '6/19 (금)', time: '7:00-10:00PM', title: '외부 연사 오프라인 특강 (북토크님 — 조회수 말고 팬을 모으는 크리에이터가 되는 법)', optional: true },
+          { week: '4주차', date: '6/22 (월)', time: '7:30-10:30PM', title: '공명 - 최종 오프라인 발표와 회고 (2조)', detail: '최종 강연 발표 (외부 강연장) 및 회고 (1시간)' },
         ],
       },
       {
-        id: 'builder_advanced', label: '빌더 심화 트랙', weekday: '화요일',
-        tagline: 'Cursor·Vooster로 MVP 만들고, 배포까지 직접. 코딩 경험자를 위한 4주',
-        target: '바이브코딩 경험이 있고 본인의 MVP를 본격적으로 출시하고 싶은 분',
-        coach: '인디해커 성구님',
-        weeks: [
-          { week: '1주차', date: '4/21 (화)', time: '8:00-9:00PM', title: '바이브코딩 중급자의 환경 설정하기' },
-          { week: '1주차', date: '4/23 (목)', time: '8:00-10:00PM', title: '1:1 컨설팅 및 QnA (w/성구님)', optional: true },
-          { week: '2주차', date: '4/28 (화)', time: '8:00-9:00PM', title: 'Cursor, Vooster로 나만의 MVP 만들기' },
-          { week: '3주차', date: '5/5 (화)', time: '8:00-9:00PM', title: 'MVP 디버깅하기 + 출시하기' },
-          { week: '4주차', date: '5/12 (화)', time: '8:00-9:00PM', title: 'Github·Vercel 배포, 도메인 구매 + 보안 검토' },
-          { week: '4주차', date: '5/15 (금)', time: '7:00-10:00PM', title: '외부 연사 오프라인 특강 (윤자동 님)', optional: true },
-        ],
+        id: 'builder_advanced', label: '빌더 실전 트랙', weekday: '화요일',
+        comingSoon: true,
+        comingSoonNote: '2026년 7월 정식 오픈 예정',
+        tagline: '더 깊은 빌더 커리큘럼으로 다듬는 중입니다. 지금은 빌더 라이트로 빌딩 워밍업을 시작해보세요.',
+        target: '본인의 MVP·SaaS를 본격적으로 출시하고 싶은 분 (정식 오픈 시 안내)',
+        weeks: [],
       },
       {
-        id: 'builder_basic', label: '빌더 기초 트랙', weekday: '화요일',
-        tagline: 'Lovable로 첫 SaaS를 4주 안에. 결제 연동까지 한 사이클 완주',
-        target: '코딩 처음이지만 본인의 SaaS 아이디어를 출시까지 끌고 가고 싶은 분',
-        coach: '인디해커 성구님',
-        weeks: [
-          { week: '1주차', date: '4/21 (화)', time: '8:00-9:00PM', title: '바이브코딩 아이디어 선정 & 초기 세팅', detail: 'Deep Research · PRD · Lovable 첫 페이지 · GitHub/Vercel/Supabase 세팅' },
-          { week: '1주차', date: '4/23 (목)', time: '8:00-10:00PM', title: '무엇이든 물어보세요 (w/빌더 코치 성구님)', optional: true },
-          { week: '2주차', date: '4/28 (화)', time: '8:00-9:00PM', title: '핵심 기능 구현 (로그인 + AI)', detail: 'Supabase DB + 로그인 · AI API 연동 · 무료/유료 티어 + 가격 페이지' },
-          { week: '3주차', date: '5/5 (화)', time: '8:00-9:00PM', title: '디자인 업그레이드 + 결제 연동', detail: 'Magic MCP 디자인 · Toss Payments · 결제 후 DB 반영 + 기능 제어' },
-          { week: '4주차', date: '5/12 (화)', time: '8:00-9:00PM', title: '배포, 런칭 전 준비사항', detail: 'SEO/메타태그 · 도메인 · Vercel Analytics · Cursor 이관' },
-          { week: '4주차', date: '5/15 (금)', time: '7:00-10:00PM', title: '외부 연사 오프라인 특강 (윤자동 님)', optional: true },
-        ],
-      },
-      {
-        id: 'ai_agent', label: 'AI 에이전트 트랙', weekday: '수요일',
+        id: 'ai_agent', label: 'AI 에이전트 트랙', weekday: '화요일',
         tagline: 'Claude Code의 스킬·MCP·서브에이전트로 만드는 100% 자동화 시스템',
         target: '반복 업무를 AI로 자동화하고 싶은 분, 멀티 에이전트 시스템에 입문하고 싶은 분',
         weeks: [
@@ -5285,6 +5296,29 @@
 
     function renderTrackSection(track, index) {
       const altBg = index % 2 === 0 ? 'bg-canvas' : 'bg-surface';
+
+      // 9기 개편: comingSoon 트랙은 hero + 안내 메시지만 표시.
+      // 일정·메타 비공개, 라이트 트랙으로 유도 CTA.
+      if (track.comingSoon) {
+        return `
+          <section id="preopen-track-${track.id}" class="${altBg} border-b border-border-hair scroll-mt-16">
+            <div class="max-w-4xl mx-auto px-5 md:px-8 py-16 md:py-20">
+              <div class="inline-flex items-center gap-2 mb-5">
+                <span class="inline-flex items-center bg-navy-soft text-navy text-[11px] font-bold px-2 py-1 rounded">${escHtml(track.comingSoonNote || '개편중')}</span>
+                <span class="text-eyebrow">${escHtml(track.weekday)}</span>
+              </div>
+              <h2 class="text-3xl md:text-5xl font-bold tracking-tight text-ink leading-[1.08] opacity-80">${escHtml(track.label)}</h2>
+              <p class="mt-5 text-base md:text-lg text-ink-muted leading-relaxed max-w-3xl">${escHtml(track.tagline)}</p>
+              ${track.target ? `<p class="mt-3 text-[14px] text-ink-soft leading-relaxed max-w-3xl">대상: ${escHtml(track.target)}</p>` : ''}
+              <div class="mt-8 inline-flex items-center gap-2 text-[13px] text-ink-muted">
+                <span>지금은</span>
+                <a href="#preopen-light-tracks" class="font-semibold text-navy underline underline-offset-2">빌더 라이트 ↓</a>
+                <span>로 빌딩 워밍업을 시작해보세요.</span>
+              </div>
+            </div>
+          </section>`;
+      }
+
       const highlights = getWeeklyHighlights(track.weeks);
 
       const metaCells = [
