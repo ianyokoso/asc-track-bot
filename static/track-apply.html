@@ -208,19 +208,20 @@
     }
 
     /* ── 조장 지원 (Leader Apply) ─ 정규 트랙 아래 별도 섹션 ──────────
-       탈리폼 스타일 참고. 단일 라디오 선택 + 모티베이션 카피 카드.
+       사이트 톤매너 (white + navy + grey) 에 맞춰 미니멀 카드.
+       단일 라디오 선택 + 부담 낮추는 모티베이션 카피.
        선택한 정규 트랙에 한해 활성, 그 외는 disabled. */
     .leader-apply-section {
-      background: linear-gradient(180deg, #FFFBEB 0%, #FFFFFF 100%);
-      border: 1px solid #FDE68A;
+      background: #FFFFFF;
+      border: 1px solid #E5E7EB;
       border-radius: 12px;
-      padding: 24px 22px 26px;
+      padding: 26px 22px 28px;
       margin-bottom: 40px;
     }
     .leader-section-eyebrow {
       display: inline-block;
-      background: #FEF3C7;
-      color: #92400E;
+      background: #EEF0F6;
+      color: #1E2A4A;
       font-size: 11px;
       font-weight: 700;
       padding: 2px 8px;
@@ -234,48 +235,81 @@
       font-weight: 700;
       color: #141E3C;
       letter-spacing: -0.01em;
-      margin-bottom: 16px;
+      margin-bottom: 18px;
     }
     .leader-pitch-card {
-      background: #FFFFFF;
-      border: 1px solid #FDE68A;
-      border-radius: 8px;
-      padding: 16px 18px 18px;
-      margin-bottom: 20px;
+      background: #F4F6F8;
+      border-radius: 10px;
+      padding: 24px 22px;
+      margin-bottom: 22px;
     }
     .leader-pitch-headline {
-      display: inline-block;
-      background: #FEE2E2;
-      color: #141E3C;
-      font-size: 14px;
+      font-size: 16px;
       font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 4px;
-      margin-bottom: 12px;
+      color: #141E3C;
+      line-height: 1.5;
+      letter-spacing: -0.01em;
+      margin-bottom: 20px;
     }
-    .leader-pitch-list {
+    .leader-pitch-quote-mark {
+      color: #9CA3AF;
+      font-weight: 400;
+    }
+    .leader-pitch-points {
       list-style: none;
       padding: 0;
+      margin: 0 0 20px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .leader-pitch-point {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .leader-pitch-check {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      background: #1E2A4A;
+      color: #FFFFFF;
+      font-size: 11px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1px;
+    }
+    .leader-pitch-point-body {
+      flex: 1;
+      min-width: 0;
+    }
+    .leader-pitch-point-head {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #141E3C;
+      margin-bottom: 3px;
+      line-height: 1.45;
+    }
+    .leader-pitch-point-sub {
+      font-size: 12.5px;
+      color: #6B7280;
+      line-height: 1.55;
+    }
+    .leader-pitch-footnote {
+      font-size: 12.5px;
+      color: #6B7280;
+      line-height: 1.75;
+      padding-top: 16px;
+      border-top: 1px solid #E5E7EB;
+      text-align: center;
       margin: 0;
-      font-size: 13px;
-      line-height: 1.85;
-      color: #4B5563;
     }
-    .leader-pitch-list li {
-      position: relative;
-      padding-left: 12px;
-    }
-    .leader-pitch-list li::before {
-      content: '-';
-      position: absolute;
-      left: 0;
-      color: #9CA3AF;
-    }
-    .leader-pitch-list strong {
+    .leader-pitch-footnote strong {
       color: #141E3C;
       font-weight: 700;
-      border-bottom: 1px solid #141E3C;
-      padding-bottom: 1px;
     }
     .leader-options {
       display: flex;
@@ -1334,14 +1368,36 @@
         </div>
 
         <div class="leader-pitch-card">
-          <div class="leader-pitch-headline">"조장이 되어 ASC를 보다 더 깊게 경험하세요!"</div>
-          <ul class="leader-pitch-list">
-            <li>조장 95% 이상이 트랙을 <strong>성공적으로 완주</strong>했습니다.</li>
-            <li>조장 출신 멤버가 <strong>남다른 퍼포먼스</strong>를 발휘하고 있습니다.</li>
-            <li>조장으로 트랙 완주 시, 소정의 사례금 <strong>3만원</strong>을 지급합니다.</li>
-            <li><strong>누구나 가능한</strong> 조장 업무 — 조별 모임 리딩, 출결 및 과제 체크, 간단 회의록 작성</li>
-            <li>선정되신 조장 님께는 <strong>상세 가이드</strong>가 제공됩니다.</li>
+          <div class="leader-pitch-headline">
+            <span class="leader-pitch-quote-mark">“</span>조장은 의외로 쉽고, 얻는 건 의외로 많습니다<span class="leader-pitch-quote-mark">”</span>
+          </div>
+          <ul class="leader-pitch-points">
+            <li class="leader-pitch-point">
+              <span class="leader-pitch-check" aria-hidden="true">✓</span>
+              <div class="leader-pitch-point-body">
+                <div class="leader-pitch-point-head">조장 업무는 일주일 30분이면 충분합니다</div>
+                <div class="leader-pitch-point-sub">조별 모임 진행, 출결 체크, 간단 회의록 — 그게 전부예요</div>
+              </div>
+            </li>
+            <li class="leader-pitch-point">
+              <span class="leader-pitch-check" aria-hidden="true">✓</span>
+              <div class="leader-pitch-point-body">
+                <div class="leader-pitch-point-head">일반 멤버보다 2배 더 깊게 ASC를 경험합니다</div>
+                <div class="leader-pitch-point-sub">조장 출신 95%가 완주, 이후 가장 강력한 네트워크 형성</div>
+              </div>
+            </li>
+            <li class="leader-pitch-point">
+              <span class="leader-pitch-check" aria-hidden="true">✓</span>
+              <div class="leader-pitch-point-body">
+                <div class="leader-pitch-point-head">사례금 3만원 + 조장 전용 혜택</div>
+                <div class="leader-pitch-point-sub">상세 가이드 제공, 운영진 1:1 백업, 조장 모임 초대</div>
+              </div>
+            </li>
           </ul>
+          <p class="leader-pitch-footnote">
+            처음이어도, 리더 경험이 없어도 괜찮아요.<br>
+            ASC 조장은 <strong>“잘하는 사람”</strong>이 아니라 <strong>“함께하는 사람”</strong>입니다.
+          </p>
         </div>
 
         <div class="leader-options" role="radiogroup" aria-labelledby="leader-apply-block">
