@@ -1395,6 +1395,152 @@ class AdminCog(commands.Cog):
             f"• 보존: 공지 채널 / 카테고리 / 카테고리 밖 채널 / 시스템·다른 기수 역할"
         ))
 
+    @commands.command(name='역할삭제', aliases=['cleanup_cohort_roles'])
+    @commands.has_permissions(administrator=True)
+    async def cleanup_cohort_roles(self, ctx, cohort: Optional[str] = None):
+        """
+        지난 기수의 트랙 역할만 삭제. 채널·카테고리는 일체 건드리지 않음.
+
+        사용법: `!역할삭제 9`  → 9기 트랙 역할만 정리
+
+        삭제 대상 (모두 만족):
+          - 이름이 `{트랙 prefix}-{기수}기` 또는 `{트랙 prefix}-{기수}기-...` 형식
+          - 봇/통합 관리 역할 아님 (`role.managed=False`)
+          - `@everyone` 아님
+
+        보존:
+          - 모든 채널·카테고리 (이 명령어는 역할만 다룸)
+          - 다른 기수 트랙 역할 / 시스템·봇 역할 / 운영자 / @everyone
+
+        안전장치:
+          - 관리자 권한 필요
+          - 삭제 대상 미리 표시 → 30초 내 `확인` 답글 필요
+        """
+        if not ctx.guild:
+            await ctx.reply("❌ 길드 채널에서만 실행 가능합니다.")
+            return
+
+        raw_cohort = (cohort or '').strip().replace('기', '')
+        if not raw_cohort.isdigit():
+            await ctx.reply(
+                "❌ 기수를 숫자로 지정해주세요. 예: `!역할삭제 9` (9기 트랙 역할 삭제)"
+            )
+            return
+        cohort_num = raw_cohort
+
+        # 트랙 prefix 매칭 — cleanup_cohort_channels 와 동일한 룰 사용.
+        _LEGACY_TRACK_PREFIXES = [
+            "나-다움",
+            "빌더-라이트",
+            "크리에이터-라이트",
+            "AI에이전트",
+        ]
+        track_short_prefixes = sorted(
+            set(list(_TRACK_DISCORD_PREFIX.values()) + _LEGACY_TRACK_PREFIXES),
+            key=len,
+            reverse=True,
+        )
+
+        cohort_marker = f"-{cohort_num}기"
+
+        def _name_matches_cohort_track(name: str) -> bool:
+            if not name:
+                return False
+            for prefix in track_short_prefixes:
+                head = f"{prefix}{cohort_marker}"
+                if name == head or name.startswith(f"{head}-"):
+                    return True
+            return False
+
+        def _is_cohort_track_role(role: discord.Role) -> bool:
+            if role.managed or role.is_default():
+                return False
+            return _name_matches_cohort_track(role.name or '')
+
+        guild = ctx.guild
+        role_candidates: List[discord.Role] = [
+            r for r in guild.roles if _is_cohort_track_role(r)
+        ]
+
+        if not role_candidates:
+            await ctx.reply(
+                f"ℹ️ {cohort_num}기 트랙 역할 중 삭제 대상이 없습니다. "
+                f"(`{{prefix}}-{cohort_num}기-...` 패턴 기준, 시스템·운영자 역할 제외)"
+            )
+            return
+
+        preview_lines = [f"**역할 ({len(role_candidates)}개)**"]
+        for r in role_candidates[:20]:
+            preview_lines.append(f"  • `{r.name}` (멤버 {len(r.members)}명)")
+        r_more = len(role_candidates) - min(20, len(role_candidates))
+        if r_more > 0:
+            preview_lines.append(f"  … 외 {r_more}개")
+
+        await ctx.reply(
+            f"⚠️ **{cohort_num}기 트랙 역할 정리** — 역할 **{len(role_candidates)}개** 삭제 예정\n"
+            f"채널·카테고리는 일체 건드리지 않습니다. 시스템·운영자·다른 기수 역할은 보존됩니다.\n\n"
+            + "\n".join(preview_lines)
+            + f"\n\n**30초 안에 `확인`** 이라고 답글 주시면 진행, 아니면 취소됩니다."
+        )
+
+        def _confirm_check(m):
+            return (
+                m.author == ctx.author
+                and m.channel == ctx.channel
+                and m.content.strip() == '확인'
+            )
+
+        try:
+            await self.bot.wait_for('message', check=_confirm_check, timeout=30.0)
+        except asyncio.TimeoutError:
+            await ctx.reply("❌ 30초 초과. 삭제 취소됨.")
+            return
+
+        status = await ctx.reply(f"🗑️ {cohort_num}기 트랙 역할 삭제 진행 중...")
+
+        deleted_roles = 0
+        errors = 0
+        error_details: List[str] = []
+        reason = f"{cohort_num}기 트랙 역할 정리 (채널 보존)"
+
+        for role in role_candidates:
+            if not _is_cohort_track_role(role):
+                logger.warning(
+                    f"[CleanupRoles] 역할 {role.name} 재검사 실패 — 이름 변경/managed 전환, skip"
+                )
+                continue
+            try:
+                await role.delete(reason=reason)
+                deleted_roles += 1
+            except discord.Forbidden as e:
+                # 봇 권한·위계 부족 — 진단에 유용한 정보라 details 에 기록.
+                logger.warning(f"[CleanupRoles] 권한·위계 부족 {role.name}: {e}")
+                errors += 1
+                if len(error_details) < 5:
+                    error_details.append(f"`{role.name}` (위계 부족)")
+            except Exception as e:
+                logger.warning(f"[CleanupRoles] 역할 삭제 실패 {role.name}: {e}")
+                errors += 1
+                if len(error_details) < 5:
+                    error_details.append(f"`{role.name}` ({type(e).__name__})")
+
+        # 실패 사유 첨부 — 사용자가 봇 위계 점검할 수 있게.
+        error_section = ''
+        if errors > 0:
+            error_section = (
+                f"\n• 실패: {errors}개"
+                + (f" — {', '.join(error_details)}" if error_details else '')
+                + ("…" if errors > len(error_details) else '')
+                + "\n  └ 봇 역할이 해당 역할보다 길드 위계에서 **위에 있어야** 삭제 가능합니다."
+            )
+
+        await status.edit(content=(
+            f"✅ {cohort_num}기 트랙 역할 정리 완료\n"
+            f"• 역할 삭제: **{deleted_roles}**개"
+            + error_section
+            + f"\n• 보존: 채널 일체 / 시스템·운영자·다른 기수 역할"
+        ))
+
 
 async def setup(bot):
     await bot.add_cog(AdminCog(bot))
