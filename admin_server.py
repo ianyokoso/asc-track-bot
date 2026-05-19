@@ -14,6 +14,7 @@ import uuid
 from urllib.parse import urlencode
 
 from env_utils import (
+    PROD_DISCORD_GUILD_BLACKLIST,
     get_bot_command_queue_file,
     get_bot_config_file,
     get_bot_heartbeat_file,
@@ -708,10 +709,81 @@ def _is_user_in_admin_guild(user_id):
         return False
 
 
+def _get_signup_allowed_guild_ids():
+    """
+    트랙신청 OAuth 가 허용되는 길드 ID set.
+
+    포함 정책:
+      1) env 별 admin guild — TEST_DISCORD_GUILD_ID (test 모드) 또는 PROD_DISCORD_GUILD_ID (prod).
+         운영진/QA 가 자기 환경 길드 멤버로 신청서 검증할 수 있게.
+      2) PROD_DISCORD_GUILD_BLACKLIST 의 실 운영 길드 (env_utils 의 frozen set).
+         env=test 운영 중이라도 실 prod 길드 멤버는 신청서 작성 가능.
+         (배포 후 9기 신청 시점에 운영 환경 전환 안 해도 prod 멤버가 즉시 신청 가능)
+
+    리턴: int guild ID 의 set. 비어있으면 신청 허용 길드 없음 → 보안 가드가 모두 거부.
+    """
+    ids = set()
+    admin_gid = _get_admin_guild_id()
+    if admin_gid:
+        try:
+            ids.add(int(admin_gid))
+        except (TypeError, ValueError):
+            pass
+    for gid in PROD_DISCORD_GUILD_BLACKLIST:
+        try:
+            ids.add(int(gid))
+        except (TypeError, ValueError):
+            pass
+    return ids
+
+
+def _is_user_in_signup_guild(user_id):
+    """
+    봇 토큰으로 user_id 가 _get_signup_allowed_guild_ids() 중 어느 길드의 멤버인지 확인.
+    하나라도 200 이면 True, 모두 404 면 False, fail-closed.
+
+    트랙신청 OAuth callback / 세션 검증에서 사용 — `_is_user_in_admin_guild` 보다
+    더 넓은 범위 허용 (admin 작업 길드 + 실 prod 길드).
+    """
+    bot_token = str(os.getenv('DISCORD_BOT_TOKEN', '')).strip()
+    user_id_str = str(user_id or '').strip()
+    if not bot_token:
+        print('[SECURITY] Signup guild check: DISCORD_BOT_TOKEN missing — denying')
+        return False
+    if not user_id_str:
+        return False
+    guild_ids = _get_signup_allowed_guild_ids()
+    if not guild_ids:
+        print('[SECURITY] Signup guild check: no allowed guilds configured — denying')
+        return False
+    for gid in guild_ids:
+        try:
+            r = requests.get(
+                f'https://discord.com/api/v10/guilds/{gid}/members/{user_id_str}',
+                headers={'Authorization': f'Bot {bot_token}'},
+                timeout=10,
+            )
+            if r.status_code == 200:
+                return True
+            if r.status_code == 404:
+                continue  # 이 길드에는 미멤버 → 다음 후보 길드 시도
+            print(f'[SECURITY] Signup guild check unexpected status: gid={gid} status={r.status_code} body={r.text[:200]}')
+        except requests.RequestException as e:
+            print(f'[SECURITY] Signup guild check network error gid={gid}: {e}')
+            continue
+        except Exception as e:
+            print(f'[SECURITY] Signup guild check unexpected error gid={gid}: {e}')
+            continue
+    return False
+
+
 def _verify_session_guild_membership(ttl_seconds=300):
     """
-    세션 사용자가 운영 길드 멤버인지 검증. TTL 내면 캐시 hit, 아니면 Discord API 재호출.
-    아닌 경우 세션을 즉시 클리어 → 이후 요청은 unauthenticated 로 처리됨.
+    세션 사용자가 신청 허용 길드 중 하나의 멤버인지 검증. TTL 내면 캐시 hit, 아니면
+    Discord API 재호출. 아닌 경우 세션을 즉시 클리어 → 이후 요청은 unauthenticated 로 처리됨.
+
+    `_is_user_in_signup_guild` 를 사용 — admin guild + prod blacklist 길드 모두 허용.
+    (env=test 운영 중이라도 실 prod 길드 멤버 신청서 작성 가능.)
 
     ttl_seconds=0 으로 호출하면 무조건 재검증 (예: 트랙신청 제출 직전).
     """
@@ -728,7 +800,7 @@ def _verify_session_guild_membership(ttl_seconds=300):
         if last_check and (now - float(last_check)) < ttl_seconds:
             return
 
-    if _is_user_in_admin_guild(user_id):
+    if _is_user_in_signup_guild(user_id):
         session['discord_guild_verified_at'] = now
         return
 
@@ -2177,11 +2249,13 @@ def discord_oauth_callback():
         user_data = user_response.json()
 
         user_id = str(user_data.get('id', '')).strip()
-        # 🔒 보안 가드: 운영 길드 (env 별 PROD/TEST) 멤버만 OAuth 통과 허용.
+        # 🔒 보안 가드: 신청 허용 길드 (admin guild + 실 prod 길드) 멤버만 OAuth 통과.
         # Discord OAuth 자체는 어떤 디스코드 계정으로도 가능하므로, 봇 토큰으로 길드
         # 멤버십을 별도 확인. 비멤버면 세션 자체를 만들지 않고 즉시 차단.
-        if not _is_user_in_admin_guild(user_id):
-            print(f"[SECURITY] OAuth rejected — user {user_id} is NOT in admin guild")
+        # `_is_user_in_signup_guild` 가 admin guild OR PROD_DISCORD_GUILD_BLACKLIST 중
+        # 하나라도 멤버이면 True → env=test 운영 중에도 실 prod 멤버 신청 가능.
+        if not _is_user_in_signup_guild(user_id):
+            print(f"[SECURITY] OAuth rejected — user {user_id} is NOT in any signup-allowed guild")
             return redirect(_build_app_redirect_url(next_path, discord_auth='not_guild_member'))
 
         session.permanent = True
@@ -2202,7 +2276,7 @@ def discord_oauth_callback():
         session['discord_access_token'] = access_token
         import time as _time
         session['discord_user_refreshed_at'] = _time.time()
-        # 방금 _is_user_in_admin_guild 가 True 였으므로 길드 검증 캐시 timestamp 도 기록 —
+        # 방금 _is_user_in_signup_guild 가 True 였으므로 길드 검증 캐시 timestamp 도 기록 —
         # 5분 내 재요청은 Discord API 안 두드려도 됨.
         session['discord_guild_verified_at'] = _time.time()
         # Standalone /apply (Flask 가 직접 서빙) 에서 viewer 정보를 query param 으로 전달.
@@ -2642,17 +2716,9 @@ def _build_member_properties(fields, member, group_labels, update_only_tracks_an
         properties[fields['handle']] = {
             "rich_text": [{"text": {"content": (handle or member_id)[:2000]}}]
         }
-    if fields.get('notes'):
-        note_parts = ['source=dashboard-group-preview']
-        if handle:
-            note_parts.append(f'handle={handle}')
-        if member.get('submitted'):
-            note_parts.append(f"submitted={member['submitted']}")
-        if member.get('edits') is not None:
-            note_parts.append(f"edits={member['edits']}")
-        properties[fields['notes']] = {
-            "rich_text": [{"text": {"content": ' | '.join(note_parts)[:2000]}}]
-        }
+    # 노트(기타사항)는 운영자가 직접 사람이 읽는 정보를 적는 곳 (탈락 기록 등).
+    # 자동 추가 시 source/handle/submitted/edits 같은 디버그 메타를 박지 않는다 —
+    # handle 은 옆 컬럼에 있고 submitted/edits 는 트랙 신청 DB 에 있음.
     if fields.get('avatar') and member.get('avatarUrl'):
         properties[fields['avatar']] = {"url": member['avatarUrl']}
 
