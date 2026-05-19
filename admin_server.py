@@ -669,6 +669,79 @@ def _fetch_guild_nickname(user_id):
         return None
 
 
+def _is_user_in_admin_guild(user_id):
+    """
+    봇 토큰으로 user_id 가 운영 길드 (env 별 prod / test) 의 멤버인지 확인.
+    Returns True if 200, False if 404 (길드 멤버 아님) or any error.
+
+    Fail-closed 설계: 봇 토큰 / 길드 ID 미설정 / API 오류 시 모두 False.
+    운영자가 환경변수 누락을 즉시 감지하도록.
+    """
+    bot_token = str(os.getenv('DISCORD_BOT_TOKEN', '')).strip()
+    guild_id = _get_admin_guild_id()
+    user_id_str = str(user_id or '').strip()
+    if not bot_token:
+        print('[SECURITY] Guild membership check: DISCORD_BOT_TOKEN missing — denying')
+        return False
+    if not guild_id:
+        print('[SECURITY] Guild membership check: guild_id missing (env 별 PROD/TEST_DISCORD_GUILD_ID 확인) — denying')
+        return False
+    if not user_id_str:
+        return False
+    try:
+        r = requests.get(
+            f'https://discord.com/api/v10/guilds/{guild_id}/members/{user_id_str}',
+            headers={'Authorization': f'Bot {bot_token}'},
+            timeout=10,
+        )
+        if r.status_code == 200:
+            return True
+        if r.status_code == 404:
+            return False
+        print(f'[SECURITY] Guild membership check unexpected status: {r.status_code} body={r.text[:200]}')
+        return False
+    except requests.RequestException as e:
+        print(f'[SECURITY] Guild membership check network error: {e} — denying')
+        return False
+    except Exception as e:
+        print(f'[SECURITY] Guild membership check unexpected error: {e} — denying')
+        return False
+
+
+def _verify_session_guild_membership(ttl_seconds=300):
+    """
+    세션 사용자가 운영 길드 멤버인지 검증. TTL 내면 캐시 hit, 아니면 Discord API 재호출.
+    아닌 경우 세션을 즉시 클리어 → 이후 요청은 unauthenticated 로 처리됨.
+
+    ttl_seconds=0 으로 호출하면 무조건 재검증 (예: 트랙신청 제출 직전).
+    """
+    import time
+
+    user = session.get('discord_user') or {}
+    user_id = str(user.get('id') or '').strip()
+    if not user_id:
+        return
+
+    now = time.time()
+    if ttl_seconds > 0:
+        last_check = session.get('discord_guild_verified_at')
+        if last_check and (now - float(last_check)) < ttl_seconds:
+            return
+
+    if _is_user_in_admin_guild(user_id):
+        session['discord_guild_verified_at'] = now
+        return
+
+    print(f"[SECURITY] Session guild membership revoked for user {user_id} — clearing session")
+    for key in (
+        'discord_user',
+        'discord_access_token',
+        'discord_user_refreshed_at',
+        'discord_guild_verified_at',
+    ):
+        session.pop(key, None)
+
+
 def _refresh_session_discord_user(force=False, ttl_seconds=60):
     """
     Discord API 를 호출해서 session['discord_user'] 의 username / displayName /
@@ -2103,8 +2176,15 @@ def discord_oauth_callback():
         user_response.raise_for_status()
         user_data = user_response.json()
 
-        session.permanent = True
         user_id = str(user_data.get('id', '')).strip()
+        # 🔒 보안 가드: 운영 길드 (env 별 PROD/TEST) 멤버만 OAuth 통과 허용.
+        # Discord OAuth 자체는 어떤 디스코드 계정으로도 가능하므로, 봇 토큰으로 길드
+        # 멤버십을 별도 확인. 비멤버면 세션 자체를 만들지 않고 즉시 차단.
+        if not _is_user_in_admin_guild(user_id):
+            print(f"[SECURITY] OAuth rejected — user {user_id} is NOT in admin guild")
+            return redirect(_build_app_redirect_url(next_path, discord_auth='not_guild_member'))
+
+        session.permanent = True
         # 서버별 닉네임 (guild nickname) 우선 — global "케이" 보다 운영 컨텍스트 풍부.
         # 길드 비멤버거나 닉네임 미설정 시 None → globalName/username 폴백.
         guild_nick = _fetch_guild_nickname(user_id)
@@ -2122,6 +2202,9 @@ def discord_oauth_callback():
         session['discord_access_token'] = access_token
         import time as _time
         session['discord_user_refreshed_at'] = _time.time()
+        # 방금 _is_user_in_admin_guild 가 True 였으므로 길드 검증 캐시 timestamp 도 기록 —
+        # 5분 내 재요청은 Discord API 안 두드려도 됨.
+        session['discord_guild_verified_at'] = _time.time()
         # Standalone /apply (Flask 가 직접 서빙) 에서 viewer 정보를 query param 으로 전달.
         # Wrapper(React) 가 사라져 /api/auth/me 호출 단계가 없으므로, callback 시 URL 에 박아 보낸다.
         is_admin = _is_admin_user(discord_user_info['id'])
@@ -2148,6 +2231,9 @@ def get_authenticated_dashboard_data():
     if not _is_oauth_enabled_for_path(next_path):
         return jsonify(_build_auth_disabled_payload(next_path)), 403
     login_url = _append_query_value(f'{_get_public_api_base_url()}/api/auth/discord', 'next', next_path)
+    # 🔒 길드 멤버십 재검증 (5분 TTL) — 가입 후 길드를 떠난 사용자 차단.
+    # 실패 시 세션 클리어 → 아래 _get_authenticated_discord_user 가 None 반환.
+    _verify_session_guild_membership()
     # 페이지 로드마다 Discord 닉네임/아바타 최신화 (TTL 60s).
     _refresh_session_discord_user()
     discord_user = _get_authenticated_discord_user()
@@ -2171,6 +2257,8 @@ def get_authenticated_dashboard_data():
 
 @app.route('/api/track-applications', methods=['GET'])
 def get_track_applications():
+    # 🔒 길드 멤버십 재검증 (5분 TTL). 떠난 사용자 세션 자동 클리어 → viewerMember=None.
+    _verify_session_guild_membership()
     cohort_label = _get_current_cohort_label(
         request.args.get('cohortLabel') or request.args.get('cohort')
     )
@@ -2247,6 +2335,9 @@ def _check_track_application_window():
 
 @app.route('/api/track-applications', methods=['POST'])
 def save_track_application():
+    # 🔒 신청서 제출 직전 길드 멤버십 무조건 재검증 (ttl_seconds=0).
+    # 길드를 떠난 사용자의 캐시 hit 으로 인한 우회 방지.
+    _verify_session_guild_membership(ttl_seconds=0)
     # 신청서 저장 직전 무조건 Discord API 재조회 → 닉네임 변경이 즉시 노션에 반영되도록.
     # force=True 라 TTL 무시.
     _refresh_session_discord_user(force=True)

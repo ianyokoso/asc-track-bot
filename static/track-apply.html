@@ -2199,6 +2199,34 @@
     // OAuth 콜백이 isAdmin=1 을 query 로 박아 보내는 경우 관리자 — Page reload 후에는
     // /api/auth/me 응답으로 다시 확인 (아래 fetchAuthMe 참고).
     let IS_VIEWER_ADMIN = mockupParams.get('isAdmin') === '1';
+    // 🔒 OAuth 실패 결과 query param 처리. 서버가 callback 에서 not_guild_member /
+    // not_configured / invalid_state / token_error / callback_error / error 등을 박아 보냄.
+    // - not_guild_member: ASC 디스코드 길드 비멤버라 차단 (보안 가드).
+    //   → 사용자가 영문 모를 상태가 안 되도록 명확한 alert + 디스코드 가입 안내.
+    (function handleDiscordAuthResult() {
+      const authResult = (mockupParams.get('discord_auth') || '').trim();
+      if (!authResult || authResult === 'success') return;
+      const MESSAGES = {
+        not_guild_member: 'ASC 디스코드 서버 멤버만 트랙 신청이 가능합니다.\n먼저 ASC 디스코드에 가입한 뒤 다시 시도해주세요.',
+        not_configured: '디스코드 로그인이 아직 설정되지 않았습니다. 운영진에게 문의해주세요.',
+        invalid_state: '디스코드 로그인 세션이 만료되었습니다. 다시 로그인해주세요.',
+        token_error: '디스코드 인증 과정에서 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+        callback_error: '디스코드 인증 콜백 처리 중 오류가 발생했습니다.',
+        error: '디스코드 로그인이 취소되었거나 오류가 발생했습니다.',
+        disabled: '디스코드 인증이 비활성 상태입니다.',
+      };
+      const msg = MESSAGES[authResult] || `디스코드 로그인 실패: ${authResult}`;
+      // 다음 reload (cohortName 자동 채움) 가 일어나기 전에 즉시 alert.
+      // setTimeout 으로 DOM 준비된 후 띄우기.
+      setTimeout(() => { try { alert(msg); } catch (e) { /* ignore */ } }, 0);
+      // URL 에서 discord_auth query param 제거 — 새로고침 시 alert 재발 방지.
+      try {
+        const cleanParams = new URLSearchParams(window.location.search);
+        cleanParams.delete('discord_auth');
+        const next = `${window.location.pathname}${cleanParams.toString() ? '?' + cleanParams.toString() : ''}${window.location.hash}`;
+        window.history.replaceState({}, '', next);
+      } catch (e) { /* ignore */ }
+    })();
     // Wrapper(React) 가 사라진 standalone 모드에서는 query param 으로 loginUrl 이 안 들어옴.
     // /api/auth/discord 가 바로 Discord OAuth 로 redirect 하므로 그쪽으로 보내면 됨.
     const LOGIN_URL = (mockupParams.get('loginUrl') || '').trim()
