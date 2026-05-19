@@ -1687,7 +1687,8 @@ def _resolve_track_application_db_fields(db_obj):
         'user_id': _pick_db_property(properties, 'rich_text', ['사용자 ID', 'User ID']),
         'discord_id': _pick_db_property(properties, 'rich_text', ['디스코드 ID', 'Discord ID', 'Handle']),
         'discord_nickname': _pick_db_property(properties, 'rich_text', ['디스코드 닉네임', 'Discord Nickname', 'Display Name']),
-        'cohort': _pick_db_property(properties, 'rich_text', ['기수', 'Cohort']),
+        # cohort 컬럼 — DB 마다 '기수' 또는 '시즌' (9기 prod DB) 으로 명명. 둘 다 인식.
+        'cohort': _pick_db_property(properties, 'rich_text', ['기수', '시즌', 'Cohort', 'Season']),
         'submitted_at': _pick_db_property(properties, 'date', ['신청 날짜', 'Submitted At']),
         'monday_track': _pick_db_property(properties, 'select', ['월요일 트랙', 'Monday Track']),
         'tuesday_track': _pick_db_property(properties, 'select', ['화요일 트랙', 'Tuesday Track']),
@@ -1772,12 +1773,34 @@ def _find_page_in_relation_db_by_cohort(notion_client, db_id, cohort_label):
 
 
 def _find_existing_track_application_page(notion_client, db_id, fields, member, cohort_label, member_page_id=None):
+    """
+    같은 사용자의 기존 신청서 row 를 찾아 upsert.
+
+    매칭 우선순위 (OR):
+      1) 사용자 ID (Discord snowflake) — 영구 불변. 닉네임/핸들/cohort 컬럼 변경에도 안전.
+      2) member 마스터 DB relation — master DB 매칭 성공 시 page_id 비교
+      3) 디스코드 ID (핸들) — 사용자가 핸들 변경 시 stale
+      4) 이름 (title) — 동명이인 위험
+
+    Cohort 필터: cohort 컬럼이 존재할 때만 추가 (DB 가 단일 cohort 면 cohort 컬럼 없어도 무관).
+    user_id 매칭이 가능하면 cohort 필터는 옵션 — 같은 사용자의 신청서가 한 row 만
+    유지되도록 보장 (cohort 컬럼이 stale 또는 누락된 row 도 같이 매칭).
+    """
     filters = []
     identifier_filters = []
 
+    user_id_text = str(member.get('userId') or member.get('id') or '').strip()
     handle = str(member.get('handle') or '').strip()
     name = str(member.get('name') or '').strip()
 
+    has_user_id_match = bool(user_id_text and fields.get('user_id'))
+
+    # Primary: 사용자 ID (Discord snowflake) — 핸들/닉네임 바뀌어도 영구 매칭.
+    if has_user_id_match:
+        identifier_filters.append({
+            "property": fields['user_id'],
+            "rich_text": {"equals": user_id_text},
+        })
     if member_page_id and fields.get('member_relation'):
         identifier_filters.append({
             "property": fields['member_relation'],
@@ -1799,16 +1822,20 @@ def _find_existing_track_application_page(notion_client, db_id, fields, member, 
 
     filters.append(identifier_filters[0] if len(identifier_filters) == 1 else {"or": identifier_filters})
 
-    cohort_targets = []
-    for candidate in [str(cohort_label or '').strip(), _normalize_track_application_cohort_value(cohort_label)]:
-        if candidate and candidate not in cohort_targets:
-            cohort_targets.append(candidate)
-    if cohort_targets and fields.get('cohort'):
-        cohort_filters = [
-            {"property": fields['cohort'], "rich_text": {"equals": target}}
-            for target in cohort_targets
-        ]
-        filters.append(cohort_filters[0] if len(cohort_filters) == 1 else {"or": cohort_filters})
+    # Cohort 필터:
+    # - user_id 매칭 가능 시: cohort 필터 스킵 → 같은 사용자 한 row 유지 (cohort 컬럼이 stale/누락이어도 OK).
+    # - user_id 매칭 불가 (legacy member): cohort 필터로 cross-cohort 오매칭 방지.
+    if not has_user_id_match:
+        cohort_targets = []
+        for candidate in [str(cohort_label or '').strip(), _normalize_track_application_cohort_value(cohort_label)]:
+            if candidate and candidate not in cohort_targets:
+                cohort_targets.append(candidate)
+        if cohort_targets and fields.get('cohort'):
+            cohort_filters = [
+                {"property": fields['cohort'], "rich_text": {"equals": target}}
+                for target in cohort_targets
+            ]
+            filters.append(cohort_filters[0] if len(cohort_filters) == 1 else {"or": cohort_filters})
 
     payload = {
         "page_size": 1,
