@@ -438,30 +438,45 @@ def _get_admin_guild_id():
 # ── 운영진 역할 ID 캐시 ─────────────────────────────────────
 # Discord 길드의 역할 ID 는 거의 안 바뀌지만 운영진 역할 추가/이름 변경 시
 # 빠르게 반영되어야 하므로 짧은 TTL.
+# 길드별 캐시: { '<guild_id>': {'role_id': ..., 'fetched_at': ..., 'role_name': ...} }
 _ADMIN_ROLE_CACHE_TTL = 30  # seconds — 5분 → 30초로 단축 (운영진 즉시 반영)
-_admin_role_id_cache = {'role_id': None, 'fetched_at': 0.0, 'role_name': None}
+_admin_role_id_cache = {}
 
 
-def _resolve_admin_role_id():
-    """길드의 '운영자' 역할 ID 조회 (bot token 사용, 캐시 TTL 30초)."""
+def _resolve_admin_role_id(guild_id=None):
+    """
+    지정 길드의 '운영자' (ADMIN_DISCORD_ROLE_NAME) 역할 ID 조회.
+    guild_id 미지정 시 _get_admin_guild_id() 의 env 기본 길드 사용.
+    bot token + 30s TTL 길드별 캐시.
+
+    리턴: role_id (str) 또는 None (해당 길드에 역할 없음 / API 실패).
+    """
     import time
+
+    if guild_id is None:
+        guild_id = _get_admin_guild_id()
+    guild_id_str = str(guild_id or '').strip()
+    if not guild_id_str:
+        return None
+
     now = time.time()
     target_name = _get_admin_role_name()
+    cached = _admin_role_id_cache.get(guild_id_str)
     if (
-        _admin_role_id_cache['role_id']
-        and _admin_role_id_cache.get('role_name') == target_name
-        and (now - _admin_role_id_cache['fetched_at']) < _ADMIN_ROLE_CACHE_TTL
+        cached
+        and cached.get('role_id')
+        and cached.get('role_name') == target_name
+        and (now - cached.get('fetched_at', 0)) < _ADMIN_ROLE_CACHE_TTL
     ):
-        return _admin_role_id_cache['role_id']
+        return cached['role_id']
 
     bot_token = str(os.getenv('DISCORD_BOT_TOKEN', '')).strip()
-    guild_id = _get_admin_guild_id()
-    if not bot_token or not guild_id:
+    if not bot_token:
         return None
 
     try:
         r = requests.get(
-            f'https://discord.com/api/v10/guilds/{guild_id}/roles',
+            f'https://discord.com/api/v10/guilds/{guild_id_str}/roles',
             headers={'Authorization': f'Bot {bot_token}'},
             timeout=10,
         )
@@ -471,29 +486,34 @@ def _resolve_admin_role_id():
             if role.get('name') == target_name:
                 role_id = str(role.get('id') or '').strip()
                 if role_id:
-                    _admin_role_id_cache.update({
+                    _admin_role_id_cache[guild_id_str] = {
                         'role_id': role_id,
                         'fetched_at': now,
                         'role_name': target_name,
-                    })
+                    }
                     return role_id
-        print(f"[WARN] Admin role '{target_name}' not found in guild {guild_id}")
+        print(f"[INFO] Admin role '{target_name}' not found in guild {guild_id_str} (skip)")
     except requests.RequestException as e:
-        print(f"[ERROR] Failed to fetch guild roles: {e}")
+        print(f"[ERROR] Failed to fetch guild {guild_id_str} roles: {e}")
     except Exception as e:
-        print(f"[ERROR] Unexpected error resolving admin role: {e}")
+        print(f"[ERROR] Unexpected error resolving admin role for {guild_id_str}: {e}")
     return None
 
 
-def _fetch_user_role_ids(user_id):
-    """user_id 가 길드에서 갖고 있는 역할 ID 목록 조회 (bot token 사용)."""
+def _fetch_user_role_ids(user_id, guild_id=None):
+    """
+    user_id 가 지정 길드에서 갖고 있는 역할 ID 목록 조회.
+    guild_id 미지정 시 env 기본 길드.
+    """
     bot_token = str(os.getenv('DISCORD_BOT_TOKEN', '')).strip()
-    guild_id = _get_admin_guild_id()
-    if not bot_token or not guild_id or not user_id:
+    if guild_id is None:
+        guild_id = _get_admin_guild_id()
+    guild_id_str = str(guild_id or '').strip()
+    if not bot_token or not guild_id_str or not user_id:
         return []
     try:
         r = requests.get(
-            f'https://discord.com/api/v10/guilds/{guild_id}/members/{user_id}',
+            f'https://discord.com/api/v10/guilds/{guild_id_str}/members/{user_id}',
             headers={'Authorization': f'Bot {bot_token}'},
             timeout=10,
         )
@@ -503,7 +523,7 @@ def _fetch_user_role_ids(user_id):
         member = r.json() or {}
         return [str(rid) for rid in (member.get('roles') or [])]
     except requests.RequestException as e:
-        print(f"[ERROR] Failed to fetch member {user_id} roles: {e}")
+        print(f"[ERROR] Failed to fetch member {user_id} roles from guild {guild_id_str}: {e}")
         return []
     except Exception as e:
         print(f"[ERROR] Unexpected error fetching member roles: {e}")
@@ -514,17 +534,24 @@ def _is_admin_user(user_id):
     """
     운영진 판정 — 우선순위:
       1) ADMIN_DISCORD_USER_IDS env 화이트리스트 (역할 시스템 장애 시 비상 우회)
-      2) 길드의 '운영자'(or ADMIN_DISCORD_ROLE_NAME) 역할 보유 여부
+      2) 신청 허용 길드 (env admin guild + PROD 블랙리스트 길드) 중 어느 한 곳에서
+         '운영자' (ADMIN_DISCORD_ROLE_NAME) 역할 보유.
+
+    env=test 운영 중이라도 실 prod 길드의 운영자 역할 보유자는 admin 페이지 접근 가능.
     """
     if not user_id:
         return False
     user_id_str = str(user_id).strip()
     if user_id_str in _get_admin_discord_user_ids():
         return True
-    admin_role_id = _resolve_admin_role_id()
-    if not admin_role_id:
-        return False
-    return admin_role_id in _fetch_user_role_ids(user_id_str)
+
+    for gid in _get_signup_allowed_guild_ids():
+        admin_role_id = _resolve_admin_role_id(gid)
+        if not admin_role_id:
+            continue
+        if admin_role_id in _fetch_user_role_ids(user_id_str, gid):
+            return True
+    return False
 
 
 def _is_admin_session():
