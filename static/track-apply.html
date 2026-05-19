@@ -6019,10 +6019,12 @@
     // ============================================================
     // track-bot Flask 가 같은 origin 에서 API 도 처리.
     const GP_API_BASE = '';
-    const GP_TEST_MEMBER_DB_ID = '3566400e9268808e9b0ae23a1231e809';
-    // 주의: .env.test 의 GROUP_PREVIEW_TEST_GROUP_DB_ID 와 일치해야 함.
-    // 이 ID 는 prod 의 `트랙/조 DB` 에 대응하는 test 워크스페이스 DB.
-    const GP_TEST_GROUP_DB_ID = '3586400e926880268f6ee51a03ad6638';
+    // ⚠️ DB ID 하드코딩 제거 (2026-05-19).
+    //   직전 footgun: 클라 하드코딩 vs 서버 env (.env.test 의 GROUP_PREVIEW_TEST_*)
+    //   값이 어긋나면 _commit_group_preview_to_notion 가드가 'This route is locked
+    //   to the configured test Notion DB IDs only.' 로 reject.
+    //   해결: payload 에서 memberDbId/groupDbId 안 보냄 → 서버가 env 기본값 자동 사용
+    //   (single source of truth = .env.test).
     let GP_TEST_COHORT_LABEL = COHORT_LABEL;
     const MOCKUP_MODE = false;
     const GP_GROUP_DB_NAME_MAP = {
@@ -6136,8 +6138,8 @@
       return {
         target: 'notion-test',
         cohortLabel: GP_TEST_COHORT_LABEL,
-        memberDbId: GP_TEST_MEMBER_DB_ID,
-        groupDbId: GP_TEST_GROUP_DB_ID,
+        // memberDbId / groupDbId 의도적으로 안 보냄 — 서버가 .env.test 의
+        // GROUP_PREVIEW_TEST_MEMBER_DB_ID / _GROUP_DB_ID 자동 사용 (single source of truth).
         members,
         tracks,
       };

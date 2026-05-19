@@ -659,42 +659,64 @@ def _fetch_guild_nickname(user_id):
     GET /guilds/{guild_id}/members/{user_id} → response.get('nick') 반환.
     Bot token 인증 (admin_server 가 이미 다른 API 호출에 사용 중).
 
-    반환:
-      - 사용자가 길드 멤버이고 서버 닉네임을 설정했으면 str (예: "오케이/ASC 커뮤니티 매니저")
-      - 닉네임 없음 (글로벌 그대로 사용 케이스) → None
-      - 길드 비멤버 (404) / 토큰 누락 / 네트워크 에러 → None (best-effort)
+    조회 순서 (첫 nick 발견 시 즉시 반환):
+      1) PROD_DISCORD_GUILD_BLACKLIST 의 실 운영 길드들 — 학생은 보통 여기 nick 설정.
+      2) admin guild (env 별 prod / test) — 운영진 nick 폴백.
+    이렇게 해야 env=test 운영 중이라도 PROD 길드 멤버의 닉네임을 가져올 수 있다.
+    (이전: admin guild 한 곳만 체크 → PROD 멤버는 항상 404 → globalName 폴백 버그.)
 
-    실패 시 silent: 호출자가 None 폴백으로 글로벌 displayName 그대로 쓰면 됨.
+    반환:
+      - 어느 한 길드에 nick 있으면 str (예: "조이안/Ian/8기")
+      - 모든 후보 길드에서 nick 없음 / 비멤버 / 에러 → None
     """
     user_id = str(user_id or '').strip()
     if not user_id:
         return None
     bot_token = str(os.getenv('DISCORD_BOT_TOKEN', '')).strip()
-    guild_id = _get_admin_guild_id()
-    if not bot_token or not guild_id:
+    if not bot_token:
         return None
-    try:
-        r = requests.get(
-            f'https://discord.com/api/v10/guilds/{guild_id}/members/{user_id}',
-            headers={'Authorization': f'Bot {bot_token}'},
-            timeout=10,
-        )
-        if r.status_code == 404:
-            # 사용자가 해당 길드 멤버 아님 — 글로벌로 폴백.
-            return None
-        r.raise_for_status()
-        data = r.json() or {}
-        nick = data.get('nick')
-        if isinstance(nick, str):
-            nick = nick.strip()
-            return nick or None
+
+    candidate_ids = []
+    for gid in PROD_DISCORD_GUILD_BLACKLIST:
+        try:
+            candidate_ids.append(int(gid))
+        except (TypeError, ValueError):
+            continue
+    admin_gid = _get_admin_guild_id()
+    if admin_gid:
+        try:
+            admin_int = int(admin_gid)
+            if admin_int not in candidate_ids:
+                candidate_ids.append(admin_int)
+        except (TypeError, ValueError):
+            pass
+    if not candidate_ids:
         return None
-    except requests.RequestException as e:
-        print(f"[WARN] _fetch_guild_nickname({user_id}) network error: {e}")
-        return None
-    except Exception as e:
-        print(f"[WARN] _fetch_guild_nickname({user_id}) unexpected error: {e}")
-        return None
+
+    for gid in candidate_ids:
+        try:
+            r = requests.get(
+                f'https://discord.com/api/v10/guilds/{gid}/members/{user_id}',
+                headers={'Authorization': f'Bot {bot_token}'},
+                timeout=10,
+            )
+            if r.status_code == 404:
+                continue
+            r.raise_for_status()
+            data = r.json() or {}
+            nick = data.get('nick')
+            if isinstance(nick, str):
+                nick = nick.strip()
+                if nick:
+                    return nick
+            # 멤버이지만 nick 미설정 → 다음 후보 길드에서 nick 있을 수 있어 계속.
+        except requests.RequestException as e:
+            print(f"[WARN] _fetch_guild_nickname({user_id}, gid={gid}) network error: {e}")
+            continue
+        except Exception as e:
+            print(f"[WARN] _fetch_guild_nickname({user_id}, gid={gid}) unexpected error: {e}")
+            continue
+    return None
 
 
 def _is_user_in_admin_guild(user_id):
@@ -4434,6 +4456,112 @@ def _run_commit_job_async(job_id, payload):
             completedAt=time.time(),
         )
         print(f"[ERROR] Commit job {job_id} failed: {e}")
+
+
+@app.route('/api/admin/track-applications/refresh-display-names', methods=['POST'])
+def refresh_track_application_display_names():
+    """
+    [관리자 전용 · 1회성 보정] 트랙 신청 캐시 + Notion 트랙신청 DB 의 표시 이름
+    (`name`) 을 현재 Discord 길드 닉네임으로 다시 채운다.
+
+    배경: `_fetch_guild_nickname` 이 admin guild 한 곳만 체크하던 버그로,
+    PROD 길드에만 nick 설정한 학생의 record 가 globalName 으로 저장돼 있던 케이스.
+    (예: Ian → "Ian" 으로 저장됐지만 실제 길드 닉네임은 "조이안/Ian/8기")
+
+    동작:
+      1) 모든 cohort 의 모든 application 을 순회.
+      2) `_fetch_guild_nickname(user_id)` 로 현재 길드 닉네임 조회 (PROD → admin 순).
+      3) 캐시 record 의 `name` 이 다르면 patch + Notion 트랙신청 DB row 도 sync.
+
+    부작용 없음 (idempotent): 이미 일치하면 skip.
+
+    ⚠️ 멤버 마스터 DB 의 title (디스코드 닉네임 컬럼) 은 건드리지 않음.
+       기존 row 보존 정책 (2026-05-08) 때문 — 운영자가 수동으로 직접 정리하거나
+       별도 endpoint 필요. 현재 endpoint 는 트랙 신청 DB + 로컬 캐시까지만 책임.
+    """
+    if not _is_admin_session():
+        return jsonify({
+            "status": "error",
+            "message": "운영진 권한이 필요합니다. 관리자 디스코드 계정으로 로그인하세요."
+        }), 403
+
+    try:
+        cache = _read_track_application_cache() or {}
+        cohorts = cache.get('cohorts') or {}
+
+        scanned = 0
+        updated = []     # 변경된 record 들
+        unchanged = 0    # nick 이 이미 일치 (또는 nick 없어서 fallback 유지)
+        notion_failed = []
+        nick_missing = []  # 길드 nick 자체가 없어 fallback 으로 globalName 유지
+
+        for cohort_label, bucket in cohorts.items():
+            applications = (bucket or {}).get('applications') or {}
+            if not isinstance(applications, dict):
+                continue
+            for user_id, record in list(applications.items()):
+                if not isinstance(record, dict):
+                    continue
+                scanned += 1
+                current_name = str(record.get('name') or '').strip()
+                resolved_id = str(record.get('userId') or user_id or '').strip()
+                if not resolved_id:
+                    continue
+                guild_nick = _fetch_guild_nickname(resolved_id)
+                if not guild_nick:
+                    # 길드 nick 미설정 — 기존 name 유지 (강제로 globalName 으로 덮어쓰지 않음).
+                    nick_missing.append({'userId': resolved_id, 'name': current_name})
+                    continue
+                if guild_nick == current_name:
+                    unchanged += 1
+                    continue
+                # 변경 — 캐시 patch
+                record['name'] = guild_nick
+                record['initials'] = _infer_member_initials(
+                    guild_nick,
+                    str(record.get('handle') or '').strip(),
+                    resolved_id,
+                )
+                applications[user_id] = record
+                # Notion 트랙신청 DB 동기화
+                try:
+                    _upsert_track_application_record_to_notion(record, cohort_label)
+                except Exception as e:
+                    notion_failed.append({
+                        'userId': resolved_id,
+                        'name': guild_nick,
+                        'reason': str(e)[:300],
+                    })
+                updated.append({
+                    'userId': resolved_id,
+                    'cohort': cohort_label,
+                    'before': current_name,
+                    'after': guild_nick,
+                })
+
+        # 캐시 한 번만 쓰기 (변경 있을 때만).
+        if updated:
+            _write_track_application_cache(cache)
+
+        return jsonify({
+            "status": "success",
+            "summary": {
+                "scanned": scanned,
+                "updated": len(updated),
+                "unchanged": unchanged,
+                "nick_missing": len(nick_missing),
+                "notion_failed": len(notion_failed),
+            },
+            "updated": updated,
+            "nick_missing": nick_missing,
+            "notion_failed": notion_failed,
+        }), 200
+    except Exception as e:
+        print(f"[ERROR] refresh_track_application_display_names: {e}")
+        return jsonify({
+            "status": "error",
+            "message": f"동기화 중 오류: {e}",
+        }), 500
 
 
 @app.route('/api/admin/reset-track-applications', methods=['POST'])

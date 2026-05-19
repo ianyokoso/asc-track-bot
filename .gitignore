@@ -39,3 +39,4 @@ track_applications_admin_mock_cache_*.json
 # Local deploy scripts (not version-controlled — different machines need different paths)
 scripts/deploy-oracle.sh
 scripts/push-and-deploy.sh
+.claude/settings.local.json

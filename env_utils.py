@@ -127,14 +127,34 @@ def resolve_active_guild(bot, explicit: Optional[str] = None):
     """
     봇이 사용해야 할 길드를 환경에 맞게 안전하게 선택한다.
 
-    test 모드: 반드시 TEST_DISCORD_GUILD_ID 와 일치하는 길드만 반환.
-               환경변수 누락/타입 오류/봇이 해당 길드 미가입 시 RuntimeError.
-               -> 봇이 prod 서버에 동시 가입돼 있어도 절대 prod 길드를 건드리지 않게 보장.
-    그 외(dev/prod/legacy): bot.guilds[0] 폴백 (기존 동작 유지).
+    우선순위:
+      0) DISCORD_TARGET_GUILD_ID 명시적 오버라이드 — 운영자가 의도적으로 특정 길드
+         (보통 prod) 를 대상으로 채널/역할 생성을 트리거할 때 사용. 봇이 해당 길드의
+         멤버여야 하며, prod 블랙리스트 가드도 우회 (의도적 opt-in 이므로).
+      1) test 모드 + TEST_DISCORD_GUILD_ID — 옛 동작. prod 블랙리스트 길드는 거부.
+      2) 그 외 (dev/prod/legacy) — bot.guilds[0] 폴백.
 
-    Returns: discord.Guild | None  (prod 폴백에서 봇이 어떤 길드에도 없으면 None)
-    Raises:  RuntimeError (test 모드에서 가드 위반)
+    Returns: discord.Guild | None
+    Raises:  RuntimeError (가드 위반)
     """
+    # ── 0) 명시적 길드 오버라이드 ─────────────────────────────────
+    target_override = (os.getenv("DISCORD_TARGET_GUILD_ID") or "").strip()
+    if target_override:
+        try:
+            target_id = int(target_override)
+        except ValueError:
+            raise RuntimeError(
+                f"DISCORD_TARGET_GUILD_ID 가 숫자가 아닙니다: {target_override!r}"
+            )
+        guild = next((g for g in bot.guilds if g.id == target_id), None)
+        if not guild:
+            raise RuntimeError(
+                f"DISCORD_TARGET_GUILD_ID={target_id} 길드에 봇이 가입돼 있지 않습니다. "
+                f"봇을 해당 서버에 초대했는지 확인하세요."
+            )
+        return guild
+
+    # ── 1) test 모드 strict 가드 ───────────────────────────────────
     env_name = get_runtime_env(explicit)
     if env_name == "test":
         test_guild_raw = (os.getenv("TEST_DISCORD_GUILD_ID") or "").strip()
@@ -166,6 +186,8 @@ def resolve_active_guild(bot, explicit: Optional[str] = None):
                 f"매칭된 길드 {guild.id} 가 PROD 블랙리스트입니다. 거부합니다."
             )
         return guild
+
+    # ── 2) dev / prod / legacy 폴백 ───────────────────────────────
     return bot.guilds[0] if bot.guilds else None
 
 
