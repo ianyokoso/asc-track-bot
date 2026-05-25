@@ -4712,6 +4712,66 @@ def commit_group_preview_status():
 
     return jsonify(job)
 
+
+@app.route('/api/admin/debug/recent-commit-jobs', methods=['GET'])
+def get_recent_commit_jobs_debug():
+    """
+    [관리자 진단용] 최근 commit job 들의 요약을 반환.
+    조 배정 후 Notion 에 데이터가 안 들어간 원인 추적용 — re-commit 없이도
+    이전 실행의 result.summary (members_updated/missing/created/group_rows_created)
+    를 즉시 확인 가능.
+
+    재실행 불가능 상황 (디스코드 이미 배정 완료) 에서 jobId 를 모를 때 유용.
+    """
+    if not _is_admin_session():
+        return jsonify({"status": "error", "message": "운영진 권한이 필요합니다."}), 403
+
+    with _COMMIT_JOBS_LOCK:
+        jobs = list(_COMMIT_JOBS.values())
+
+    # 최근 순으로 정렬 (completedAt → createdAt fallback).
+    def _job_ts(j):
+        return j.get('completedAt') or j.get('createdAt') or 0
+    jobs.sort(key=_job_ts, reverse=True)
+
+    # 최대 10개. payload (members/tracks) 는 너무 커서 제외, summary 만 추림.
+    out = []
+    for j in jobs[:10]:
+        summary = (j.get('result') or {}).get('summary') or {}
+        out.append({
+            'jobId': j.get('jobId'),
+            'status': j.get('status'),
+            'phase': j.get('phase'),
+            'phaseDetail': j.get('phaseDetail'),
+            'error': j.get('error'),
+            'errorKind': j.get('errorKind'),
+            'createdAt': j.get('createdAt'),
+            'completedAt': j.get('completedAt'),
+            'ownerUserId': j.get('ownerUserId'),
+            'summary': {
+                'members_updated': summary.get('members_updated'),
+                'members_created': summary.get('members_created'),
+                'members_cleared': summary.get('members_cleared'),
+                'members_missing_count': len(summary.get('members_missing') or []),
+                'members_missing_sample': (summary.get('members_missing') or [])[:5],
+                'group_databases_created': summary.get('group_databases_created'),
+                'group_rows_created': summary.get('group_rows_created'),
+                'archived_inline_dbs': summary.get('archived_inline_dbs'),
+                'tracks_touched': summary.get('tracks_touched'),
+                'member_db_id': summary.get('member_db_id'),
+                'group_db_id': summary.get('group_db_id'),
+                'track_pages': summary.get('track_pages'),
+                'discord_status': (summary.get('discord') or {}).get('status'),
+            },
+        })
+
+    return jsonify({
+        'status': 'success',
+        'count': len(out),
+        'jobs': out,
+    })
+
+
 @app.route('/api/drop-stats', methods=['GET'])
 def get_drop_stats():
     """
