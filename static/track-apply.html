@@ -3764,21 +3764,43 @@
       const orig = btn ? btn.textContent : null;
       if (btn) { btn.disabled = true; btn.textContent = '불러오는 중…'; }
       try {
-        const { appliedCount, notFoundTracks, totalMembers, source } = await gpLoadFromNotion(false);
+        const result = await gpLoadFromNotion(false);
+        const {
+          appliedCount, notFoundTracks, totalMembers, source,
+          _discordError, _trackBreakdown, _guildName, _rolesMatched, _membersScanned,
+        } = result;
+        console.log('[runAdminLoadFromNotion] full result:', result);
         const sourceLabel = source === 'discord' ? '디스코드 역할'
           : source === 'notion' ? '노션 inline DB'
           : '없음';
-        const summary =
-          appliedCount > 0
-            ? `✅ ${sourceLabel} 조 배정 상태 반영 완료\n\n` +
-              `• 트랙 ${appliedCount}개 sync\n` +
-              `• 총 멤버 ${totalMembers}명 배정 적용\n\n` +
-              (notFoundTracks.length
-                ? `⚠️ 매칭 안 된 트랙: ${notFoundTracks.join(', ')}\n` +
-                  '(GP_GROUP_DB_NAME_MAP 의 트랙명과 source 의 트랙명이 정확히 같아야 인식됨)'
-                : '')
-            : `ℹ️ ${GP_TEST_COHORT_LABEL} 의 조 배정 데이터 없음 (디스코드·노션 모두). 첫 조 배정이거나 cohort 라벨 불일치.`;
-        alert(summary);
+        const lines = [];
+        if (appliedCount > 0) {
+          lines.push(`✅ ${sourceLabel} 조 배정 상태 반영 완료`);
+          lines.push('');
+          lines.push(`• 트랙 ${appliedCount}개 sync · 총 멤버 ${totalMembers}명`);
+          if (source === 'discord') {
+            lines.push(`• 길드: ${_guildName || '?'} · 패턴 매칭 역할 ${_rolesMatched ?? '?'}개 · 멤버 스캔 ${_membersScanned ?? '?'}명`);
+          }
+          if (Array.isArray(_trackBreakdown) && _trackBreakdown.length) {
+            lines.push('');
+            lines.push('— 트랙별 그룹 ('+ source +')');
+            _trackBreakdown.forEach(t => {
+              lines.push(`  · ${t.trackName} → ${t.groupCount}조 (${t.groupSummary.join(', ')})`);
+            });
+          }
+          if (notFoundTracks.length) {
+            lines.push('');
+            lines.push(`⚠️ GP_GROUP_DB_NAME_MAP 와 매칭 안 됨: ${notFoundTracks.join(', ')}`);
+          }
+        } else {
+          lines.push(`ℹ️ ${GP_TEST_COHORT_LABEL} 조 배정 데이터 0건 — 디스코드 + 노션 모두 비어있음`);
+          if (_discordError) {
+            lines.push('');
+            lines.push(`디스코드 조회 실패: ${_discordError}`);
+            lines.push('(브라우저 콘솔 → [gpLoadFromDiscord] 응답 확인)');
+          }
+        }
+        alert(lines.join('\n'));
       } finally {
         if (btn) { btn.disabled = false; btn.textContent = orig || '📥 디스코드 상태 불러오기'; }
       }
@@ -6051,19 +6073,27 @@
       const cohort = encodeURIComponent(GP_TEST_COHORT_LABEL);
       let data = null;
       let source = 'none';
+      let discordRawResponse = null;
+      let discordErrorMessage = null;
       try {
         const res = await fetch(
           `${GP_API_BASE}/api/mockups/group-preview/current-state-from-discord?cohortLabel=${cohort}`,
           { credentials: 'include' }
         );
         const j = await res.json().catch(() => ({}));
+        discordRawResponse = j;
+        console.log('[gpLoadFromDiscord] HTTP', res.status, 'response:', j);
         if (res.ok && j.status === 'success' && Array.isArray(j.tracks) && j.tracks.length > 0) {
           data = j;
           source = 'discord';
-        } else if (!silent && res.ok && j.warning) {
-          console.warn('[gpLoadFromDiscord] warning:', j.warning);
+        } else {
+          discordErrorMessage = j.message || j.warning || `HTTP ${res.status} (tracks=${(j.tracks || []).length})`;
+          if (!silent && res.ok && j.warning) {
+            console.warn('[gpLoadFromDiscord] warning:', j.warning);
+          }
         }
       } catch (e) {
+        discordErrorMessage = String(e?.message || e);
         console.warn('[gpLoadFromDiscord] network error:', e);
       }
 
@@ -6090,7 +6120,11 @@
       }
 
       if (!data) {
-        return { appliedCount: 0, notFoundTracks: [], totalMembers: 0, source: 'none' };
+        return {
+          appliedCount: 0, notFoundTracks: [], totalMembers: 0, source: 'none',
+          _discordError: discordErrorMessage,
+          _discordRaw: discordRawResponse,
+        };
       }
 
       // GP_GROUP_DB_NAME_MAP 의 역매핑 — Notion 트랙 페이지 이름 → tab.id
@@ -6130,7 +6164,21 @@
         }
       }
 
-      return { appliedCount, notFoundTracks, totalMembers, source };
+      // 디버그용: 응답의 track별 group 수를 노출.
+      const trackBreakdown = (data.tracks || []).map(t => ({
+        trackName: t.trackName,
+        groupCount: (t.groups || []).length,
+        groupSummary: (t.groups || []).map(g => `${g.name || 'noname'}=${(g.members||[]).length}명`),
+      }));
+      return {
+        appliedCount, notFoundTracks, totalMembers, source,
+        _discordError: discordErrorMessage,
+        _discordRaw: discordRawResponse,
+        _trackBreakdown: trackBreakdown,
+        _guildName: data.guild_name,
+        _rolesMatched: data.roles_matched,
+        _membersScanned: data.members_scanned,
+      };
     }
 
     /** 첫 진입 시 자동 분할 결과를 저장 (이후 drag/drop 으로 변형) */
