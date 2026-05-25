@@ -1133,7 +1133,9 @@ class AdminCog(commands.Cog):
                         "isLeader": bool(member.get("leader") or member.get("isLeader")),
                     })
 
-                if not members_payload:
+                # Empty 그룹도 forceCreateEmptyGroups 플래그가 있으면 구조만 생성
+                # (역할/채널은 만들고 멤버 배정만 skip). 인프라 수동 부트스트랩용.
+                if not members_payload and not bool(group.get("forceCreateEmpty")):
                     continue
 
                 groups_payload.append({

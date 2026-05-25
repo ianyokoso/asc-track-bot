@@ -4675,6 +4675,80 @@ def refresh_track_application_display_names():
         }), 500
 
 
+@app.route('/api/admin/create-track-infra', methods=['POST'])
+def create_track_infra():
+    """
+    [관리자] 특정 트랙의 디스코드 인프라 (역할 + 채널) 만 수동 생성.
+
+    Use case: 조 배정 commit 도중 일부 트랙이 누락되어 채널/역할이 안 만들어진 경우
+    수동 부트스트랩. 멤버 배정은 하지 않고 구조만 생성.
+
+    Request body:
+      {
+        "cohortLabel": "9기",
+        "trackName": "나 탐구 트랙",
+        "groupCount": 2
+      }
+
+    트랙명은 _TRACK_DISCORD_PREFIX 의 키와 정확히 일치해야 함:
+      - 크리에이터 트랙 / 빌더 기초 트랙 / 빌더 심화 트랙 /
+        세일즈 실전 트랙 / AI 에이전트 트랙 / 앱 개발 트랙 / 나 탐구 트랙
+    """
+    if not _is_admin_session():
+        return jsonify({"status": "error", "message": "운영진 권한이 필요합니다."}), 403
+
+    body = request.get_json(silent=True) or {}
+    cohort_label = str(body.get('cohortLabel') or _get_current_cohort_label()).strip()
+    track_name = str(body.get('trackName') or '').strip()
+    try:
+        group_count = int(body.get('groupCount') or 0)
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "groupCount 는 정수여야 합니다."}), 400
+
+    if not track_name:
+        return jsonify({"status": "error", "message": "trackName 필요"}), 400
+    if group_count < 1 or group_count > 30:
+        return jsonify({"status": "error", "message": "groupCount 는 1~30 사이"}), 400
+
+    # 봇 IPC payload — forceCreateEmpty=True 로 empty member 그룹도 채널/역할 생성.
+    tracks_payload = [{
+        'trackName': track_name,
+        'groupDbName': track_name,
+        'tabLabel': track_name,
+        'groups': [
+            {
+                'name': f'{cohort_label} {n + 1}조',
+                'groupNumber': n + 1,
+                'members': [],
+                'forceCreateEmpty': True,  # ← 빈 그룹도 인프라 생성
+            }
+            for n in range(group_count)
+        ],
+    }]
+
+    test_queue_file = get_bot_command_queue_file(BASE_DIR, explicit='test')
+    try:
+        result = _run_bot_command_and_wait(
+            'group_preview_sync_discord',
+            {"cohortLabel": cohort_label, "tracks": tracks_payload},
+            queue_file=test_queue_file,
+            timeout=300.0,  # 인프라 5분
+        )
+    except TimeoutError as e:
+        return jsonify({"status": "error", "message": f"봇 응답 타임아웃: {e}"}), 504
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"봇 IPC 실패: {e}"}), 502
+
+    return jsonify({
+        'status': 'success',
+        'message': f'{track_name} {group_count}개조 인프라 생성 완료',
+        'cohortLabel': cohort_label,
+        'trackName': track_name,
+        'groupCount': group_count,
+        'discord_summary': result,
+    })
+
+
 @app.route('/api/admin/reset-track-applications', methods=['POST'])
 def reset_track_applications_mockup():
     """
