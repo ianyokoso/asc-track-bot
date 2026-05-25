@@ -2716,36 +2716,62 @@ def _collect_member_group_labels(tracks):
 
 def _find_existing_member_page(notion_api, member_db_id, fields, member):
     """
-    멤버 마스터 DB 매칭 정책 (2026-05-08 변경):
-      - Discord 사용자 ID (snowflake) — 1차 unique 식별자.
-      - Discord handle (@닉네임) — 2차 unique 식별자.
-      - title (이름) 매칭은 제거 — 동명이인 위험 (사용자 정책).
-      - title === member_id (legacy fallback): 마스터 DB title 컬럼에 Discord ID 가
-        저장돼있는 옛 데이터 호환용. ID 매칭이라 동명이인 위험 없음 → 유지.
+    멤버 마스터 DB 매칭 정책 (2026-05-25 갱신):
+      1차 — Discord 사용자 ID (snowflake) rich_text 컬럼 exact.
+      2차 — Discord handle (@닉네임) rich_text 컬럼 exact.
+      3차 — title 컬럼이 Discord ID 인 legacy 데이터 호환.
+      4차 (안전 fallback) — title (디스코드 닉네임) 컬럼 exact match,
+            **단 결과가 정확히 1건일 때만** 채택. 2건 이상이면 동명이인
+            우려로 skip.
+
+      배경: 운영 마스터 DB 의 row 들에 사용자 ID / 디스코드 ID 컬럼이
+      빈 경우, 1·2·3차 모두 0건 → 매칭 실패 → 트랙·조 갱신 skip.
+      디스코드 닉네임 = title 은 마스터 DB 에서 항상 채워져 있고,
+      운영 컨텍스트에서 보통 unique 라 안전.
     """
-    filters = []
     member_id = str(member.get('userId') or member.get('id') or '').strip()
     handle = str(member.get('handle', '')).strip()
+    name = str(member.get('name', '')).strip()
 
+    # 1·2·3차 OR filter — 한 번에 묶어서 query.
+    id_filters = []
     if member_id and fields.get('user_id'):
-        filters.append({"property": fields['user_id'], "rich_text": {"equals": member_id}})
+        id_filters.append({"property": fields['user_id'], "rich_text": {"equals": member_id}})
     if handle and fields.get('handle'):
-        filters.append({"property": fields['handle'], "rich_text": {"equals": handle}})
+        id_filters.append({"property": fields['handle'], "rich_text": {"equals": handle}})
     if member_id and fields.get('title'):
-        filters.append({"property": fields['title'], "title": {"equals": member_id}})
+        id_filters.append({"property": fields['title'], "title": {"equals": member_id}})
 
-    if not filters:
-        return None
+    if id_filters:
+        payload = {
+            "page_size": 1,
+            "filter": id_filters[0] if len(id_filters) == 1 else {"or": id_filters},
+        }
+        pages = notion_api.fetch_all_pages(
+            f'https://api.notion.com/v1/databases/{member_db_id}/query',
+            payload,
+        )
+        if pages:
+            return pages[0]
 
-    payload = {
-        "page_size": 1,
-        "filter": filters[0] if len(filters) == 1 else {"or": filters}
-    }
-    pages = notion_api.fetch_all_pages(
-        f'https://api.notion.com/v1/databases/{member_db_id}/query',
-        payload,
-    )
-    return pages[0] if pages else None
+    # 4차 fallback — title exact match (동명이인 방어: 정확히 1건만 채택).
+    if name and fields.get('title'):
+        payload = {
+            "page_size": 2,
+            "filter": {"property": fields['title'], "title": {"equals": name}},
+        }
+        pages = notion_api.fetch_all_pages(
+            f'https://api.notion.com/v1/databases/{member_db_id}/query',
+            payload,
+        )
+        if len(pages) == 1:
+            print(f"[group-commit:diag] nickname fallback match: {name!r} -> {pages[0].get('id')}")
+            return pages[0]
+        if len(pages) > 1:
+            # 동명이인 — 안전상 skip.
+            print(f"[group-commit:diag] nickname fallback AMBIGUOUS ({len(pages)} hits): {name!r}")
+
+    return None
 
 
 def _build_member_properties(fields, member, group_labels, update_only_tracks_and_group=False):
@@ -3651,6 +3677,22 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
         "group_databases_created": created_group_dbs,
         "group_rows_created": created_group_rows,
     }
+
+    # 🆕 notionOnly=true 면 Discord sync skip. Discord 채널/역할이 이미 정상 배정된
+    # 상태에서 Notion 만 다시 push 할 때 사용 (재시도 시 디스코드 중복 처리 방지).
+    if bool(payload.get('notionOnly')):
+        _progress('done', 'Notion only — 완료 (Discord skip)')
+        print(f"[group-commit:diag] === commit done (notion-only) === "
+              f"members_updated={member_summary['updated']} "
+              f"members_created={member_summary['created']} "
+              f"members_missing={len(member_summary.get('missing', []))} "
+              f"group_dbs_created={created_group_dbs} "
+              f"group_rows_created={created_group_rows}")
+        return {
+            "status": "success",
+            "message": "Notion 만 sync 됨 (Discord skip).",
+            "summary": dict(notion_phase_summary, discord={"skipped": True}),
+        }
 
     _progress('discord_sync', '봇이 채널·역할을 만드는 중')
     # 🔧 timeout 600s (10분) — 풀 코호트 50명 + 다수 트랙·그룹 처리 시
