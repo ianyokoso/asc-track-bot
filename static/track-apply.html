@@ -2867,6 +2867,7 @@
           <button type="button" class="btn-ghost" id="admin-clear-mock" title="목업 멤버 전부 리스트에서 완전히 제거 (실 OAuth 사용자만 남김)">🧹 목업 지우기</button>
           <button type="button" class="btn-ghost text-bad" id="admin-full-reset" title="신청 데이터 초기화 (서버 캐시 + 브라우저). 이전 기수 Discord 트랙 채널은 봇 '!채널삭제 &lt;기수&gt;' 별도 실행 필요.">🗑️ 전체 초기화</button>
           <button type="button" class="btn-ghost" id="admin-notion-only-resync" title="조 배정 결과를 Notion 에만 다시 push (디스코드 안 건드림). 매칭 실패한 신규 멤버는 마스터 DB 에 자동 추가.">🔁 Notion 재실행 (신규 자동 추가)</button>
+          <button type="button" class="btn-ghost" id="admin-load-from-notion" title="노션 inline DB 의 현재 조 배정 상태를 가져와 화면에 반영. 디스코드 실제 운영 상태와 sync.">📥 노션 상태 불러오기</button>
           <button class="btn-ghost" id="admin-track-apply-sync">Full Sync</button>
           <button class="btn-navy" id="admin-track-apply-refresh">Refresh</button>`;
         requestAnimationFrame(() => {
@@ -2890,6 +2891,9 @@
           });
           document.getElementById('admin-notion-only-resync')?.addEventListener('click', () => {
             void runAdminNotionOnlyResync();
+          });
+          document.getElementById('admin-load-from-notion')?.addEventListener('click', () => {
+            void runAdminLoadFromNotion();
           });
           document.getElementById('admin-track-apply-sync')?.addEventListener('click', () => {
             void syncAdminMembersToServer();
@@ -3744,6 +3748,57 @@
      *   2) payload 에 notionOnly: true 추가 → 서버가 Discord 봇 명령 skip
      *   3) 폴링하다가 완료되면 결과 요약 alert
      */
+    /**
+     * [관리자] 노션의 현재 조 배정 상태를 _gpAssignments 에 강제 반영.
+     *
+     * 흐름:
+     *   1) GET /api/mockups/group-preview/current-state 호출
+     *   2) 응답의 tracks 를 GP_TABS 와 매칭 (트랙명 정확 일치)
+     *   3) 매칭된 트랙의 _gpAssignments 를 노션 상태로 덮어쓰기
+     *   4) 결과 alert + 활성 탭 재렌더
+     *
+     * 사용 시점: admin 이 "디스코드 운영 상태와 안 맞는다" 고 발견했을 때 즉시 sync.
+     */
+    async function runAdminLoadFromNotion() {
+      const btn = document.getElementById('admin-load-from-notion');
+      const orig = btn ? btn.textContent : null;
+      if (btn) { btn.disabled = true; btn.textContent = '불러오는 중…'; }
+      try {
+        const { appliedCount, notFoundTracks, totalMembers } = await gpLoadFromNotion(false);
+        const summary =
+          appliedCount > 0
+            ? `✅ 노션 조 배정 상태 반영 완료\n\n` +
+              `• 트랙 ${appliedCount}개 sync\n` +
+              `• 총 멤버 ${totalMembers}명 배정 적용\n\n` +
+              (notFoundTracks.length
+                ? `⚠️ 매칭 안 된 트랙: ${notFoundTracks.join(', ')}\n` +
+                  '(GP_GROUP_DB_NAME_MAP 의 트랙명과 노션 트랙 페이지 title 이 정확히 같아야 인식됨)'
+                : '')
+            : `ℹ️ 노션에서 ${GP_TEST_COHORT_LABEL} 의 inline DB 데이터 없음 — 첫 조 배정이거나 cohort 라벨 불일치.`;
+        alert(summary);
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = orig || '📥 노션 상태 불러오기'; }
+      }
+    }
+
+    // 조 배정 view 진입 시 한 번 자동 fetch — admin 이 보는 게 곧 노션 실제 상태.
+    // 이전 footgun: localStorage 의 stale 또는 random chunking 결과로 commit 하면
+    //   노션 inline DB 가 random 결과로 덮어써짐. 진입 시점에 노션 상태로 초기화.
+    let _gpNotionSyncedThisSession = false;
+    async function gpAutoLoadFromNotionIfNeeded() {
+      if (_gpNotionSyncedThisSession) return;
+      if (!IS_ADMIN_MOCK) return;  // admin 만 적용 (학생은 자기 조만 보는 별도 흐름)
+      _gpNotionSyncedThisSession = true;
+      try {
+        const { appliedCount } = await gpLoadFromNotion(true);
+        if (appliedCount > 0 && typeof showToast === 'function') {
+          showToast(`📥 노션 조 배정 ${appliedCount}개 트랙 sync 됨`, 3000);
+        }
+      } catch (e) {
+        console.warn('[gpAutoLoad] failed:', e);
+      }
+    }
+
     async function runAdminNotionOnlyResync() {
       if (typeof gpBuildCommitPayload !== 'function') {
         alert('조 배정 상태를 불러올 수 없습니다. /apply → 조 배정 ↗ 진입 후 다시 시도하세요.');
@@ -5971,6 +6026,84 @@
       }
     }
 
+    /**
+     * 노션에서 현재 조 배정 상태를 가져와 _gpAssignments 에 반영.
+     *
+     * 사용 시점:
+     *   - admin 이 조 배정 ↗ 진입 시 (자동, 1회)
+     *   - admin 헤더의 '📥 노션 상태 불러오기' 버튼 클릭 시 (수동)
+     *
+     * 이유: 이전엔 localStorage 또는 random chunking 결과를 표시 → admin 이 그
+     *   상태로 commit 하면 노션 inline DB 가 random 결과로 덮어써짐. 노션이
+     *   single source of truth 이므로 진입 시 거기서 읽어와야 안전.
+     *
+     * 반환: { appliedCount, notFoundTracks }
+     *   appliedCount — 매칭돼서 _gpAssignments 에 반영된 트랙 수
+     *   notFoundTracks — 노션의 트랙 페이지가 GP_TABS 와 매칭 안 된 이름들 (디버깅용)
+     */
+    async function gpLoadFromNotion(silent = false) {
+      const cohort = encodeURIComponent(GP_TEST_COHORT_LABEL);
+      let data;
+      try {
+        const res = await fetch(
+          `${GP_API_BASE}/api/mockups/group-preview/current-state?cohortLabel=${cohort}`,
+          { credentials: 'include' }
+        );
+        data = await res.json().catch(() => ({}));
+        if (!res.ok || data.status !== 'success') {
+          if (!silent) {
+            alert(`노션 상태 불러오기 실패: ${data.message || res.status}`);
+          } else {
+            console.warn('[gpLoadFromNotion] failed:', data.message || res.status);
+          }
+          return { appliedCount: 0, notFoundTracks: [], totalMembers: 0 };
+        }
+      } catch (e) {
+        if (!silent) alert(`네트워크 오류: ${e.message || e}`);
+        else console.warn('[gpLoadFromNotion] network error:', e);
+        return { appliedCount: 0, notFoundTracks: [], totalMembers: 0 };
+      }
+
+      // GP_GROUP_DB_NAME_MAP 의 역매핑 — Notion 트랙 페이지 이름 → tab.id
+      const reverseMap = Object.fromEntries(
+        Object.entries(GP_GROUP_DB_NAME_MAP).map(([tabId, trackName]) => [trackName, tabId])
+      );
+
+      let appliedCount = 0;
+      let totalMembers = 0;
+      const notFoundTracks = [];
+      (data.tracks || []).forEach(track => {
+        const tabId = reverseMap[String(track.trackName || '').trim()];
+        if (!tabId) {
+          notFoundTracks.push(track.trackName);
+          return;
+        }
+        // userId 기준 그룹 배열 [[id1, id2], [id3]] 형태로 변환.
+        // MOCK_MEMBERS 에 없는 userId 는 제외 (이미 등록 해제된 멤버 등).
+        const knownIds = new Set(MOCK_MEMBERS.map(m => getMemberIdentityKey(m)));
+        const groupArrays = (track.groups || []).map(g =>
+          (g.members || []).map(m => m.userId).filter(id => id && knownIds.has(id))
+        ).filter(g => g.length > 0);
+        if (!groupArrays.length) return;
+        _gpAssignments[tabId] = groupArrays;
+        appliedCount++;
+        totalMembers += groupArrays.reduce((s, g) => s + g.length, 0);
+      });
+
+      if (appliedCount > 0) {
+        gpSaveState();
+        // 활성 탭이 있으면 즉시 재렌더 (admin 헤더 버튼에서 호출 시).
+        if (_gpActiveTrack && typeof gpRenderCards === 'function') {
+          try { gpRenderCards(); } catch (e) { /* noop */ }
+        }
+        if (typeof gpRenderTabs === 'function') {
+          try { gpRenderTabs(); } catch (e) { /* noop */ }
+        }
+      }
+
+      return { appliedCount, notFoundTracks, totalMembers };
+    }
+
     /** 첫 진입 시 자동 분할 결과를 저장 (이후 drag/drop 으로 변형) */
     function gpEnsureAssignment(tab) {
       if (_gpAssignments[tab.id]) {
@@ -6804,6 +6937,10 @@
       document.getElementById('view-group-preview').classList.remove('hidden-view');
       renderGroupPreview();
       window.scrollTo({ top: 0, behavior: 'auto' });
+      // 노션 실제 조 배정 상태 자동 sync (admin 만, 세션당 1회).
+      // 진입 직후라서 약간 지연 — renderGroupPreview 가 stale state 로 그린 뒤
+      // sync 응답 도착 시 re-render. (응답이 100-500ms 걸려서 깜빡임 최소화)
+      try { void gpAutoLoadFromNotionIfNeeded(); } catch (e) {}
     }
 
     function backFromGroupPreviewView() {
@@ -6853,6 +6990,7 @@
       renderHeaderActions(null);
       stateButtons.forEach(b => b.classList.remove('active'));
       renderGroupPreview();
+      try { void gpAutoLoadFromNotionIfNeeded(); } catch (e) {}
     }
   </script>
   <!-- 🔧 Success/info toast container — showToast() 가 message 채우고 .is-visible 토글. -->

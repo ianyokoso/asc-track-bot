@@ -4772,6 +4772,173 @@ def commit_group_preview_mockup():
     }), 202
 
 
+@app.route('/api/mockups/group-preview/current-state', methods=['GET'])
+def get_group_preview_current_state():
+    """
+    노션 master DB 의 현재 조 배정 상태를 읽어 frontend 의 _gpAssignments 초기화에 사용.
+
+    의도: admin 이 조 배정 뷰에 진입했을 때 localStorage 의 stale 또는 새 random
+    chunking 으로 commit 하면 노션의 실제 배정이 random 결과로 덮어써짐. 진입
+    시점에 노션 실제 상태를 가져와서 거기서 incremental 수정만 하도록 안내.
+
+    매핑: (track tab id) → master DB 트랙 페이지 (이름 매칭) → 그 아래 inline DBs
+    → 각 inline DB 의 row → '이름' relation → master DB 멤버 → 사용자 ID.
+    Cohort 필터링: inline DB title 이 `<cohort>` 로 시작하는 것만 포함.
+
+    Response:
+      {
+        status: 'success',
+        cohortLabel: '9기',
+        member_db_id: '...', group_db_id: '...',
+        tracks: [
+          {
+            trackName: '나 다움 트랙',
+            trackPageId: '...',
+            groups: [
+              { name: '9기 1조', inline_db_id: '...',
+                members: [ { userId: '123...', name: '홍길동', handle: '@xxx', leader: true } ] }
+            ]
+          }
+        ]
+      }
+    """
+    if not _is_admin_session():
+        return jsonify({"status": "error", "message": "운영진 권한이 필요합니다."}), 403
+
+    cohort_label = (request.args.get('cohortLabel') or _get_current_cohort_label()).strip()
+    member_db_id = _normalize_notion_id(GROUP_PREVIEW_DEFAULT_MEMBER_TEST_DB_ID)
+    group_db_id = _normalize_notion_id(GROUP_PREVIEW_DEFAULT_GROUP_TEST_DB_ID)
+
+    # token 결정 — commit endpoint 와 동일 정책.
+    _env_name = (os.getenv('ASC_ENV') or os.getenv('RUN_MODE') or '').strip().lower()
+    notion_token_to_use = GROUP_PREVIEW_TEST_NOTION_TOKEN or (
+        (os.getenv('NOTION_TOKEN') or '').strip() if _env_name == 'test' else None
+    )
+    if not notion_token_to_use:
+        return jsonify({"status": "error", "message": "test Notion 토큰을 결정할 수 없습니다."}), 500
+
+    try:
+        notion_api = _load_notion_api(notion_token_override=notion_token_to_use)
+
+        # 1) master DB → page_id → (user_id, name, handle) 맵 구성. one query.
+        member_db_obj = notion_api.get_database(member_db_id)
+        if not member_db_obj:
+            return jsonify({"status": "error", "message": f"member DB 조회 실패: {member_db_id}"}), 500
+        member_fields = _resolve_member_db_fields(member_db_obj)
+
+        member_pages = notion_api.fetch_all_pages(
+            f'https://api.notion.com/v1/databases/{member_db_id}/query',
+            {"page_size": 100},
+        )
+        page_to_member = {}
+        for page in member_pages or []:
+            props = page.get('properties', {}) or {}
+            # user_id
+            user_id_val = ''
+            if member_fields.get('user_id'):
+                rt = (props.get(member_fields['user_id'], {}) or {}).get('rich_text') or []
+                user_id_val = ''.join(t.get('plain_text', '') for t in rt).strip()
+            # name (title)
+            name_val = ''
+            if member_fields.get('title'):
+                tt = (props.get(member_fields['title'], {}) or {}).get('title') or []
+                name_val = ''.join(t.get('plain_text', '') for t in tt).strip()
+            # handle
+            handle_val = ''
+            if member_fields.get('handle'):
+                ht = (props.get(member_fields['handle'], {}) or {}).get('rich_text') or []
+                handle_val = ''.join(t.get('plain_text', '') for t in ht).strip()
+            page_to_member[page['id']] = {
+                'userId': user_id_val,
+                'name': name_val,
+                'handle': handle_val,
+            }
+
+        # 2) master(group) DB 의 트랙 페이지들 — 트랙 이름이 title 이므로 전부 list.
+        master_schema = _resolve_master_db_schema(notion_api, group_db_id)
+        master_pages = notion_api.fetch_all_pages(
+            f'https://api.notion.com/v1/databases/{group_db_id}/query',
+            {"page_size": 100},
+        )
+
+        # title prop 으로 트랙 이름 추출.
+        title_prop_name = master_schema.get('title_prop_name')
+        cohort_prefix_strict = cohort_label.strip()
+        cohort_digits = ''.join(ch for ch in cohort_prefix_strict if ch.isdigit())
+        cohort_prefixes = [cohort_prefix_strict]
+        if cohort_digits and f'{cohort_digits}기' not in cohort_prefixes:
+            cohort_prefixes.append(f'{cohort_digits}기')
+
+        out_tracks = []
+        for page in master_pages or []:
+            page_id = page.get('id')
+            props = page.get('properties', {}) or {}
+            track_name = ''
+            if title_prop_name:
+                tt = (props.get(title_prop_name, {}) or {}).get('title') or []
+                track_name = ''.join(t.get('plain_text', '') for t in tt).strip()
+            if not track_name:
+                continue
+
+            # 3) 이 트랙 페이지 안의 inline DBs — cohort prefix 매칭만.
+            inline_dbs = notion_api.get_inline_databases(page_id) or []
+            cohort_inline_dbs = []
+            for db in inline_dbs:
+                db_title = str(db.get('title', '')).strip()
+                if any(db_title.startswith(p) for p in cohort_prefixes if p):
+                    cohort_inline_dbs.append(db)
+
+            if not cohort_inline_dbs:
+                continue
+
+            # 4) 각 inline DB 의 rows — 멤버 relation 매핑.
+            groups_out = []
+            for db in cohort_inline_dbs:
+                inline_db_id = db['id']
+                rows = notion_api.fetch_all_pages(
+                    f'https://api.notion.com/v1/databases/{inline_db_id}/query',
+                    {"page_size": 100},
+                )
+                members_out = []
+                for row in rows or []:
+                    row_props = row.get('properties', {}) or {}
+                    relation = (row_props.get('이름', {}) or {}).get('relation') or []
+                    if not relation:
+                        continue
+                    ref_page_id = relation[0].get('id')
+                    member_info = page_to_member.get(ref_page_id) or {}
+                    role_select = (row_props.get('직책', {}) or {}).get('select') or {}
+                    leader = str(role_select.get('name') or '').strip() == '조장'
+                    members_out.append({
+                        'userId': member_info.get('userId') or '',
+                        'name': member_info.get('name') or '',
+                        'handle': member_info.get('handle') or '',
+                        'leader': leader,
+                    })
+                groups_out.append({
+                    'name': str(db.get('title', '')).strip(),
+                    'inline_db_id': inline_db_id,
+                    'members': members_out,
+                })
+
+            out_tracks.append({
+                'trackName': track_name,
+                'trackPageId': page_id,
+                'groups': groups_out,
+            })
+
+        return jsonify({
+            'status': 'success',
+            'cohortLabel': cohort_label,
+            'member_db_id': member_db_id,
+            'group_db_id': group_db_id,
+            'tracks': out_tracks,
+        })
+    except Exception as e:
+        print(f"[ERROR] get_group_preview_current_state failed: {e}")
+        return jsonify({"status": "error", "message": _safe_error_message(e)}), 500
+
+
 @app.route('/api/mockups/group-preview/commit/status', methods=['GET'])
 def commit_group_preview_status():
     """비동기 commit job 의 현재 상태."""
