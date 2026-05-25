@@ -4749,6 +4749,50 @@ def create_track_infra():
     })
 
 
+@app.route('/api/admin/migrate-track-prefix', methods=['POST'])
+def migrate_track_prefix():
+    """
+    [관리자] 옛 trackName fallback 으로 만들어진 역할의 멤버를 새 prefix 역할로 이동.
+
+    예: '나-다움-9기-N조' 역할 보유 멤버 → '나탐구-9기-N조' 역할 추가.
+       '나-다움-9기-조장' 보유 멤버 → '나탐구-9기-조장' 추가.
+
+    동작:
+      - 옛 역할 자체는 안 건드림 (사용자가 별도 정리).
+      - 새 역할은 없으면 생성.
+      - 멤버에게 새 역할 추가 (이미 갖고 있으면 skip).
+
+    Request body:
+      { "cohortLabel": "9기", "oldPrefix": "나-다움", "newPrefix": "나탐구" }
+    """
+    if not _is_admin_session():
+        return jsonify({"status": "error", "message": "운영진 권한이 필요합니다."}), 403
+
+    body = request.get_json(silent=True) or {}
+    cohort_label = str(body.get('cohortLabel') or _get_current_cohort_label()).strip()
+    old_prefix = str(body.get('oldPrefix') or '').strip()
+    new_prefix = str(body.get('newPrefix') or '').strip()
+    if not old_prefix or not new_prefix:
+        return jsonify({"status": "error", "message": "oldPrefix + newPrefix 필요"}), 400
+    if old_prefix == new_prefix:
+        return jsonify({"status": "error", "message": "oldPrefix 와 newPrefix 가 같음"}), 400
+
+    test_queue_file = get_bot_command_queue_file(BASE_DIR, explicit='test')
+    try:
+        result = _run_bot_command_and_wait(
+            'migrate_track_role_prefix',
+            {"cohortLabel": cohort_label, "oldPrefix": old_prefix, "newPrefix": new_prefix},
+            queue_file=test_queue_file,
+            timeout=300.0,
+        )
+    except TimeoutError as e:
+        return jsonify({"status": "error", "message": f"봇 응답 타임아웃: {e}"}), 504
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"봇 IPC 실패: {e}"}), 502
+
+    return jsonify(result)
+
+
 @app.route('/api/admin/cleanup-track-groups', methods=['POST'])
 def cleanup_track_groups():
     """

@@ -481,6 +481,134 @@ class IPCCog(commands.Cog):
                 len(matched_loose_roles), len(deleted_roles), len(failures),
             )
 
+        elif cmd_type == 'migrate_track_role_prefix':
+            # 옛 prefix 의 group 역할에 속한 멤버를 새 prefix 의 같은 group 번호 역할로
+            # 추가 부여. 옛 역할 자체는 안 건드림 (사용자가 별도 정리).
+            #
+            # 예: '나-다움-9기-1조' 보유 멤버 → '나탐구-9기-1조' 역할 추가.
+            #     '나-다움-9기-조장' 보유 멤버 → '나탐구-9기-조장' 역할 추가.
+            #
+            # 새 역할이 없으면 생성.
+            payload = cmd.get('payload', {})
+            cohort_label = str(payload.get('cohortLabel') or '').strip()
+            old_prefix = str(payload.get('oldPrefix') or '').strip()
+            new_prefix = str(payload.get('newPrefix') or '').strip()
+            if not cohort_label or not old_prefix or not new_prefix:
+                raise Exception("cohortLabel + oldPrefix + newPrefix required")
+            cohort_digits = ''.join(ch for ch in cohort_label if ch.isdigit())
+            if not cohort_digits:
+                raise Exception(f"cohort label digits not extractable: {cohort_label!r}")
+            if old_prefix == new_prefix:
+                raise Exception("oldPrefix and newPrefix must differ")
+
+            try:
+                guild = resolve_active_guild(self.bot)
+            except RuntimeError as e:
+                raise Exception(f"guild resolution failed: {e}")
+            if not guild:
+                raise Exception("Bot is not connected to any guild.")
+
+            import re
+            old_group_re = re.compile(rf'^{re.escape(old_prefix)}-{re.escape(cohort_digits)}기-(\d+)조$')
+            old_leader_re = re.compile(rf'^{re.escape(old_prefix)}-{re.escape(cohort_digits)}기-조장$')
+
+            old_group_roles = {}   # group_num -> Role
+            old_leader_role = None
+            for role in guild.roles:
+                m = old_group_re.match(role.name or '')
+                if m:
+                    old_group_roles[int(m.group(1))] = role
+                    continue
+                if old_leader_re.match(role.name or ''):
+                    old_leader_role = role
+
+            if not old_group_roles and not old_leader_role:
+                cmd['result'] = {
+                    'status': 'nothing_to_migrate',
+                    'cohortLabel': cohort_label,
+                    'oldPrefix': old_prefix,
+                    'newPrefix': new_prefix,
+                    'message': f"옛 prefix '{old_prefix}-{cohort_digits}기-N조' 역할을 찾지 못했습니다.",
+                }
+                logger.info(f"[IPC migrate] nothing to migrate: {old_prefix} -> {new_prefix}")
+                return  # process_command 종료 (loop 의 continue 가 아님)
+
+            reason = f"트랙 prefix 마이그레이션: {old_prefix} → {new_prefix}"
+
+            # 새 group 역할 ensure.
+            new_group_roles = {}
+            roles_created = []
+            for num in sorted(old_group_roles.keys()):
+                new_name = f"{new_prefix}-{cohort_digits}기-{num}조"
+                new_role = discord.utils.get(guild.roles, name=new_name)
+                if not new_role:
+                    new_role = await guild.create_role(name=new_name, reason=reason)
+                    roles_created.append(new_name)
+                new_group_roles[num] = new_role
+
+            new_leader_role = None
+            if old_leader_role:
+                new_leader_name = f"{new_prefix}-{cohort_digits}기-조장"
+                new_leader_role = discord.utils.get(guild.roles, name=new_leader_name)
+                if not new_leader_role:
+                    new_leader_role = await guild.create_role(name=new_leader_name, reason=reason)
+                    roles_created.append(new_leader_name)
+
+            # gateway 캐시 풀 fill (멤버 누락 방지).
+            if len(guild.members) < (guild.member_count or 0):
+                try:
+                    await guild.chunk(cache=True)
+                except Exception as e:
+                    logger.warning(f"[IPC migrate] guild.chunk failed: {e}")
+
+            # 멤버 순회 — 옛 역할 보유시 새 역할 추가.
+            migrated_per_group = {}
+            migrated_leader_count = 0
+            members_touched = 0
+            failures = []
+            for member in guild.members:
+                if member.bot:
+                    continue
+                member_role_ids = {r.id for r in member.roles}
+                roles_to_add = []
+                for num, old_role in old_group_roles.items():
+                    if old_role.id in member_role_ids:
+                        new_role = new_group_roles[num]
+                        if new_role.id not in member_role_ids:
+                            roles_to_add.append(new_role)
+                            migrated_per_group[num] = migrated_per_group.get(num, 0) + 1
+                if (old_leader_role and old_leader_role.id in member_role_ids
+                        and new_leader_role and new_leader_role.id not in member_role_ids):
+                    roles_to_add.append(new_leader_role)
+                    migrated_leader_count += 1
+                if roles_to_add:
+                    try:
+                        await member.add_roles(*roles_to_add, reason=reason)
+                        members_touched += 1
+                    except Exception as e:
+                        failures.append({
+                            'member_id': str(member.id),
+                            'member_name': str(member.display_name or member.name),
+                            'error': str(e),
+                        })
+
+            cmd['result'] = {
+                'status': 'success',
+                'cohortLabel': cohort_label,
+                'oldPrefix': old_prefix,
+                'newPrefix': new_prefix,
+                'roles_created': roles_created,
+                'migrated_per_group': migrated_per_group,
+                'migrated_leader_count': migrated_leader_count,
+                'members_touched': members_touched,
+                'failures': failures,
+            }
+            logger.info(
+                "[IPC migrate] %s -> %s members_touched=%d per_group=%s leader=%d roles_created=%d failures=%d",
+                old_prefix, new_prefix, members_touched, migrated_per_group,
+                migrated_leader_count, len(roles_created), len(failures),
+            )
+
     @check_queue.before_loop
     async def before_check_queue(self):
         await self.bot.wait_until_ready()
