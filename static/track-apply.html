@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <!-- build: 2026-05-25-tracknamealias — JS 캐시 강제 무효화 -->
   <title>ASC 트랙 신청</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -3809,16 +3813,32 @@
     // 조 배정 view 진입 시 한 번 자동 fetch — admin 이 보는 게 곧 노션 실제 상태.
     // 이전 footgun: localStorage 의 stale 또는 random chunking 결과로 commit 하면
     //   노션 inline DB 가 random 결과로 덮어써짐. 진입 시점에 노션 상태로 초기화.
+    // build tag — JS 캐시 부스트 확인용 (브라우저 콘솔에서 GP_BUILD_TAG 으로 검사 가능).
+    window.GP_BUILD_TAG = '2026-05-25-tracknamealias';
+    console.log('[group-preview] build tag:', window.GP_BUILD_TAG);
+
     let _gpNotionSyncedThisSession = false;
     async function gpAutoLoadFromNotionIfNeeded() {
-      if (_gpNotionSyncedThisSession) return;
-      if (!IS_ADMIN_MOCK) return;  // admin 만 적용 (학생은 자기 조만 보는 별도 흐름)
+      console.log('[gpAutoLoad] entering — synced=' + _gpNotionSyncedThisSession + ' adminMock=' + IS_ADMIN_MOCK);
+      if (_gpNotionSyncedThisSession) {
+        console.log('[gpAutoLoad] skipped: already synced this session');
+        return;
+      }
+      if (!IS_ADMIN_MOCK) {
+        console.log('[gpAutoLoad] skipped: not admin');
+        return;
+      }
       _gpNotionSyncedThisSession = true;
       try {
-        const { appliedCount, source } = await gpLoadFromNotion(true);
+        const result = await gpLoadFromNotion(true);
+        console.log('[gpAutoLoad] result:', result);
+        const { appliedCount, source, _trackBreakdown } = result;
         if (appliedCount > 0 && typeof showToast === 'function') {
           const srcLabel = source === 'discord' ? '디스코드' : source === 'notion' ? '노션' : '';
-          showToast(`📥 ${srcLabel} 조 배정 ${appliedCount}개 트랙 sync 됨`, 3000);
+          showToast(`📥 ${srcLabel} 조 배정 ${appliedCount}개 트랙 sync 됨`, 3500);
+        } else if (typeof showToast === 'function') {
+          // 0 트랙 적용된 경우에도 toast — 사용자가 sync 가 동작하는지 알 수 있게.
+          showToast(`⚠️ 조 배정 sync 결과 0개 — 브라우저 콘솔 [gpAutoLoad] 로그 확인`, 4000);
         }
       } catch (e) {
         console.warn('[gpAutoLoad] failed:', e);
@@ -6139,22 +6159,36 @@
       let appliedCount = 0;
       let totalMembers = 0;
       const notFoundTracks = [];
+      console.log('[gpLoadFromNotion] reverseMap:', reverseMap);
+      console.log('[gpLoadFromNotion] response tracks:', (data.tracks || []).map(t => ({
+        name: t.trackName, groups: (t.groups || []).length,
+      })));
+      const knownIds = new Set(MOCK_MEMBERS.map(m => getMemberIdentityKey(m)));
       (data.tracks || []).forEach(track => {
-        const tabId = reverseMap[String(track.trackName || '').trim()];
+        const trackNameKey = String(track.trackName || '').trim();
+        const tabId = reverseMap[trackNameKey];
         if (!tabId) {
           notFoundTracks.push(track.trackName);
+          console.warn('[gpLoadFromNotion] no tabId for trackName=' + JSON.stringify(trackNameKey));
           return;
         }
         // userId 기준 그룹 배열 [[id1, id2], [id3]] 형태로 변환.
         // MOCK_MEMBERS 에 없는 userId 는 제외 (이미 등록 해제된 멤버 등).
-        const knownIds = new Set(MOCK_MEMBERS.map(m => getMemberIdentityKey(m)));
-        const groupArrays = (track.groups || []).map(g =>
-          (g.members || []).map(m => m.userId).filter(id => id && knownIds.has(id))
-        ).filter(g => g.length > 0);
-        if (!groupArrays.length) return;
-        _gpAssignments[tabId] = groupArrays;
+        const rawGroups = (track.groups || []).map(g =>
+          (g.members || []).map(m => m.userId).filter(Boolean)
+        );
+        const filteredGroups = rawGroups.map(g => g.filter(id => knownIds.has(id))).filter(g => g.length > 0);
+        console.log('[gpLoadFromNotion] track=' + trackNameKey + ' tabId=' + tabId +
+                    ' rawGroups=' + rawGroups.map(g => g.length).join(',') +
+                    ' afterKnownIdFilter=' + filteredGroups.map(g => g.length).join(','));
+        if (!filteredGroups.length) {
+          console.warn('[gpLoadFromNotion] tabId=' + tabId + ' has no filtered groups — skipping (rawGroup memberCount=' +
+                       rawGroups.map(g => g.length).join(',') + '). knownIds size=' + knownIds.size);
+          return;
+        }
+        _gpAssignments[tabId] = filteredGroups;
         appliedCount++;
-        totalMembers += groupArrays.reduce((s, g) => s + g.length, 0);
+        totalMembers += filteredGroups.reduce((s, g) => s + g.length, 0);
       });
 
       if (appliedCount > 0) {
