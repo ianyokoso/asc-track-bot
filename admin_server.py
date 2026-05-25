@@ -2892,6 +2892,9 @@ def _upsert_group_preview_members(notion_api, member_db_id, members, member_grou
         raise RuntimeError(f'Failed to load member test DB: {member_db_id}')
 
     fields = _resolve_member_db_fields(db_obj)
+    print(f"[group-commit:diag] member_db_id={member_db_id}")
+    print(f"[group-commit:diag] resolved fields={fields}")
+    print(f"[group-commit:diag] input member count={len(members)} auto_create_missing={auto_create_missing}")
     if not fields.get('title'):
         raise RuntimeError('Member test DB is missing a title property.')
 
@@ -2903,9 +2906,14 @@ def _upsert_group_preview_members(notion_api, member_db_id, members, member_grou
     for member in members:
         member_id = str(member.get('userId') or member.get('id') or '').strip()
         if not member_id:
+            print(f"[group-commit:diag] skip member: empty userId in payload — raw={member}")
             continue
 
+        handle_dbg = str(member.get('handle') or '').strip()
+        name_dbg = str(member.get('name') or '').strip()
         existing = _find_existing_member_page(notion_api, member_db_id, fields, member)
+        print(f"[group-commit:diag] match userId={member_id} handle={handle_dbg!r} "
+              f"name={name_dbg!r} -> {'FOUND ' + existing.get('id', '') if existing else 'MISS'}")
 
         if existing:
             # 트랙·조만 패치 (기존 페이지 다른 정보 보존).
@@ -2955,6 +2963,13 @@ def _upsert_group_preview_members(notion_api, member_db_id, members, member_grou
     summary['cleared'] = _clear_non_participant_tracks_and_groups(
         notion_api, member_db_id, fields, touched_page_ids
     )
+
+    print(f"[group-commit:diag] master DB summary: updated={summary['updated']} "
+          f"created={summary['created']} missing={len(summary['missing'])} "
+          f"cleared={summary['cleared']}")
+    if summary['missing']:
+        sample = summary['missing'][:5]
+        print(f"[group-commit:diag] missing sample: {sample}")
 
     return member_page_ids, summary
 
@@ -3457,6 +3472,13 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
     member_db_id = _resolve_database_target_id(notion_api, member_db_id)
     member_group_labels = _collect_member_group_labels(tracks)
 
+    print(f"[group-commit:diag] === commit start === cohort={cohort_label} "
+          f"member_db_id={member_db_id} group_db_id={group_db_id} "
+          f"members={len(members)} tracks={len(tracks)} "
+          f"auto_create={auto_create_missing}")
+    print(f"[group-commit:diag] env=ASC_ENV={os.getenv('ASC_ENV')!r} "
+          f"token_source={'override' if GROUP_PREVIEW_TEST_NOTION_TOKEN else 'NOTION_TOKEN(env)'}")
+
     _progress('notion_members', f'멤버 마스터 DB 갱신 중 ({len(members)}명)')
     member_page_ids, member_summary = _upsert_group_preview_members(
         notion_api,
@@ -3515,6 +3537,8 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
             notion_api, group_db_id, track_name, schema=master_db_schema
         )
         track_name_to_page_id[track_name] = track_page_id
+        print(f"[group-commit:diag] track '{track_name}' -> page_id={track_page_id} "
+              f"(created={_created}) groups={len(groups)}")
 
         # 🔧 incremental sync (2026-05-08):
         #   직전: 트랙 페이지의 기존 inline DB 전부 archive 후 재생성 → URL 바뀌고
@@ -3533,6 +3557,7 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
             existing_db = _find_inline_db_by_title(notion_api, track_page_id, group_name)
             if existing_db:
                 inline_db_id = existing_db['id']
+                print(f"[group-commit:diag]   group '{group_name}' reuse inline_db={inline_db_id}")
             else:
                 inline_db_id = _create_group_preview_inline_db(
                     notion_api,
@@ -3541,6 +3566,7 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
                     member_db_id,
                 )
                 created_group_dbs += 1
+                print(f"[group-commit:diag]   group '{group_name}' created inline_db={inline_db_id}")
             _ensure_group_inline_db_schema(notion_api, inline_db_id, member_db_id)
             group_url = f"https://www.notion.so/{inline_db_id.replace('-', '')}"
 
@@ -3624,6 +3650,12 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
         raise RuntimeError(f'Notion commit completed, but Discord sync failed: {e}') from e
 
     _progress('done', '완료')
+    print(f"[group-commit:diag] === commit done === "
+          f"members_updated={member_summary['updated']} "
+          f"members_created={member_summary['created']} "
+          f"members_missing={len(member_summary.get('missing', []))} "
+          f"group_dbs_created={created_group_dbs} "
+          f"group_rows_created={created_group_rows}")
     return {
         "status": "success",
         "message": "Mock group preview was committed to the test Notion databases and synced to Discord.",
