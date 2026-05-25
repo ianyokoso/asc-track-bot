@@ -2866,7 +2866,7 @@
           <button type="button" class="btn-ghost" id="admin-fill-mock-random" title="현재 목업 멤버 풀은 그대로, 트랙·조장·sub-form 을 매번 다른 랜덤 분배로 셔플">🎲 랜덤 채우기</button>
           <button type="button" class="btn-ghost" id="admin-clear-mock" title="목업 멤버 전부 리스트에서 완전히 제거 (실 OAuth 사용자만 남김)">🧹 목업 지우기</button>
           <button type="button" class="btn-ghost text-bad" id="admin-full-reset" title="신청 데이터 초기화 (서버 캐시 + 브라우저). 이전 기수 Discord 트랙 채널은 봇 '!채널삭제 &lt;기수&gt;' 별도 실행 필요.">🗑️ 전체 초기화</button>
-          <button type="button" class="btn-ghost" id="admin-notion-only-resync" title="조 배정 결과를 Notion 에만 다시 push (디스코드 안 건드림). 이전 commit 에서 Notion 매칭 실패한 경우 복구용.">🔁 Notion만 재실행</button>
+          <button type="button" class="btn-ghost" id="admin-notion-only-resync" title="조 배정 결과를 Notion 에만 다시 push (디스코드 안 건드림). 매칭 실패한 신규 멤버는 마스터 DB 에 자동 추가.">🔁 Notion 재실행 (신규 자동 추가)</button>
           <button class="btn-ghost" id="admin-track-apply-sync">Full Sync</button>
           <button class="btn-navy" id="admin-track-apply-refresh">Refresh</button>`;
         requestAnimationFrame(() => {
@@ -3767,16 +3767,21 @@
         return;
       }
       payload.notionOnly = true;
+      // 🔧 매칭 실패 신규 멤버는 마스터 DB 에 자동 row 생성 (사용자 요구).
+      //   매칭 성공 케이스는 기존 row 의 트랙·조 만 갱신 (다른 필드 보존).
+      //   매칭 실패 케이스는 title=name, user_id, handle, tracks, group 모두 set
+      //   하는 신규 row 생성. 다음 번 sync 부터는 ID 매칭으로 정상 동작.
+      payload.autoCreateMissing = true;
 
       const memberCount = (payload.members || []).length;
       const trackCount = payload.tracks.length;
       const groupCount = payload.tracks.reduce((s, t) => s + (t.groups || []).length, 0);
       const confirmed = confirm(
-        '🔁 Notion 만 재실행\n\n' +
+        '🔁 Notion 재실행 (신규 자동 추가)\n\n' +
         `대상: 트랙 ${trackCount}개 · 조 ${groupCount}개 · 멤버 ${memberCount}명\n\n` +
         '• Discord 채널/역할은 건드리지 않습니다 (이미 배정 완료 가정).\n' +
-        '• 마스터 DB 매칭 + 트랙·조 갱신 + inline DB row 동기화만 다시 실행.\n' +
-        '• 직전 commit 에서 매칭 실패 (members_missing) 인 경우 닉네임 fallback 매칭 시도.\n\n' +
+        '• 기존 마스터 DB row 매칭 시: 트랙·조 만 갱신 (다른 필드 보존).\n' +
+        '• 매칭 실패한 신규 멤버: 마스터 DB 에 row 자동 생성 (Discord ID·핸들 포함).\n\n' +
         '진행할까요?'
       );
       if (!confirmed) return;
@@ -3790,18 +3795,23 @@
         });
         const summary = result?.summary || {};
         const updated = summary.members_updated || 0;
+        const created = summary.members_created || 0;
         const missing = Array.isArray(summary.members_missing) ? summary.members_missing.length : 0;
         const groupRows = summary.group_rows_created || 0;
         const groupDbs = summary.group_databases_created || 0;
+        const missingSample = (summary.members_missing || []).slice(0, 5)
+          .map(m => m.name || m.handle || m.userId).filter(Boolean).join(', ');
         alert(
           '✅ Notion 재실행 완료\n\n' +
-          `• 마스터 DB 트랙·조 갱신: ${updated}명\n` +
-          `• 매칭 실패 (skip): ${missing}명\n` +
+          `• 마스터 DB 트랙·조 갱신: ${updated}명 (기존 row 매칭)\n` +
+          `• 마스터 DB 신규 추가: ${created}명 (매칭 실패 → 자동 생성)\n` +
           `• inline 조 DB row 추가: ${groupRows}개\n` +
-          `• inline 조 DB 신규 생성: ${groupDbs}개\n\n` +
+          `• inline 조 DB 신규 생성: ${groupDbs}개\n` +
           (missing
-            ? '⚠️ 매칭 실패 남아있음 — /api/admin/debug/recent-commit-jobs 로 missing 목록 확인 후 대응.'
-            : '모든 멤버 매칭 성공.')
+            ? `\n⚠️ 자동 생성도 실패한 멤버: ${missing}명${missingSample ? ` (${missingSample}${missing > 5 ? ' 외' : ''})` : ''}\n` +
+              '   원인은 보통 user_id 누락 등 payload 자체 문제. ' +
+              '/api/admin/debug/recent-commit-jobs 응답 확인.'
+            : '\n모든 멤버 마스터 DB 반영 완료.')
         );
       } catch (e) {
         alert(`❌ Notion 재실행 실패: ${e?.message || e}`);
@@ -6223,6 +6233,11 @@
         // GROUP_PREVIEW_TEST_MEMBER_DB_ID / _GROUP_DB_ID 자동 사용 (single source of truth).
         members,
         tracks,
+        // 🔧 default true (2026-05-25): 새 기수 = 대부분 신규 멤버 = 마스터 DB 에
+        //   row 가 아직 없음. 매칭 실패 시 silent skip 하면 마스터 DB 가 영원히
+        //   안 채워짐. 자동 생성을 기본 ON 으로 두고, 매칭 성공한 기존 멤버는
+        //   여전히 트랙·조 만 patch (다른 필드 보존).
+        autoCreateMissing: true,
       };
     }
 
