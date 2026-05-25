@@ -4749,6 +4749,51 @@ def create_track_infra():
     })
 
 
+@app.route('/api/admin/cleanup-track-groups', methods=['POST'])
+def cleanup_track_groups():
+    """
+    [관리자] 특정 트랙에서 keepGroupCount 초과 그룹의 역할 + 채널 삭제.
+
+    Use case: 이전 실패한 commit 이 의도하지 않은 추가 그룹 (예: 나탐구 3조) 을
+    디스코드에 만들어둔 경우 정리.
+
+    Request body:
+      { "cohortLabel": "9기", "trackName": "나 탐구 트랙", "keepGroupCount": 2 }
+
+    →  '나탐구-9기-3조', '나탐구-9기-4조' ... 같은 역할 + 채널 모두 삭제.
+       '나탐구-9기-1조', '나탐구-9기-2조' 는 그대로.
+    """
+    if not _is_admin_session():
+        return jsonify({"status": "error", "message": "운영진 권한이 필요합니다."}), 403
+
+    body = request.get_json(silent=True) or {}
+    cohort_label = str(body.get('cohortLabel') or _get_current_cohort_label()).strip()
+    track_name = str(body.get('trackName') or '').strip()
+    try:
+        keep_count = int(body.get('keepGroupCount'))
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "keepGroupCount 는 정수여야 합니다."}), 400
+    if not track_name:
+        return jsonify({"status": "error", "message": "trackName 필요"}), 400
+    if keep_count < 0:
+        return jsonify({"status": "error", "message": "keepGroupCount 는 0 이상"}), 400
+
+    test_queue_file = get_bot_command_queue_file(BASE_DIR, explicit='test')
+    try:
+        result = _run_bot_command_and_wait(
+            'cleanup_track_groups_beyond',
+            {"cohortLabel": cohort_label, "trackName": track_name, "keepGroupCount": keep_count},
+            queue_file=test_queue_file,
+            timeout=120.0,
+        )
+    except TimeoutError as e:
+        return jsonify({"status": "error", "message": f"봇 응답 타임아웃: {e}"}), 504
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"봇 IPC 실패: {e}"}), 502
+
+    return jsonify(result)
+
+
 @app.route('/api/admin/reset-track-applications', methods=['POST'])
 def reset_track_applications_mockup():
     """

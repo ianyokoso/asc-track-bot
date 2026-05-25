@@ -336,6 +336,108 @@ class IPCCog(commands.Cog):
                 cohort_label, len(role_id_to_group), scanned, len(out_tracks),
             )
 
+        elif cmd_type == 'cleanup_track_groups_beyond':
+            # 특정 트랙의 group_num > keep_count 인 역할 + 채널 삭제 (고스트 정리).
+            #
+            # 사용 시점: 이전 실패한 commit 이 의도하지 않은 그룹 (예: 나탐구 3조) 을
+            # 디스코드에 만들어버린 경우 수동 정리. keep_count 이하 그룹은 안 건드림.
+            payload = cmd.get('payload', {})
+            cohort_label = str(payload.get('cohortLabel') or '').strip()
+            track_name = str(payload.get('trackName') or '').strip()
+            try:
+                keep_count = int(payload.get('keepGroupCount') or 0)
+            except (TypeError, ValueError):
+                raise Exception("keepGroupCount must be int")
+            if not cohort_label or not track_name:
+                raise Exception("cohortLabel + trackName required")
+            if keep_count < 0:
+                raise Exception("keepGroupCount must be >= 0")
+            cohort_digits = ''.join(ch for ch in cohort_label if ch.isdigit())
+            if not cohort_digits:
+                raise Exception(f"cohort label digits not extractable: {cohort_label!r}")
+
+            try:
+                guild = resolve_active_guild(self.bot)
+            except RuntimeError as e:
+                raise Exception(f"guild resolution failed: {e}")
+            if not guild:
+                raise Exception("Bot is not connected to any guild.")
+
+            # 트랙명 → prefix 매핑 (admin.py 와 동일).
+            prefix_map = {
+                '크리에이터 트랙':        '크리에이터',
+                '빌더 기초 트랙':         '빌더-기초',
+                '빌더 심화 트랙':         '빌더-심화',
+                '세일즈 실전 트랙':       '세일즈-실전',
+                'AI 에이전트 트랙':       'AI에이전트-실전',
+                '앱 개발 트랙':           '앱개발',
+                '나 탐구 트랙':           '나탐구',
+            }
+            prefix = prefix_map.get(track_name)
+            if not prefix:
+                raise Exception(f"unknown trackName: {track_name!r}")
+
+            import re
+            group_re = re.compile(rf'^{re.escape(prefix)}-{re.escape(cohort_digits)}기-(\d+)조$')
+
+            deleted_roles = []
+            deleted_channels = []
+            failures = []
+
+            # 1) 역할 삭제 (group_num > keep_count).
+            for role in list(guild.roles):
+                m = group_re.match(role.name or '')
+                if not m:
+                    continue
+                num = int(m.group(1))
+                if num <= keep_count:
+                    continue
+                try:
+                    await role.delete(reason=f"수동 정리: {track_name} keep={keep_count} 이하만 유지")
+                    deleted_roles.append({'name': role.name, 'id': str(role.id)})
+                    logger.info(f"[IPC cleanup] deleted role: {role.name}")
+                except Exception as e:
+                    failures.append({'kind': 'role', 'name': role.name, 'error': str(e)})
+
+            # 2) 같은 패턴의 채널도 삭제 (text + voice).
+            for channel in list(guild.channels):
+                cname = (channel.name or '').lower()
+                m = group_re.match(channel.name or '')
+                if not m:
+                    # voice 채널 등에 suffix 가 있을 수 있어 prefix 매칭도 시도.
+                    voice_m = re.match(
+                        rf'^{re.escape(prefix.lower())}-{re.escape(cohort_digits)}기-(\d+)조',
+                        cname,
+                    )
+                    if not voice_m:
+                        continue
+                    num = int(voice_m.group(1))
+                else:
+                    num = int(m.group(1))
+                if num <= keep_count:
+                    continue
+                try:
+                    await channel.delete(reason=f"수동 정리: {track_name} keep={keep_count} 이하만 유지")
+                    deleted_channels.append({'name': channel.name, 'id': str(channel.id), 'type': str(channel.type)})
+                    logger.info(f"[IPC cleanup] deleted channel: {channel.name}")
+                except Exception as e:
+                    failures.append({'kind': 'channel', 'name': channel.name, 'error': str(e)})
+
+            result = {
+                'status': 'success',
+                'cohortLabel': cohort_label,
+                'trackName': track_name,
+                'keepGroupCount': keep_count,
+                'deleted_roles': deleted_roles,
+                'deleted_channels': deleted_channels,
+                'failures': failures,
+            }
+            cmd['result'] = result
+            logger.info(
+                "[IPC] cleanup_track_groups_beyond track=%s keep=%d roles_del=%d channels_del=%d failures=%d",
+                track_name, keep_count, len(deleted_roles), len(deleted_channels), len(failures),
+            )
+
     @check_queue.before_loop
     async def before_check_queue(self):
         await self.bot.wait_until_ready()
