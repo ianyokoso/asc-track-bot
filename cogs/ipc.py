@@ -485,8 +485,8 @@ class IPCCog(commands.Cog):
             # 옛 prefix 의 group 역할에 속한 멤버를 새 prefix 의 같은 group 번호 역할로
             # 추가 부여. 옛 역할 자체는 안 건드림 (사용자가 별도 정리).
             #
-            # 예: '나-다움-9기-1조' 보유 멤버 → '나탐구-9기-1조' 역할 추가.
-            #     '나-다움-9기-조장' 보유 멤버 → '나탐구-9기-조장' 역할 추가.
+            # 예: '{oldPrefix}-9기-1조' 보유 멤버 → '{newPrefix}-9기-1조' 역할 추가.
+            #     '{oldPrefix}-9기-조장' 보유 멤버 → '{newPrefix}-9기-조장' 역할 추가.
             #
             # 새 역할이 없으면 생성.
             payload = cmd.get('payload', {})

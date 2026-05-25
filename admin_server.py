@@ -4754,8 +4754,8 @@ def migrate_track_prefix():
     """
     [관리자] 옛 trackName fallback 으로 만들어진 역할의 멤버를 새 prefix 역할로 이동.
 
-    예: '나-다움-9기-N조' 역할 보유 멤버 → '나탐구-9기-N조' 역할 추가.
-       '나-다움-9기-조장' 보유 멤버 → '나탐구-9기-조장' 추가.
+    예: '{oldPrefix}-9기-N조' 역할 보유 멤버 → '{newPrefix}-9기-N조' 역할 추가.
+       '{oldPrefix}-9기-조장' 보유 멤버 → '{newPrefix}-9기-조장' 추가.
 
     동작:
       - 옛 역할 자체는 안 건드림 (사용자가 별도 정리).
@@ -4763,7 +4763,7 @@ def migrate_track_prefix():
       - 멤버에게 새 역할 추가 (이미 갖고 있으면 skip).
 
     Request body:
-      { "cohortLabel": "9기", "oldPrefix": "나-다움", "newPrefix": "나탐구" }
+      { "cohortLabel": "9기", "oldPrefix": "...", "newPrefix": "..." }
     """
     if not _is_admin_session():
         return jsonify({"status": "error", "message": "운영진 권한이 필요합니다."}), 403
@@ -5185,7 +5185,7 @@ def get_group_preview_current_state():
         member_db_id: '...', group_db_id: '...',
         tracks: [
           {
-            trackName: '나 다움 트랙',
+            trackName: '나 탐구 트랙',
             trackPageId: '...',
             groups: [
               { name: '9기 1조', inline_db_id: '...',

@@ -1246,7 +1246,6 @@ class AdminCog(commands.Cog):
 
         # 현재 매핑된 트랙 prefix + 과거 사용된 레거시 prefix
         _LEGACY_TRACK_PREFIXES = [
-            "나-다움",          # 옛 이름 (현재: 나탐구)
             "빌더-라이트",
             "크리에이터-라이트",
             "AI에이전트",       # 'AI에이전트-실전' 의 짧은 변형
@@ -1432,7 +1431,6 @@ class AdminCog(commands.Cog):
 
         # 트랙 prefix 매칭 — cleanup_cohort_channels 와 동일한 룰 사용.
         _LEGACY_TRACK_PREFIXES = [
-            "나-다움",
             "빌더-라이트",
             "크리에이터-라이트",
             "AI에이전트",

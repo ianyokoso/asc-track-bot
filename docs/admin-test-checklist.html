@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>ASC 트랙 봇 — 운영자 테스트 체크리스트</title>
+<style>
+  @page {
+    size: A4;
+    margin: 18mm 16mm 18mm 16mm;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", sans-serif;
+    color: #1a1a1a;
+    line-height: 1.55;
+    font-size: 10.5pt;
+    margin: 0;
+  }
+  header {
+    border-bottom: 2px solid #1a1a1a;
+    padding-bottom: 10px;
+    margin-bottom: 18px;
+  }
+  h1 {
+    font-size: 20pt;
+    margin: 0 0 6px 0;
+    letter-spacing: -0.3px;
+  }
+  .subtitle {
+    color: #666;
+    font-size: 10pt;
+    margin: 0;
+  }
+  .meta {
+    margin-top: 8px;
+    font-size: 9pt;
+    color: #888;
+  }
+  section {
+    margin-top: 18px;
+    page-break-inside: avoid;
+  }
+  h2 {
+    font-size: 13pt;
+    margin: 0 0 8px 0;
+    padding: 6px 10px;
+    border-radius: 4px;
+    background: #f3f3f3;
+    border-left: 4px solid #333;
+  }
+  h2.danger { background: #fff2f2; border-left-color: #d33; }
+  h2.warning { background: #fff8e6; border-left-color: #e8a838; }
+  h2.normal { background: #f0f6ff; border-left-color: #3b82f6; }
+  h2.flow { background: #f0fdf4; border-left-color: #16a34a; }
+
+  h3 {
+    font-size: 11pt;
+    margin: 12px 0 6px 0;
+    color: #222;
+  }
+  ul.checklist {
+    list-style: none;
+    padding-left: 4px;
+    margin: 6px 0 10px 0;
+  }
+  ul.checklist li {
+    position: relative;
+    padding: 4px 0 4px 24px;
+    border-bottom: 1px dashed #e8e8e8;
+    line-height: 1.45;
+  }
+  ul.checklist li::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 7px;
+    width: 13px;
+    height: 13px;
+    border: 1.5px solid #555;
+    border-radius: 3px;
+    background: #fff;
+  }
+  ul.checklist li.warn { background: #fffbea; }
+  ul.checklist li.warn::after {
+    content: "⚠";
+    position: absolute;
+    right: 4px;
+    top: 4px;
+    color: #c98a00;
+    font-weight: bold;
+  }
+  .quote {
+    background: #fafafa;
+    border-left: 3px solid #bbb;
+    padding: 8px 12px;
+    margin: 6px 0 10px 0;
+    font-size: 9.5pt;
+    color: #555;
+  }
+  .top3 {
+    background: linear-gradient(180deg, #fff5f5 0%, #ffffff 100%);
+    border: 1px solid #f1c0c0;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin: 14px 0;
+  }
+  .top3 h2 { background: transparent; border-left: none; padding-left: 0; margin-bottom: 8px; }
+  .top3 ol { margin: 4px 0 0 22px; padding: 0; }
+  .top3 ol li { margin-bottom: 6px; }
+  .scenario {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin: 14px 0 6px 0;
+  }
+  .scenario h2 { background: transparent; border-left: none; padding-left: 0; margin-bottom: 8px; }
+  .scenario ol { margin: 4px 0 0 22px; padding: 0; }
+  .scenario ol li { margin-bottom: 5px; }
+  code {
+    background: #f1f1f1;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: "SF Mono", Monaco, monospace;
+    font-size: 9.5pt;
+  }
+  .small { font-size: 9pt; color: #666; }
+  footer {
+    margin-top: 24px;
+    padding-top: 10px;
+    border-top: 1px solid #ddd;
+    font-size: 8.5pt;
+    color: #888;
+    text-align: center;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 8.5pt;
+    padding: 1px 7px;
+    border-radius: 10px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .badge.red { background: #fde2e2; color: #b42525; }
+  .badge.orange { background: #fde9c4; color: #9a5a00; }
+  .badge.blue { background: #dde9ff; color: #1e40af; }
+  .badge.green { background: #d4f3df; color: #166534; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ASC 트랙 봇 — 운영자 테스트 체크리스트</h1>
+  <p class="subtitle">실전 오픈 직전, 운영자가 직접 눈으로 확인하는 기능 점검표</p>
+  <p class="meta">대상: 운영자 (비개발자) · 작성일: 2026-05-18</p>
+</header>
+
+<div class="top3">
+  <h2>🎯 가장 중요한 3가지 — 이것만은 꼭</h2>
+  <ol>
+    <li><strong>봇이 메인 ASC 디스코드 서버에 채널을 만들지 않는지</strong> — 시범 1회 돌린 뒤 메인 서버 사이드바에 새 카테고리/채널이 안 생겼는지 눈으로 확인</li>
+    <li><strong>노션 멤버 DB에 같은 사람이 두 번 안 생기는지</strong> — 신청자 본인 row 1개만 있고 "트랙" 컬럼만 채워졌는지 확인</li>
+    <li><strong>모바일에서 디스코드 로그인 → 신청 제출</strong>이 끝까지 되는지 — 학생 절반은 모바일</li>
+  </ol>
+</div>
+
+<section>
+  <h2 class="normal">1. 신청 페이지가 학생에게 보일 때 <span class="badge blue">눈으로 체크</span></h2>
+  <p class="quote">직접 신청 URL을 열어보면서 학생 시점으로 확인</p>
+  <ul class="checklist">
+    <li>신청 페이지 URL 접속 → <strong>카운트다운</strong> 또는 <strong>신청 폼</strong>이 정상 표시</li>
+    <li><strong>디스코드 로그인 버튼</strong> 클릭 → 로그인 후 폼 진입</li>
+    <li><strong>모바일 핸드폰</strong>으로도 같은 흐름 한 번 (학생 절반은 모바일로 신청)</li>
+    <li><strong>빌더 기초/실전 트랙 = "리뉴얼 중"</strong> 카드로 보이고, 선택 불가</li>
+    <li><strong>요일 슬롯 확인</strong>: 화요일 = AI 에이전트, 수요일 = 나 탐구</li>
+    <li><strong>OT 날짜 = 5/24</strong> 로 표기</li>
+    <li><strong>크리에이터 트랙</strong> 선택 시 숏폼/롱폼 선택 박스 뜸</li>
+  </ul>
+</section>
+
+<section>
+  <h2 class="normal">2. 신청 제약이 제대로 걸리는지</h2>
+  <ul class="checklist">
+    <li>정규 트랙 <strong>3개째</strong> 선택하면 막힘 (최대 2개 안내 메시지)</li>
+    <li>라이트 트랙 = 크리에이터/빌더 <strong>각각 1개씩만</strong> 선택됨</li>
+    <li>크리에이터 선택 후 숏폼/롱폼 안 고르고 제출 → <strong>제출 차단 + 안내</strong></li>
+    <li>조장 옵션이 비활성 상태일 때 <strong>클릭해도 안 눌림</strong></li>
+  </ul>
+</section>
+
+<section>
+  <h2 class="normal">3. 신청 제출 → 데이터 정상 저장</h2>
+  <ul class="checklist">
+    <li>본인 디스코드로 신청 1건 제출 → "신청 완료" 화면 뜸</li>
+    <li>같은 계정으로 다시 들어가면 <strong>본인이 낸 신청 내역</strong> 그대로 보임</li>
+    <li>신청 <strong>수정</strong> 가능 (트랙 바꿔서 재제출)</li>
+    <li>신청 <strong>취소/드롭</strong> 가능</li>
+    <li>노션 트랙 신청 DB 열어보면 → 방금 낸 신청이 row로 들어와 있음</li>
+  </ul>
+</section>
+
+<section>
+  <h2 class="normal">4. 운영자 대시보드 — 클릭해보면서 확인</h2>
+  <ul class="checklist">
+    <li>운영자 페이지 진입 → <strong>신청자 목록</strong> 정상 표시 (이름, 디스코드, 트랙)</li>
+    <li>트랙별로 <strong>신청자 인원수</strong>가 신청 DB와 일치</li>
+    <li>한 명을 다른 조로 <strong>드래그</strong> → 화면에 반영</li>
+    <li><strong>"조 배정 완료"</strong> 버튼 클릭 → 로딩 → 완료 메시지</li>
+  </ul>
+</section>
+
+<section>
+  <h2 class="danger">5. "조 배정 완료" 누른 후 — 봇이 자동으로 한 일 <span class="badge red">핵심</span></h2>
+  <p class="quote">운영 트랙 디스코드 서버 열어서 눈으로 확인</p>
+  <ul class="checklist">
+    <li><strong>트랙별 카테고리</strong> 생김 (예: <code>=====크리에이터 트랙=====</code>)</li>
+    <li>카테고리 안에 <strong>공지 채널</strong>, <strong>과제-인증 채널</strong> 생김</li>
+    <li><strong>조별 채널</strong> 생김 (예: <code>크리에이터-9기-1조</code>)</li>
+    <li><strong>화상미팅 음성 채널</strong> 생김 (예: <code>크리에이터-9기-1조-화상미팅</code>)</li>
+    <li><strong>조장 채널</strong> 생김</li>
+  </ul>
+</section>
+
+<section>
+  <h2 class="danger">6. 학생 시점에서 확인 — 본인 디스코드로 들어가보기</h2>
+  <ul class="checklist">
+    <li>본인에게 <strong>트랙 역할이 자동 부여</strong>됨 (예: <code>크리에이터-9기-1조</code>)</li>
+    <li>본인 조 채널이 <strong>사이드바에 보임</strong></li>
+    <li><strong>다른 조 채널은 안 보임</strong> (격리 확인)</li>
+    <li>화상미팅 채널 들어가서 <strong>마이크/카메라/화면공유 가능</strong></li>
+    <li>라이트 트랙 신청자는 <strong>부모 트랙 공지/과제만 보이고</strong>, 조 채널은 안 보임</li>
+  </ul>
+</section>
+
+<section>
+  <h2 class="danger">7. 노션 측 확인 — "조 배정 완료" 누른 후</h2>
+  <ul class="checklist">
+    <li>트랙·조 마스터 페이지 안에 <strong>트랙별 inline DB</strong> 자동 생성됨</li>
+    <li>그 안에 <strong>조별 멤버 목록</strong> 들어가 있음</li>
+    <li>운영봇 멤버 마스터 DB → 본인 row의 <strong>"트랙" 컬럼이 채워져 있음</strong></li>
+    <li class="warn">멤버 DB에 <strong>본인 row가 새로 또 만들어지지 않았는지</strong> (중복 X) — 가장 중요</li>
+    <li><strong>매칭 실패한 멤버</strong>가 있으면 운영자 페이지에 "마스터 DB 추가" 버튼 떠 있음</li>
+  </ul>
+</section>
+
+<section>
+  <h2 class="warning">8. 사고 대응용 명령어 — 한 번씩 눌러보기</h2>
+  <p class="quote">가짜 기수(예: 99기)로 미리 테스트하고 진짜 운영 가기 전 정리</p>
+  <ul class="checklist">
+    <li>디스코드에서 <code>!채널삭제 99</code> → confirmation 메시지 뜸 → 확인 → <strong>99기 채널·역할만 삭제</strong>, 다른 기수는 그대로</li>
+    <li><code>!역할삭제 99</code> → 채널은 살아있고 <strong>역할만</strong> 삭제됨</li>
+    <li><strong>운영자가 아닌 사람</strong>이 같은 명령어 치면 → 거부됨</li>
+  </ul>
+</section>
+
+<section>
+  <h2 class="warning">9. 마감 후 화면 — 시간 지나면 자동 전환되는지</h2>
+  <ul class="checklist">
+    <li>신청 마감 시각 지나면 페이지가 <strong>"마감되었습니다"</strong> 화면으로 자동 전환</li>
+    <li>이미 신청한 사람은 <strong>본인 신청 내역</strong> 보임</li>
+    <li>미로그인 사용자는 <strong>로그인 버튼</strong>만 보임 (폼 X)</li>
+  </ul>
+</section>
+
+<div class="scenario">
+  <h2 class="flow">🟢 추천 시범 운행 시나리오 (30분이면 됨)</h2>
+  <ol>
+    <li>본인 + 운영진 1명, <strong>본인 핸드폰으로</strong> 신청 페이지 접속 → 로그인 → 신청 제출</li>
+    <li>운영자 페이지에서 두 사람을 다른 조로 배정 → <strong>"조 배정 완료"</strong></li>
+    <li>운영 트랙 디스코드 서버 가서 → 카테고리·채널·역할·화상미팅 생긴 거 눈으로 체크 <span class="small">(§ 5)</span></li>
+    <li>학생 시점에서 → 본인 조만 보이는지 체크 <span class="small">(§ 6)</span></li>
+    <li>노션 가서 → 신청 row · inline DB · 멤버 DB 트랙 컬럼만 갱신됐는지 체크 <span class="small">(§ 7)</span></li>
+    <li><strong>메인 ASC 디스코드 서버 사이드바 확인</strong> → 새로 생긴 거 0개 <span class="small">(가장 중요 1번)</span></li>
+    <li>시범 자원 정리 → <code>!채널삭제 99</code> 또는 디스코드에서 우클릭 삭제</li>
+  </ol>
+  <p style="margin: 10px 0 0 0; font-weight: 600;">→ 이 7단계 다 통과하면 내일 실전 OK입니다.</p>
+</div>
+
+<footer>
+  ASC 트랙 봇 운영자 테스트 체크리스트 · v1.0 · 작성: 2026-05-18
+</footer>
+
+</body>
+</html>

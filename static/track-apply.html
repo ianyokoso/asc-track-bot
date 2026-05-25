@@ -1349,7 +1349,7 @@
                   <!-- NOTION_SCHEDULE:self_inquiry -->
 <details class="schedule-details"><summary class="schedule-summary">일정 확인하기</summary><div class="schedule-body"><table><thead><tr><th class="col-week">주차</th><th class="col-date">날짜</th><th class="col-time">시간</th><th class="col-session">세션</th></tr></thead><tbody>
 <tr class="sched-row"><td class="col-week"><span class="sched-week">OT</span></td><td class="col-date">5/24 (일)</td><td class="col-time">8:00-10:00PM</td><td class="col-session"><div class="sched-title">오리엔테이션 라이브 (4주간 일정 및 내용 리뷰)</div></td></tr>
-<tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">5/27 (수)</td><td class="col-time">8:00-9:30PM</td><td class="col-session"><div class="sched-title">발견 - 나다움 찾기 (온라인 라이브)</div><div class="sched-detail">진단 결과 리뷰 및 가치 단어 정리 · 이키가이 분석 (좋아하는 것 × 잘하는 것 × 세상이 필요로 하는 것 × 돈 버는 것)</div></td></tr>
+<tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">5/27 (수)</td><td class="col-time">8:00-9:30PM</td><td class="col-session"><div class="sched-title">발견 - 나 탐구 (온라인 라이브)</div><div class="sched-detail">진단 결과 리뷰 및 가치 단어 정리 · 이키가이 분석 (좋아하는 것 × 잘하는 것 × 세상이 필요로 하는 것 × 돈 버는 것)</div></td></tr>
 <tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">5/27 (수)</td><td class="col-time">9:30-11:00PM</td><td class="col-session"><div class="sched-title">조별 모임 / 피드백 세션</div><div class="sched-detail">자기소개 및 아이스브레이킹</div></td></tr>
 <tr class="sched-row"><td class="col-week"><span class="sched-week">1주차</span></td><td class="col-date">5/31 (일)</td><td class="col-time">당일까지</td><td class="col-session"><div class="sched-title">1차 과제 제출</div><div class="sched-detail">경험인벤토리, 가치단어, 소명선서문, 이키가이 (4종)</div></td></tr>
 <tr class="sched-row"><td class="col-week"><span class="sched-week">2주차</span></td><td class="col-date">6/3 (수)</td><td class="col-time">8:00-9:00PM</td><td class="col-session"><div class="sched-title">실행 - 브랜딩과 콘텐츠 설계 (온라인 라이브)</div><div class="sched-detail">퍼스널 브랜딩 작성법 (나만의 슬로건, 프로필 정립) · 콘텐츠 기획서 작성법 (젠스파크 / 미리캔버스 등)</div></td></tr>
@@ -5551,11 +5551,11 @@
       },
       {
         id: 'self_inquiry', label: '나 탐구 트랙', weekday: '수요일',
-        tagline: '나다움 발견 → 퍼스널 브랜딩 → 실제 강연까지, 4주 만에 무대 위로',
+        tagline: '나 탐구 → 퍼스널 브랜딩 → 실제 강연까지, 4주 만에 무대 위로',
         target: '본인의 정체성·메시지를 정리하고 싶은 분, 강연·콘텐츠 시작이 막막한 분',
         weeks: [
           { week: 'OT', date: '5/24 (일)', time: '8:00-10:00PM', title: '오리엔테이션 라이브', detail: '4주간 일정 및 내용 리뷰' },
-          { week: '1주차', date: '5/27 (수)', time: '8:00-9:30PM', title: '발견 - 나다움 찾기 (온라인 라이브)', detail: '진단 결과 리뷰 및 가치 단어 정리 · 이키가이 분석' },
+          { week: '1주차', date: '5/27 (수)', time: '8:00-9:30PM', title: '발견 - 나 탐구 (온라인 라이브)', detail: '진단 결과 리뷰 및 가치 단어 정리 · 이키가이 분석' },
           { week: '1주차', date: '5/27 (수)', time: '9:30-11:00PM', title: '조별 모임 / 피드백 세션', detail: '자기소개 및 아이스브레이킹' },
           { week: '1주차', date: '5/31 (일)', time: '당일까지', title: '1차 과제 제출', detail: '경험인벤토리, 가치단어, 소명선서문, 이키가이 (4종)' },
           { week: '2주차', date: '6/3 (수)', time: '8:00-9:00PM', title: '실행 - 브랜딩과 콘텐츠 설계 (온라인 라이브)', detail: '퍼스널 브랜딩 작성법 · 콘텐츠 기획서 작성법' },
@@ -6150,7 +6150,6 @@
       }
 
       // GP_GROUP_DB_NAME_MAP 의 역매핑 — Notion/Discord 트랙명 → tab.id.
-      // ALIASES 도 함께 등록해 옛 이름 ('나 다움 트랙') 도 처리.
       const reverseMap = Object.fromEntries(
         Object.entries(GP_GROUP_DB_NAME_MAP).map(([tabId, trackName]) => [trackName, tabId])
       );
@@ -6372,10 +6371,6 @@
     let GP_TEST_COHORT_LABEL = COHORT_LABEL;
     const MOCKUP_MODE = false;
     // 봇의 _TRACK_DISCORD_PREFIX (cogs/admin.py) 와 트랙명을 정확히 일치시킴.
-    // 직전 footgun (2026-05-25): self_inquiry → '나 다움 트랙' 이었는데 봇은
-    // '나 탐구 트랙' 만 인식. 결과: 1) 봇이 track_name 조회 실패 → '나-다움' 으로
-    // 역할 prefix 생성. 2) '디스코드 상태 불러오기' 가 '나 탐구 트랙' 으로
-    // 반환하지만 reverseMap 에서 매칭 실패 → admin 화면 stale 유지.
     const GP_GROUP_DB_NAME_MAP = {
       sales_real: '세일즈 실전 트랙',
       self_inquiry: '나 탐구 트랙',
@@ -6388,12 +6383,8 @@
       builder_light: '빌더 라이트 트랙',
     };
 
-    // 트랙명 alias 역매핑 — 봇/Notion 이 옛 이름 ('나 다움 트랙') 반환해도 같은 tabId 로 인식.
-    // GP_GROUP_DB_NAME_MAP 의 reverseMap 보강.
-    const GP_TRACK_NAME_ALIASES = {
-      '나 다움 트랙': 'self_inquiry',   // legacy Notion 페이지명 호환
-      '나 탐구 트랙': 'self_inquiry',
-    };
+    // 트랙명 alias 역매핑 — 향후 트랙명 별칭이 생기면 여기에 추가.
+    const GP_TRACK_NAME_ALIASES = {};
 
     function gpUnique(values) {
       return [...new Set(values.filter(Boolean))];
@@ -6409,7 +6400,7 @@
           } else if (track.id === 'sales_real') {
             names.push('세일즈 실전 트랙');
           } else if (track.id === 'self_inquiry') {
-            names.push('나 다움 트랙');
+            names.push('나 탐구 트랙');
           } else if (track.id === 'builder_advanced') {
             names.push('빌더 심화 트랙');
           } else if (track.id === 'builder_basic') {
