@@ -3819,13 +3819,15 @@
 
     let _gpNotionSyncedThisSession = false;
     async function gpAutoLoadFromNotionIfNeeded() {
-      console.log('[gpAutoLoad] entering — synced=' + _gpNotionSyncedThisSession + ' adminMock=' + IS_ADMIN_MOCK);
+      // 직전 footgun: IS_ADMIN_MOCK (항상 false, legacy preview 플래그) 를 admin 가드로 잘못 사용.
+      // 진짜 admin 플래그는 IS_VIEWER_ADMIN (OAuth 콜백의 isAdmin=1 또는 /api/auth/me 응답).
+      console.log('[gpAutoLoad] entering — synced=' + _gpNotionSyncedThisSession + ' viewerAdmin=' + IS_VIEWER_ADMIN);
       if (_gpNotionSyncedThisSession) {
         console.log('[gpAutoLoad] skipped: already synced this session');
         return;
       }
-      if (!IS_ADMIN_MOCK) {
-        console.log('[gpAutoLoad] skipped: not admin');
+      if (!IS_VIEWER_ADMIN) {
+        console.log('[gpAutoLoad] skipped: not admin (IS_VIEWER_ADMIN=false)');
         return;
       }
       _gpNotionSyncedThisSession = true;
