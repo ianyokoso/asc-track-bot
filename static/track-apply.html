@@ -6175,19 +6175,22 @@
           return;
         }
         // userId 기준 그룹 배열 [[id1, id2], [id3]] 형태로 변환.
-        // MOCK_MEMBERS 에 없는 userId 는 제외 (이미 등록 해제된 멤버 등).
+        // 빈 그룹도 그대로 보존 (Discord 에 역할만 있고 멤버 없는 경우 = '2 empty groups' 표시).
         const rawGroups = (track.groups || []).map(g =>
           (g.members || []).map(m => m.userId).filter(Boolean)
         );
-        const filteredGroups = rawGroups.map(g => g.filter(id => knownIds.has(id))).filter(g => g.length > 0);
+        // MOCK_MEMBERS 에 없는 userId 는 제외 (등록 해제된 멤버, 봇 등).
+        const filteredGroups = rawGroups.map(g => g.filter(id => knownIds.has(id)));
         console.log('[gpLoadFromNotion] track=' + trackNameKey + ' tabId=' + tabId +
                     ' rawGroups=' + rawGroups.map(g => g.length).join(',') +
                     ' afterKnownIdFilter=' + filteredGroups.map(g => g.length).join(','));
-        if (!filteredGroups.length) {
-          console.warn('[gpLoadFromNotion] tabId=' + tabId + ' has no filtered groups — skipping (rawGroup memberCount=' +
-                       rawGroups.map(g => g.length).join(',') + '). knownIds size=' + knownIds.size);
+        // 트랙 응답 자체가 비어있으면 skip (response 에 없는 트랙은 건드리지 않음).
+        if (!rawGroups.length) {
           return;
         }
+        // 응답에 그룹이 있으면 (멤버 0 인 빈 그룹이라도) _gpAssignments 에 반영.
+        // 이렇게 해야 'create-track-infra 로 역할만 만든 트랙' 도 빈 N개조로 표시되어
+        // localStorage 의 stale random 그룹이 덮어써짐.
         _gpAssignments[tabId] = filteredGroups;
         appliedCount++;
         totalMembers += filteredGroups.reduce((s, g) => s + g.length, 0);

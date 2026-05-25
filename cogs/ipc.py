@@ -258,6 +258,11 @@ class IPCCog(commands.Cog):
 
             role_id_to_group = {}             # role.id -> (track_name, group_num)
             role_id_to_leader_track = {}      # role.id -> track_name
+            # 트랙 그룹 인벤토리 — 멤버 유무와 별개로 '어떤 트랙·조 역할이 길드에
+            # 존재하는지' 기록. 멤버 0명인 그룹도 응답에 빈 그룹으로 포함시키기 위함.
+            # (예: create-track-infra 로 만든 역할은 멤버 배정 X → 그래도 admin 화면에
+            # 빈 그룹 2개로 보여줘야 함. 안 그러면 localStorage 의 stale 3조가 유지됨.)
+            track_group_inventory = {}        # track_name -> set of group_num
 
             for role in guild.roles:
                 m = group_re.match(role.name or '')
@@ -265,7 +270,10 @@ class IPCCog(commands.Cog):
                     prefix, num_str = m.group(1), m.group(2)
                     for p in sorted_prefixes:
                         if prefix == p:
-                            role_id_to_group[role.id] = (prefix_to_track[p], int(num_str))
+                            track_name_resolved = prefix_to_track[p]
+                            group_num_int = int(num_str)
+                            role_id_to_group[role.id] = (track_name_resolved, group_num_int)
+                            track_group_inventory.setdefault(track_name_resolved, set()).add(group_num_int)
                             break
                     continue
                 m = leader_re.match(role.name or '')
@@ -306,15 +314,20 @@ class IPCCog(commands.Cog):
                     }
                     track_to_groups.setdefault(track_name, {}).setdefault(group_num, []).append(member_info)
 
+            # 멤버 보유 트랙 + 역할만 있는 트랙 (인프라만 부트스트랩된 경우) 합집합.
             out_tracks = []
-            for track_name in sorted(track_to_groups.keys()):
-                groups_map = track_to_groups[track_name]
+            all_track_names = set(track_to_groups.keys()) | set(track_group_inventory.keys())
+            for track_name in sorted(all_track_names):
+                groups_map = track_to_groups.get(track_name, {})
+                inventory_nums = track_group_inventory.get(track_name, set())
+                # 역할 인벤토리 + 멤버 수집된 그룹 번호의 합집합.
+                all_nums = sorted(set(groups_map.keys()) | inventory_nums)
                 out_groups = []
-                for group_num in sorted(groups_map.keys()):
+                for group_num in all_nums:
                     out_groups.append({
                         'name': f'{cohort_label} {group_num}조',
                         'groupNumber': group_num,
-                        'members': groups_map[group_num],
+                        'members': groups_map.get(group_num, []),
                     })
                 out_tracks.append({
                     'trackName': track_name,
