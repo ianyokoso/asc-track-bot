@@ -220,6 +220,122 @@ class IPCCog(commands.Cog):
                 result.get('group_channels_created', 0),
             )
 
+        elif cmd_type == 'get_discord_group_state':
+            # 디스코드 길드의 현재 조 배정 상태 enumerate.
+            # admin 의 '디스코드 상태 불러오기' 가 호출. REST API 의 GUILD_MEMBERS
+            # intent 제약을 우회 — gateway 캐시로 모든 멤버 접근 가능.
+            payload = cmd.get('payload', {})
+            cohort_label = str(payload.get('cohortLabel') or '').strip()
+            if not cohort_label:
+                raise Exception("cohortLabel is required for get_discord_group_state")
+            cohort_digits = ''.join(ch for ch in cohort_label if ch.isdigit())
+            if not cohort_digits:
+                raise Exception(f"cohort label digits not extractable: {cohort_label!r}")
+
+            try:
+                guild = resolve_active_guild(self.bot)
+            except RuntimeError as e:
+                raise Exception(f"guild resolution failed: {e}")
+            if not guild:
+                raise Exception("Bot is not connected to any guild.")
+
+            # 트랙 prefix → 트랙명 역매핑. cogs/admin.py 의 _TRACK_DISCORD_PREFIX 와 sync.
+            prefix_to_track = {
+                '크리에이터': '크리에이터 트랙',
+                '빌더-기초': '빌더 기초 트랙',
+                '빌더-심화': '빌더 심화 트랙',
+                '세일즈-실전': '세일즈 실전 트랙',
+                'AI에이전트-실전': 'AI 에이전트 트랙',
+                '앱개발': '앱 개발 트랙',
+                '나탐구': '나 탐구 트랙',
+            }
+            sorted_prefixes = sorted(prefix_to_track.keys(), key=len, reverse=True)
+
+            import re
+            cohort_re_str = re.escape(cohort_digits)
+            group_re = re.compile(rf'^(.+?)-{cohort_re_str}기-(\d+)조$')
+            leader_re = re.compile(rf'^(.+?)-{cohort_re_str}기-조장$')
+
+            role_id_to_group = {}             # role.id -> (track_name, group_num)
+            role_id_to_leader_track = {}      # role.id -> track_name
+
+            for role in guild.roles:
+                m = group_re.match(role.name or '')
+                if m:
+                    prefix, num_str = m.group(1), m.group(2)
+                    for p in sorted_prefixes:
+                        if prefix == p:
+                            role_id_to_group[role.id] = (prefix_to_track[p], int(num_str))
+                            break
+                    continue
+                m = leader_re.match(role.name or '')
+                if m:
+                    prefix = m.group(1)
+                    for p in sorted_prefixes:
+                        if prefix == p:
+                            role_id_to_leader_track[role.id] = prefix_to_track[p]
+                            break
+
+            # gateway 캐시된 멤버 enumerate.
+            # 캐시가 비어있다면 guild.chunk() 로 강제 fetch.
+            if len(guild.members) < (guild.member_count or 0):
+                try:
+                    logger.info(f"[IPC] guild.members cache short ({len(guild.members)}/{guild.member_count}) — chunking...")
+                    await guild.chunk(cache=True)
+                except Exception as e:
+                    logger.warning(f"[IPC] guild.chunk failed (proceeding with partial cache): {e}")
+
+            track_to_groups = {}
+            scanned = 0
+            for m in guild.members:
+                if m.bot:
+                    continue
+                scanned += 1
+                user_role_ids = {r.id for r in m.roles}
+                leader_track_names = {role_id_to_leader_track[rid] for rid in user_role_ids if rid in role_id_to_leader_track}
+                for rid in user_role_ids:
+                    grp = role_id_to_group.get(rid)
+                    if not grp:
+                        continue
+                    track_name, group_num = grp
+                    member_info = {
+                        'userId': str(m.id),
+                        'name': (m.nick or m.global_name or m.name or '').strip(),
+                        'handle': f'@{m.name}' if m.name else '',
+                        'leader': track_name in leader_track_names,
+                    }
+                    track_to_groups.setdefault(track_name, {}).setdefault(group_num, []).append(member_info)
+
+            out_tracks = []
+            for track_name in sorted(track_to_groups.keys()):
+                groups_map = track_to_groups[track_name]
+                out_groups = []
+                for group_num in sorted(groups_map.keys()):
+                    out_groups.append({
+                        'name': f'{cohort_label} {group_num}조',
+                        'groupNumber': group_num,
+                        'members': groups_map[group_num],
+                    })
+                out_tracks.append({
+                    'trackName': track_name,
+                    'groups': out_groups,
+                })
+
+            result = {
+                'status': 'success',
+                'cohortLabel': cohort_label,
+                'guild_id': str(guild.id),
+                'guild_name': guild.name,
+                'roles_matched': len(role_id_to_group),
+                'members_scanned': scanned,
+                'tracks': out_tracks,
+            }
+            cmd['result'] = result
+            logger.info(
+                "[IPC] get_discord_group_state cohort=%s roles_matched=%d members_scanned=%d tracks_out=%d",
+                cohort_label, len(role_id_to_group), scanned, len(out_tracks),
+            )
+
     @check_queue.before_loop
     async def before_check_queue(self):
         await self.bot.wait_until_ready()

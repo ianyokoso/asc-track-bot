@@ -4792,19 +4792,53 @@ def get_group_preview_current_state_from_discord():
     """
     Discord 길드의 실제 역할 할당 상태를 가져와 frontend 의 _gpAssignments 초기화에 사용.
 
-    의도: 노션이 비어있어도 디스코드엔 봇이 실제 만든 역할/배정이 남아있음 → 그것이 곧
-    'admin 이 마지막으로 commit 한 의도' 의 source of truth. 노션 inline DB 가 없거나
-    stale 한 경우 디스코드를 거꾸로 읽어와서 화면에 반영.
+    구현 (2026-05-25 변경): 봇 IPC 사용. 직전엔 admin_server 가 직접 REST 호출했지만
+    GUILD_MEMBERS privileged intent 제약 또는 캐시 누락으로 일부 멤버만 반환됨
+    (예: 3명만 회수). 봇은 gateway 캐시로 모든 멤버 보유 + guild.chunk() 로
+    full fetch 가능 → IPC 가 더 신뢰성 높음.
 
-    동작:
-      1) guild roles 조회 (GET /guilds/{id}/roles)
-      2) `{prefix}-{cohort}기-{N}조` 패턴 매칭으로 (track_prefix, group_num, role_id) 추출
-         + `{prefix}-{cohort}기-조장` 도 leader_role 로 별도 추출
-      3) guild members pagination 조회 (GET /guilds/{id}/members?limit=1000)
-      4) 각 멤버의 roles 에서 group_role/leader_role 매칭 → (track, group_num, userId, leader)
-      5) GP_TABS 의 트랙명과 매칭 가능한 트랙만 응답에 포함
+    Response 구조:
+      { status, cohortLabel, guild_id, tracks: [{ trackName, groups: [{ name, groupNumber, members: [...] }] }] }
+    """
+    if not _is_admin_session():
+        return jsonify({"status": "error", "message": "운영진 권한이 필요합니다."}), 403
 
-    Response 구조는 current-state (노션 버전) 와 동일.
+    cohort_label = (request.args.get('cohortLabel') or _get_current_cohort_label()).strip()
+    cohort_digits = ''.join(ch for ch in cohort_label if ch.isdigit())
+    if not cohort_digits:
+        return jsonify({"status": "error", "message": f"cohort 라벨에서 숫자 추출 실패: {cohort_label!r}"}), 400
+
+    # 봇 IPC 호출 — 봇이 gateway 캐시 기반으로 enumerate.
+    test_queue_file = get_bot_command_queue_file(BASE_DIR, explicit='test')
+    try:
+        result = _run_bot_command_and_wait(
+            'get_discord_group_state',
+            {"cohortLabel": cohort_label},
+            queue_file=test_queue_file,
+            timeout=60.0,
+        )
+    except TimeoutError as e:
+        return jsonify({"status": "error", "message": f"봇 응답 타임아웃: {e}"}), 504
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"봇 IPC 실패: {e}"}), 502
+
+    # 봇이 이미 응답 구조를 맞춰서 반환 — 그대로 통과.
+    if not isinstance(result, dict):
+        return jsonify({"status": "error", "message": f"봇 응답 형식 오류: {type(result).__name__}"}), 502
+
+    print(f"[discord-current-state] (via IPC) cohort={cohort_label} "
+          f"roles_matched={result.get('roles_matched')} "
+          f"members_scanned={result.get('members_scanned')} "
+          f"tracks_out={len(result.get('tracks') or [])}")
+    return jsonify(result)
+
+
+@app.route('/api/mockups/group-preview/current-state-from-discord-rest', methods=['GET'])
+def get_group_preview_current_state_from_discord_rest():
+    """
+    [DEPRECATED] Discord REST API 로 직접 멤버 조회. GUILD_MEMBERS intent 캐시
+    제약 때문에 일부 멤버만 반환하는 케이스가 있어 봇 IPC 버전으로 대체됨.
+    디버깅용으로 endpoint 만 유지.
     """
     if not _is_admin_session():
         return jsonify({"status": "error", "message": "운영진 권한이 필요합니다."}), 403
