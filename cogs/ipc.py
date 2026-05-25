@@ -341,9 +341,12 @@ class IPCCog(commands.Cog):
             #
             # 사용 시점: 이전 실패한 commit 이 의도하지 않은 그룹 (예: 나탐구 3조) 을
             # 디스코드에 만들어버린 경우 수동 정리. keep_count 이하 그룹은 안 건드림.
+            #
+            # dryRun=true → 실제 삭제 안 하고 매칭만 보고 (진단용).
             payload = cmd.get('payload', {})
             cohort_label = str(payload.get('cohortLabel') or '').strip()
             track_name = str(payload.get('trackName') or '').strip()
+            dry_run = bool(payload.get('dryRun'))
             try:
                 keep_count = int(payload.get('keepGroupCount') or 0)
             except (TypeError, ValueError):
@@ -378,64 +381,91 @@ class IPCCog(commands.Cog):
                 raise Exception(f"unknown trackName: {track_name!r}")
 
             import re
-            group_re = re.compile(rf'^{re.escape(prefix)}-{re.escape(cohort_digits)}기-(\d+)조$')
+            # 진단용: 디스코드의 실제 역할/채널 이름 dump.
+            all_matching_roles = []   # prefix 가 들어간 모든 역할 (정규식 매칭 여부 무관)
+            all_matching_channels = []
 
+            # 엄격 패턴: '{prefix}-{cohort}기-{N}조'
+            strict_re = re.compile(rf'^{re.escape(prefix)}-{re.escape(cohort_digits)}기-(\d+)조$')
+            # 느슨 패턴: prefix 와 cohort 가 어떤 형태로든 포함 + 숫자조
+            loose_re = re.compile(rf'{re.escape(cohort_digits)}\s*기.*?(\d+)\s*조', re.IGNORECASE)
+
+            # 1) 역할 후보 수집 + 엄격 매칭 삭제 (group_num > keep_count).
             deleted_roles = []
-            deleted_channels = []
+            matched_loose_roles = []
             failures = []
 
-            # 1) 역할 삭제 (group_num > keep_count).
             for role in list(guild.roles):
-                m = group_re.match(role.name or '')
-                if not m:
+                rname = role.name or ''
+                if prefix in rname or prefix.replace('-', '') in rname or prefix.replace('-', ' ') in rname:
+                    all_matching_roles.append({'name': rname, 'id': str(role.id)})
+                strict_m = strict_re.match(rname)
+                if strict_m:
+                    num = int(strict_m.group(1))
+                    matched_loose_roles.append({'name': rname, 'num': num, 'pattern': 'strict'})
+                    if num > keep_count:
+                        if dry_run:
+                            deleted_roles.append({'name': rname, 'id': str(role.id), 'dryRun': True})
+                        else:
+                            try:
+                                await role.delete(reason=f"수동 정리: {track_name} keep={keep_count} 이하만 유지")
+                                deleted_roles.append({'name': rname, 'id': str(role.id)})
+                                logger.info(f"[IPC cleanup] deleted role: {rname}")
+                            except Exception as e:
+                                failures.append({'kind': 'role', 'name': rname, 'error': str(e)})
                     continue
-                num = int(m.group(1))
-                if num <= keep_count:
-                    continue
-                try:
-                    await role.delete(reason=f"수동 정리: {track_name} keep={keep_count} 이하만 유지")
-                    deleted_roles.append({'name': role.name, 'id': str(role.id)})
-                    logger.info(f"[IPC cleanup] deleted role: {role.name}")
-                except Exception as e:
-                    failures.append({'kind': 'role', 'name': role.name, 'error': str(e)})
+                # 느슨 매칭도 시도해서 정보 노출.
+                loose_m = loose_re.search(rname)
+                if loose_m and prefix in rname:
+                    matched_loose_roles.append({'name': rname, 'num': int(loose_m.group(1)), 'pattern': 'loose'})
 
             # 2) 같은 패턴의 채널도 삭제 (text + voice).
+            deleted_channels = []
+            matched_loose_channels = []
             for channel in list(guild.channels):
-                cname = (channel.name or '').lower()
-                m = group_re.match(channel.name or '')
-                if not m:
-                    # voice 채널 등에 suffix 가 있을 수 있어 prefix 매칭도 시도.
-                    voice_m = re.match(
-                        rf'^{re.escape(prefix.lower())}-{re.escape(cohort_digits)}기-(\d+)조',
-                        cname,
-                    )
-                    if not voice_m:
-                        continue
-                    num = int(voice_m.group(1))
-                else:
-                    num = int(m.group(1))
-                if num <= keep_count:
-                    continue
-                try:
-                    await channel.delete(reason=f"수동 정리: {track_name} keep={keep_count} 이하만 유지")
-                    deleted_channels.append({'name': channel.name, 'id': str(channel.id), 'type': str(channel.type)})
-                    logger.info(f"[IPC cleanup] deleted channel: {channel.name}")
-                except Exception as e:
-                    failures.append({'kind': 'channel', 'name': channel.name, 'error': str(e)})
+                cname = channel.name or ''
+                if prefix in cname or prefix.replace('-', '') in cname:
+                    all_matching_channels.append({'name': cname, 'id': str(channel.id), 'type': str(channel.type)})
+                # voice 채널은 prefix-매칭 (suffix 허용)
+                strict_m = re.match(
+                    rf'^{re.escape(prefix)}-{re.escape(cohort_digits)}기-(\d+)조',
+                    cname,
+                )
+                if strict_m:
+                    num = int(strict_m.group(1))
+                    matched_loose_channels.append({'name': cname, 'num': num, 'pattern': 'strict'})
+                    if num > keep_count:
+                        if dry_run:
+                            deleted_channels.append({'name': cname, 'id': str(channel.id), 'dryRun': True})
+                        else:
+                            try:
+                                await channel.delete(reason=f"수동 정리: {track_name} keep={keep_count} 이하만 유지")
+                                deleted_channels.append({'name': cname, 'id': str(channel.id), 'type': str(channel.type)})
+                                logger.info(f"[IPC cleanup] deleted channel: {cname}")
+                            except Exception as e:
+                                failures.append({'kind': 'channel', 'name': cname, 'error': str(e)})
 
             result = {
                 'status': 'success',
                 'cohortLabel': cohort_label,
                 'trackName': track_name,
+                'prefix': prefix,
                 'keepGroupCount': keep_count,
+                'dryRun': dry_run,
                 'deleted_roles': deleted_roles,
                 'deleted_channels': deleted_channels,
                 'failures': failures,
+                # 진단 dump — prefix 포함된 모든 역할/채널 + 엄격 매칭 결과.
+                'diag_all_prefix_roles': all_matching_roles,
+                'diag_all_prefix_channels': all_matching_channels,
+                'diag_strict_matched_roles': matched_loose_roles,
+                'diag_strict_matched_channels': matched_loose_channels,
             }
             cmd['result'] = result
             logger.info(
-                "[IPC] cleanup_track_groups_beyond track=%s keep=%d roles_del=%d channels_del=%d failures=%d",
-                track_name, keep_count, len(deleted_roles), len(deleted_channels), len(failures),
+                "[IPC] cleanup_track_groups_beyond track=%s keep=%d dryRun=%s prefix_roles=%d strict_roles=%d deleted=%d failures=%d",
+                track_name, keep_count, dry_run, len(all_matching_roles),
+                len(matched_loose_roles), len(deleted_roles), len(failures),
             )
 
     @check_queue.before_loop
