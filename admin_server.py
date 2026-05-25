@@ -3636,7 +3636,26 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
                     # 멤버 페이지에 '소속 조' 속성이 없을 수도 있어 실패는 경고 처리
                     print(f"[WARN] assign_member_to_group failed for {member_id}: {e}")
 
+    # Notion 작업이 끝난 시점의 summary 를 미리 만들어둠 — Discord 가 실패해도
+    # 운영자가 Notion 상태(매칭 성공/실패 등) 를 확인할 수 있게 job result 에 보존.
+    notion_phase_summary = {
+        "member_db_id": member_db_id,
+        "group_db_id": group_db_id,
+        "track_pages": track_name_to_page_id,
+        "members_created": member_summary['created'],
+        "members_updated": member_summary['updated'],
+        "members_cleared": member_summary.get('cleared', 0),
+        "members_missing": member_summary.get('missing', []),
+        "tracks_touched": touched_tracks,
+        "archived_inline_dbs": archived_inline_dbs,
+        "group_databases_created": created_group_dbs,
+        "group_rows_created": created_group_rows,
+    }
+
     _progress('discord_sync', '봇이 채널·역할을 만드는 중')
+    # 🔧 timeout 600s (10분) — 풀 코호트 50명 + 다수 트랙·그룹 처리 시
+    #   기존 120s 로 자주 timeout. 봇이 실제로는 끝내는데 admin_server 가
+    #   먼저 포기하면서 job 이 failed 로 마킹되고 Notion summary 도 손실됨.
     try:
         discord_summary = _run_bot_command_and_wait(
             'group_preview_sync_discord',
@@ -3645,9 +3664,17 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
                 "tracks": tracks,
             },
             queue_file=test_queue_file,
+            timeout=600.0,
         )
     except Exception as e:
-        raise RuntimeError(f'Notion commit completed, but Discord sync failed: {e}') from e
+        # Notion 은 다 끝났는데 Discord 만 실패한 경우 — Notion summary 를 살려서
+        # 운영자에게 보고. partial 상태로 표기 + Discord 가 실제로는 백그라운드에서
+        # 끝났는지 별도로 확인하도록 안내.
+        partial_err = RuntimeError(
+            f'Notion commit completed, but Discord sync failed: {e}'
+        )
+        partial_err.partial_notion_summary = notion_phase_summary
+        raise partial_err from e
 
     _progress('done', '완료')
     print(f"[group-commit:diag] === commit done === "
@@ -4480,13 +4507,23 @@ def _run_commit_job_async(job_id, payload):
         )
         print(f"[ERROR] Commit job {job_id} validation failed: {e}")
     except Exception as e:
-        _update_commit_job(
-            job_id,
-            status='failed',
-            error=str(e),
-            errorKind='internal',
-            completedAt=time.time(),
-        )
+        # Notion 은 끝났는데 Discord 만 실패한 경우 partial_notion_summary 가 붙어옴.
+        # 그 summary 를 result.summary 에 저장해야 운영자가 진단 endpoint 로
+        # 마스터 DB / inline DB 작업 결과를 확인 가능.
+        update_payload = {
+            'status': 'failed',
+            'error': str(e),
+            'errorKind': 'internal',
+            'completedAt': time.time(),
+        }
+        partial = getattr(e, 'partial_notion_summary', None)
+        if isinstance(partial, dict):
+            update_payload['result'] = {
+                'status': 'partial',
+                'message': 'Notion 단계는 완료, Discord 단계 실패 (봇이 백그라운드에서 끝냈을 가능성 있음).',
+                'summary': partial,
+            }
+        _update_commit_job(job_id, **update_payload)
         print(f"[ERROR] Commit job {job_id} failed: {e}")
 
 
