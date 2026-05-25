@@ -4772,6 +4772,202 @@ def commit_group_preview_mockup():
     }), 202
 
 
+# ── Discord 역할 → 트랙 prefix 역매핑 ───────────────────────────────
+# cogs/admin.py 의 _TRACK_DISCORD_PREFIX 와 1:1 sync 필요. 봇이 만든 역할 이름이
+# `{prefix}-{cohort}기-{N}조` 패턴이므로, prefix 로 트랙명 복원.
+# 한 prefix → 여러 트랙명 매핑이 있을 경우 첫 번째 (대표) 트랙명만 회수.
+_DISCORD_PREFIX_TO_TRACK = {
+    '크리에이터': '크리에이터 트랙',
+    '빌더-기초': '빌더 기초 트랙',
+    '빌더-심화': '빌더 심화 트랙',
+    '세일즈-실전': '세일즈 실전 트랙',
+    'AI에이전트-실전': 'AI 에이전트 트랙',
+    '앱개발': '앱 개발 트랙',
+    '나탐구': '나 탐구 트랙',
+}
+
+
+@app.route('/api/mockups/group-preview/current-state-from-discord', methods=['GET'])
+def get_group_preview_current_state_from_discord():
+    """
+    Discord 길드의 실제 역할 할당 상태를 가져와 frontend 의 _gpAssignments 초기화에 사용.
+
+    의도: 노션이 비어있어도 디스코드엔 봇이 실제 만든 역할/배정이 남아있음 → 그것이 곧
+    'admin 이 마지막으로 commit 한 의도' 의 source of truth. 노션 inline DB 가 없거나
+    stale 한 경우 디스코드를 거꾸로 읽어와서 화면에 반영.
+
+    동작:
+      1) guild roles 조회 (GET /guilds/{id}/roles)
+      2) `{prefix}-{cohort}기-{N}조` 패턴 매칭으로 (track_prefix, group_num, role_id) 추출
+         + `{prefix}-{cohort}기-조장` 도 leader_role 로 별도 추출
+      3) guild members pagination 조회 (GET /guilds/{id}/members?limit=1000)
+      4) 각 멤버의 roles 에서 group_role/leader_role 매칭 → (track, group_num, userId, leader)
+      5) GP_TABS 의 트랙명과 매칭 가능한 트랙만 응답에 포함
+
+    Response 구조는 current-state (노션 버전) 와 동일.
+    """
+    if not _is_admin_session():
+        return jsonify({"status": "error", "message": "운영진 권한이 필요합니다."}), 403
+
+    cohort_label = (request.args.get('cohortLabel') or _get_current_cohort_label()).strip()
+    cohort_digits = ''.join(ch for ch in cohort_label if ch.isdigit())
+    if not cohort_digits:
+        return jsonify({"status": "error", "message": f"cohort 라벨에서 숫자 추출 실패: {cohort_label!r}"}), 400
+
+    guild_id = _get_admin_guild_id()
+    if not guild_id:
+        return jsonify({"status": "error", "message": "guild_id 결정 실패 — TEST/PROD_DISCORD_GUILD_ID env 확인."}), 500
+
+    bot_token = str(os.getenv('DISCORD_BOT_TOKEN', '')).strip()
+    if not bot_token:
+        return jsonify({"status": "error", "message": "DISCORD_BOT_TOKEN env 없음."}), 500
+
+    headers = {'Authorization': f'Bot {bot_token}'}
+
+    # ── 1) 길드 역할 list ────────────────────────────────────────
+    try:
+        roles_resp = requests.get(
+            f'https://discord.com/api/v10/guilds/{guild_id}/roles',
+            headers=headers,
+            timeout=30,
+        )
+        if roles_resp.status_code != 200:
+            return jsonify({"status": "error",
+                            "message": f"길드 역할 조회 실패: HTTP {roles_resp.status_code} {roles_resp.text[:200]}"}), 502
+        roles_list = roles_resp.json() or []
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"길드 역할 조회 예외: {e}"}), 502
+
+    # 역할 ID → (track_name, group_num) 매핑 + leader 역할 ID 별도.
+    # 패턴: '<prefix>-<cohort>기-<N>조' / '<prefix>-<cohort>기-조장'
+    import re
+    cohort_str = re.escape(cohort_digits)
+    group_re = re.compile(rf'^(.+?)-{cohort_str}기-(\d+)조$')
+    leader_re = re.compile(rf'^(.+?)-{cohort_str}기-조장$')
+
+    role_id_to_group = {}    # role_id → (track_name, group_num)
+    leader_role_ids = set()  # 모든 트랙의 조장 역할
+    role_id_to_leader_track = {}  # role_id → track_name (조장)
+    sorted_prefixes = sorted(_DISCORD_PREFIX_TO_TRACK.keys(), key=len, reverse=True)
+
+    for role in roles_list:
+        name = str(role.get('name') or '')
+        role_id = str(role.get('id') or '')
+        if not role_id:
+            continue
+        m = group_re.match(name)
+        if m:
+            prefix, group_num_str = m.group(1), m.group(2)
+            # 가장 긴 prefix 부터 매칭 (e.g. '빌더-기초' vs '빌더')
+            for known_prefix in sorted_prefixes:
+                if prefix == known_prefix:
+                    role_id_to_group[role_id] = (
+                        _DISCORD_PREFIX_TO_TRACK[known_prefix],
+                        int(group_num_str),
+                    )
+                    break
+            continue
+        m = leader_re.match(name)
+        if m:
+            prefix = m.group(1)
+            for known_prefix in sorted_prefixes:
+                if prefix == known_prefix:
+                    leader_role_ids.add(role_id)
+                    role_id_to_leader_track[role_id] = _DISCORD_PREFIX_TO_TRACK[known_prefix]
+                    break
+
+    if not role_id_to_group:
+        return jsonify({
+            "status": "success",
+            "cohortLabel": cohort_label,
+            "guild_id": guild_id,
+            "tracks": [],
+            "warning": f"{cohort_label} 의 '{{prefix}}-{cohort_digits}기-N조' 패턴 역할을 찾지 못했습니다.",
+        })
+
+    # ── 2) guild members pagination ──────────────────────────────
+    members_all = []
+    last_id = '0'
+    page_limit = 1000
+    safety_pages = 20
+    while safety_pages > 0:
+        safety_pages -= 1
+        try:
+            resp = requests.get(
+                f'https://discord.com/api/v10/guilds/{guild_id}/members',
+                headers=headers,
+                params={'limit': page_limit, 'after': last_id},
+                timeout=30,
+            )
+            if resp.status_code != 200:
+                return jsonify({"status": "error",
+                                "message": f"guild members 조회 실패: HTTP {resp.status_code} {resp.text[:200]}"}), 502
+            page = resp.json() or []
+        except Exception as e:
+            return jsonify({"status": "error", "message": f"guild members 조회 예외: {e}"}), 502
+
+        if not page:
+            break
+        members_all.extend(page)
+        last_id = str(page[-1].get('user', {}).get('id') or '')
+        if not last_id or len(page) < page_limit:
+            break
+
+    # ── 3) 역할 매칭으로 (track, group_num) → members 집계 ─────────
+    track_to_groups = {}  # track_name -> {group_num: [member_info]}
+    for gm in members_all:
+        user_obj = gm.get('user') or {}
+        user_id = str(user_obj.get('id') or '').strip()
+        if not user_id or user_obj.get('bot'):
+            continue
+        username = str(user_obj.get('username') or '').strip()
+        global_name = str(user_obj.get('global_name') or '').strip()
+        nick = str(gm.get('nick') or '').strip()
+        display_name = nick or global_name or username
+        handle = f'@{username}' if username else ''
+        user_role_ids = set(str(r) for r in (gm.get('roles') or []))
+        leader_track_names = {role_id_to_leader_track[rid] for rid in user_role_ids if rid in role_id_to_leader_track}
+
+        for rid in user_role_ids:
+            grp = role_id_to_group.get(rid)
+            if not grp:
+                continue
+            track_name, group_num = grp
+            track_to_groups.setdefault(track_name, {}).setdefault(group_num, []).append({
+                'userId': user_id,
+                'name': display_name,
+                'handle': handle,
+                'leader': track_name in leader_track_names,
+            })
+
+    # ── 4) 응답 구성 — group_num 오름차순으로 ─────────────────────
+    out_tracks = []
+    for track_name in sorted(track_to_groups.keys()):
+        groups_map = track_to_groups[track_name]
+        out_groups = []
+        for group_num in sorted(groups_map.keys()):
+            out_groups.append({
+                'name': f'{cohort_label} {group_num}조',
+                'groupNumber': group_num,
+                'members': groups_map[group_num],
+            })
+        out_tracks.append({
+            'trackName': track_name,
+            'groups': out_groups,
+        })
+
+    print(f"[discord-current-state] cohort={cohort_label} guild={guild_id} "
+          f"roles_matched={len(role_id_to_group)} members_total={len(members_all)} "
+          f"tracks_out={len(out_tracks)}")
+
+    return jsonify({
+        'status': 'success',
+        'cohortLabel': cohort_label,
+        'guild_id': guild_id,
+        'tracks': out_tracks,
+    })
+
+
 @app.route('/api/mockups/group-preview/current-state', methods=['GET'])
 def get_group_preview_current_state():
     """

@@ -2867,7 +2867,7 @@
           <button type="button" class="btn-ghost" id="admin-clear-mock" title="목업 멤버 전부 리스트에서 완전히 제거 (실 OAuth 사용자만 남김)">🧹 목업 지우기</button>
           <button type="button" class="btn-ghost text-bad" id="admin-full-reset" title="신청 데이터 초기화 (서버 캐시 + 브라우저). 이전 기수 Discord 트랙 채널은 봇 '!채널삭제 &lt;기수&gt;' 별도 실행 필요.">🗑️ 전체 초기화</button>
           <button type="button" class="btn-ghost" id="admin-notion-only-resync" title="조 배정 결과를 Notion 에만 다시 push (디스코드 안 건드림). 매칭 실패한 신규 멤버는 마스터 DB 에 자동 추가.">🔁 Notion 재실행 (신규 자동 추가)</button>
-          <button type="button" class="btn-ghost" id="admin-load-from-notion" title="노션 inline DB 의 현재 조 배정 상태를 가져와 화면에 반영. 디스코드 실제 운영 상태와 sync.">📥 노션 상태 불러오기</button>
+          <button type="button" class="btn-ghost" id="admin-load-from-notion" title="디스코드 길드의 현재 역할 할당 상태 (조 배정 결과) 를 가져와 화면에 반영. 노션 비어있어도 디스코드 실제 운영 상태로 복원 가능.">📥 디스코드 상태 불러오기</button>
           <button class="btn-ghost" id="admin-track-apply-sync">Full Sync</button>
           <button class="btn-navy" id="admin-track-apply-refresh">Refresh</button>`;
         requestAnimationFrame(() => {
@@ -3764,20 +3764,23 @@
       const orig = btn ? btn.textContent : null;
       if (btn) { btn.disabled = true; btn.textContent = '불러오는 중…'; }
       try {
-        const { appliedCount, notFoundTracks, totalMembers } = await gpLoadFromNotion(false);
+        const { appliedCount, notFoundTracks, totalMembers, source } = await gpLoadFromNotion(false);
+        const sourceLabel = source === 'discord' ? '디스코드 역할'
+          : source === 'notion' ? '노션 inline DB'
+          : '없음';
         const summary =
           appliedCount > 0
-            ? `✅ 노션 조 배정 상태 반영 완료\n\n` +
+            ? `✅ ${sourceLabel} 조 배정 상태 반영 완료\n\n` +
               `• 트랙 ${appliedCount}개 sync\n` +
               `• 총 멤버 ${totalMembers}명 배정 적용\n\n` +
               (notFoundTracks.length
                 ? `⚠️ 매칭 안 된 트랙: ${notFoundTracks.join(', ')}\n` +
-                  '(GP_GROUP_DB_NAME_MAP 의 트랙명과 노션 트랙 페이지 title 이 정확히 같아야 인식됨)'
+                  '(GP_GROUP_DB_NAME_MAP 의 트랙명과 source 의 트랙명이 정확히 같아야 인식됨)'
                 : '')
-            : `ℹ️ 노션에서 ${GP_TEST_COHORT_LABEL} 의 inline DB 데이터 없음 — 첫 조 배정이거나 cohort 라벨 불일치.`;
+            : `ℹ️ ${GP_TEST_COHORT_LABEL} 의 조 배정 데이터 없음 (디스코드·노션 모두). 첫 조 배정이거나 cohort 라벨 불일치.`;
         alert(summary);
       } finally {
-        if (btn) { btn.disabled = false; btn.textContent = orig || '📥 노션 상태 불러오기'; }
+        if (btn) { btn.disabled = false; btn.textContent = orig || '📥 디스코드 상태 불러오기'; }
       }
     }
 
@@ -3790,9 +3793,10 @@
       if (!IS_ADMIN_MOCK) return;  // admin 만 적용 (학생은 자기 조만 보는 별도 흐름)
       _gpNotionSyncedThisSession = true;
       try {
-        const { appliedCount } = await gpLoadFromNotion(true);
+        const { appliedCount, source } = await gpLoadFromNotion(true);
         if (appliedCount > 0 && typeof showToast === 'function') {
-          showToast(`📥 노션 조 배정 ${appliedCount}개 트랙 sync 됨`, 3000);
+          const srcLabel = source === 'discord' ? '디스코드' : source === 'notion' ? '노션' : '';
+          showToast(`📥 ${srcLabel} 조 배정 ${appliedCount}개 트랙 sync 됨`, 3000);
         }
       } catch (e) {
         console.warn('[gpAutoLoad] failed:', e);
@@ -6027,41 +6031,66 @@
     }
 
     /**
-     * 노션에서 현재 조 배정 상태를 가져와 _gpAssignments 에 반영.
+     * 디스코드 길드의 실제 역할 할당을 가져와 _gpAssignments 에 반영.
      *
      * 사용 시점:
      *   - admin 이 조 배정 ↗ 진입 시 (자동, 1회)
-     *   - admin 헤더의 '📥 노션 상태 불러오기' 버튼 클릭 시 (수동)
+     *   - admin 헤더의 '📥 디스코드 상태 불러오기' 버튼 클릭 시 (수동)
      *
-     * 이유: 이전엔 localStorage 또는 random chunking 결과를 표시 → admin 이 그
-     *   상태로 commit 하면 노션 inline DB 가 random 결과로 덮어써짐. 노션이
-     *   single source of truth 이므로 진입 시 거기서 읽어와야 안전.
+     * 이유: 노션 commit 실패 / 매칭 실패로 노션이 비어있어도, 디스코드엔
+     *   봇이 실제 만든 역할 (예: `세일즈-실전-9기-1조`) 이 남아있음.
+     *   디스코드 = 'admin 이 마지막으로 commit 한 의도' 의 source of truth.
      *
-     * 반환: { appliedCount, notFoundTracks }
-     *   appliedCount — 매칭돼서 _gpAssignments 에 반영된 트랙 수
-     *   notFoundTracks — 노션의 트랙 페이지가 GP_TABS 와 매칭 안 된 이름들 (디버깅용)
+     * 폴백: Discord 응답에 tracks 가 0개면 Notion endpoint 도 시도.
+     *
+     * 반환: { appliedCount, notFoundTracks, totalMembers, source }
+     *   source: 'discord' | 'notion' | 'none'
      */
     async function gpLoadFromNotion(silent = false) {
+      // 'gpLoadFromNotion' 함수명은 historical naming. 내부적으로 디스코드 우선.
       const cohort = encodeURIComponent(GP_TEST_COHORT_LABEL);
-      let data;
+      let data = null;
+      let source = 'none';
       try {
         const res = await fetch(
-          `${GP_API_BASE}/api/mockups/group-preview/current-state?cohortLabel=${cohort}`,
+          `${GP_API_BASE}/api/mockups/group-preview/current-state-from-discord?cohortLabel=${cohort}`,
           { credentials: 'include' }
         );
-        data = await res.json().catch(() => ({}));
-        if (!res.ok || data.status !== 'success') {
-          if (!silent) {
-            alert(`노션 상태 불러오기 실패: ${data.message || res.status}`);
-          } else {
-            console.warn('[gpLoadFromNotion] failed:', data.message || res.status);
-          }
-          return { appliedCount: 0, notFoundTracks: [], totalMembers: 0 };
+        const j = await res.json().catch(() => ({}));
+        if (res.ok && j.status === 'success' && Array.isArray(j.tracks) && j.tracks.length > 0) {
+          data = j;
+          source = 'discord';
+        } else if (!silent && res.ok && j.warning) {
+          console.warn('[gpLoadFromDiscord] warning:', j.warning);
         }
       } catch (e) {
-        if (!silent) alert(`네트워크 오류: ${e.message || e}`);
-        else console.warn('[gpLoadFromNotion] network error:', e);
-        return { appliedCount: 0, notFoundTracks: [], totalMembers: 0 };
+        console.warn('[gpLoadFromDiscord] network error:', e);
+      }
+
+      // 디스코드에서 매칭 0건이면 Notion fallback (이전 commit 흔적이라도 가져옴).
+      if (!data) {
+        try {
+          const res = await fetch(
+            `${GP_API_BASE}/api/mockups/group-preview/current-state?cohortLabel=${cohort}`,
+            { credentials: 'include' }
+          );
+          const j = await res.json().catch(() => ({}));
+          if (res.ok && j.status === 'success') {
+            data = j;
+            source = 'notion';
+          } else if (!silent) {
+            alert(`상태 불러오기 실패: ${j.message || res.status}`);
+            return { appliedCount: 0, notFoundTracks: [], totalMembers: 0, source: 'none' };
+          }
+        } catch (e) {
+          if (!silent) alert(`네트워크 오류: ${e.message || e}`);
+          else console.warn('[gpLoadFromNotion] network error:', e);
+          return { appliedCount: 0, notFoundTracks: [], totalMembers: 0, source: 'none' };
+        }
+      }
+
+      if (!data) {
+        return { appliedCount: 0, notFoundTracks: [], totalMembers: 0, source: 'none' };
       }
 
       // GP_GROUP_DB_NAME_MAP 의 역매핑 — Notion 트랙 페이지 이름 → tab.id
@@ -6101,7 +6130,7 @@
         }
       }
 
-      return { appliedCount, notFoundTracks, totalMembers };
+      return { appliedCount, notFoundTracks, totalMembers, source };
     }
 
     /** 첫 진입 시 자동 분할 결과를 저장 (이후 drag/drop 으로 변형) */
