@@ -3439,7 +3439,14 @@
     function shouldMergeRemoteMember(member) {
       if (!member) return false;
       const memberId = getMemberIdentityKey(member);
+      // baseline mock — 항상 merge (서버가 tracks 채워주거나 비워주는 경로).
       if (memberId && BASE_MOCK_MEMBER_IDS.has(memberId)) return true;
+      // 실 Discord 사용자 (snowflake = 15~20자리 정수) — tracks 유무 무관 항상 merge.
+      // 직전 footgun: 관리자가 편집으로 트랙을 모두 제거하면 isApplied=false 가 되어
+      // 다음 loadTrackApplications / loadState 에서 skip → 신청자 목록에서 사라짐.
+      // 신청자 목록(미신청 탭 포함) 에 남아야 정상.
+      if (/^\d{15,20}$/.test(memberId || '')) return true;
+      // 그 외 (legacy / 짧은 hex ID 등) — 신청한 경우만 merge (옛 동작 유지).
       return isApplied(member);
     }
 
