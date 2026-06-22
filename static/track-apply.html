@@ -2372,14 +2372,14 @@
     let _activeOtDate = '';  // 마지막 적용된 otDate. 같으면 재적용 skip.
     let _PREOPEN_TRACKS_BASELINE_SNAPSHOT = null;  // PREOPEN_TRACKS 원본 (lazy init).
 
-    /** "5/24 (일)" / "5/24(일)" / "5/24" 같은 텍스트 안의 모든 M/D 발견 후 shift 적용. */
+    /** "5/24 (일)" / "5/24(일)" 패턴만 shift. (요일) 없는 단순 M/D 는 매칭 X (8:00 시간 등 오탐 방지). */
     function _shiftScheduleText(text, shiftDays) {
       if (!shiftDays) return text;
       const koreanWeekdays = ['일','월','화','수','목','금','토'];
-      // 우선 (월)/(화)... 포함 패턴 처리 → shift 후 요일도 재계산.
-      let out = String(text || '').replace(/(\d{1,2})\/(\d{1,2})\s*\(([월화수목금토일])\)/g, (_match, mm, dd) => {
+      return String(text || '').replace(/(\d{1,2})\/(\d{1,2})\s*\(([월화수목금토일])\)/g, (_match, mm, dd) => {
         const m = parseInt(mm, 10);
         const d = parseInt(dd, 10);
+        if (!(m >= 1 && m <= 12) || !(d >= 1 && d <= 31)) return _match;  // invalid base 보호
         const base = new Date(Date.UTC(2026, m - 1, d));
         const shifted = new Date(base.getTime() + shiftDays * 86400000);
         const newM = shifted.getUTCMonth() + 1;
@@ -2387,17 +2387,11 @@
         const wd = koreanWeekdays[shifted.getUTCDay()];
         return `${newM}/${newD} (${wd})`;
       });
-      // 그 외 (요일) 없는 단순 M/D 패턴.
-      out = out.replace(/(\d{1,2})\/(\d{1,2})(?!\s*\([월화수목금토일]\))/g, (_match, mm, dd) => {
-        const m = parseInt(mm, 10);
-        const d = parseInt(dd, 10);
-        const base = new Date(Date.UTC(2026, m - 1, d));
-        const shifted = new Date(base.getTime() + shiftDays * 86400000);
-        const newM = shifted.getUTCMonth() + 1;
-        const newD = shifted.getUTCDate();
-        return `${newM}/${newD}`;
-      });
-      return out;
+    }
+
+    /** "M/D (요일)" 패턴이 포함된 텍스트인지 — dataset.scheduleOriginal baseline 검증용. */
+    function _looksLikeScheduleBaseline(text) {
+      return /\d{1,2}\/\d{1,2}\s*\([월화수목금토일]\)/.test(String(text || ''));
     }
 
     function _computeShiftDaysFromOtDate(otDateIso) {
@@ -2408,26 +2402,28 @@
       return Math.round((target.getTime() - base.getTime()) / 86400000);
     }
 
-    /** otDate 적용 — 모든 일정 텍스트를 baseline 기준에서 shift 후 반영. */
+    /** otDate 적용 — 정적 영역만 dataset 기반 shift, PREOPEN_TRACKS 는 snapshot 기반 매번 재계산. */
     function applyScheduleShiftFromOtDate(otDateIso) {
       const shiftDays = _computeShiftDaysFromOtDate(otDateIso);
-      // NOTION_SCHEDULE 표 .col-date 텍스트 갱신.
-      document.querySelectorAll('.col-date').forEach(cell => {
-        if (!cell.dataset.scheduleOriginal) {
+      // NOTION_SCHEDULE 표 .col-date — #view-open-new 안의 정적 셀만 (PREOPEN_TRACKS 동적 DOM 제외).
+      // 동적 PREOPEN_TRACKS 의 .col-date 는 renderTracksView 가 baseline snapshot 에서 shift된 텍스트로 그리므로
+      // 별도 처리 X. selector 가 둘 다 잡으면 누적 shift footgun 발생.
+      document.querySelectorAll('#view-open-new .col-date').forEach(cell => {
+        if (!cell.dataset.scheduleOriginal && _looksLikeScheduleBaseline(cell.textContent)) {
           cell.dataset.scheduleOriginal = cell.textContent;
         }
-        const original = cell.dataset.scheduleOriginal;
+        const original = cell.dataset.scheduleOriginal || cell.textContent;
         cell.textContent = shiftDays ? _shiftScheduleText(original, shiftDays) : original;
       });
-      // OT 날짜 텍스트 (.ot-date-text) 갱신.
+      // OT 날짜 텍스트 (.ot-date-text) — 공통 운영 안내의 OT 부분.
       document.querySelectorAll('.ot-date-text').forEach(el => {
-        if (!el.dataset.scheduleOriginal) {
+        if (!el.dataset.scheduleOriginal && _looksLikeScheduleBaseline(el.textContent)) {
           el.dataset.scheduleOriginal = el.textContent;
         }
-        const original = el.dataset.scheduleOriginal;
+        const original = el.dataset.scheduleOriginal || el.textContent;
         el.textContent = shiftDays ? _shiftScheduleText(original, shiftDays) : original;
       });
-      // PREOPEN_TRACKS — JS object 의 week.date in-place shift. baseline 스냅샷에서 매번 다시.
+      // PREOPEN_TRACKS — baseline snapshot 에서 매번 shift 적용 (누적 안 됨). renderTracksView 가 새 DOM 그림.
       try {
         if (typeof PREOPEN_TRACKS !== 'undefined' && Array.isArray(PREOPEN_TRACKS)) {
           if (!_PREOPEN_TRACKS_BASELINE_SNAPSHOT) {
