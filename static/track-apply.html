@@ -1441,7 +1441,7 @@
       <!-- 공통 운영 안내 (요일별 트랙 섹션 하단에 한 번만) -->
       <div class="mt-2 mb-8 rounded-md border border-border-hair bg-surface px-4 py-3 text-[12px] text-ink-muted leading-relaxed">
         <span class="text-eyebrow mr-2" style="letter-spacing:0.1em;">공통 운영</span>
-        <strong class="text-ink">OT</strong> 5/24(일) 8:00-10:00PM
+        <strong class="text-ink">OT</strong> <span class="ot-date-text">5/24(일)</span> 8:00-10:00PM
         <span class="text-ink-soft">·</span>
         매 주차 강의 후 <strong class="text-ink">조별 모임/피드백 세션</strong>
         <span class="text-ink-soft">·</span>
@@ -1449,9 +1449,11 @@
       </div>
 
       <!-- ═════════════════ [필수] 조장 지원 여부 ═════════════════
-           정규 트랙 직속 섹션. 단일 라디오 (선택한 트랙만 활성) + 모티베이션 카피.
-           기본값 = "지원에 희망하지 않습니다." 라 사용자가 의식하지 않아도 폼은 valid. -->
-      <section id="leader-apply-block" class="leader-apply-section">
+           정규 트랙 직속 섹션. 단일 라디오 (selected 한 트랙만 활성) + 모티베이션 카피.
+           기본값 = "지원에 희망하지 않습니다." 라 사용자가 의식하지 않아도 폼은 valid.
+           10기 정책 (2026-06-22): 조장 지원 섹션 숨김 처리. hidden-view 로 토글.
+           복원 시 hidden-view 클래스 제거. -->
+      <section id="leader-apply-block" class="leader-apply-section hidden-view">
         <div class="leader-section-title">
           <span class="leader-section-eyebrow">필수</span>조장 지원 여부
         </div>
@@ -1515,8 +1517,11 @@
             <span class="leader-option-key">E</span>
             <span class="leader-option-label">[앱 개발 트랙] 조장에 지원하겠습니다.</span>
           </label>
+          <!-- 10기 정책: 섹션 숨김 처리되어 있어 사용자 선택 불가.
+               'none' 을 default checked 로 박아 validation 통과. 섹션 다시 노출 시
+               이 default 만 제거하면 됨. -->
           <label class="leader-option leader-option-none" data-leader-track="none">
-            <input type="radio" name="leader-apply" value="none">
+            <input type="radio" name="leader-apply" value="none" checked>
             <span class="leader-option-key">F</span>
             <span class="leader-option-label">지원에 희망하지 않습니다.</span>
           </label>
@@ -2018,6 +2023,12 @@
           <p class="text-[11px] text-ink-soft mt-1">진행바 위치를 임의 날짜로 고정 (데모용). 비우면 실제 KST 오늘 사용.</p>
           <button type="button" id="cohort-config-today-clear" class="text-[11px] text-navy underline mt-1">오늘 오버라이드 해제</button>
         </div>
+        <div class="mb-2">
+          <label class="text-eyebrow block mb-1.5">OT 날짜 (선택)</label>
+          <input type="date" id="cohort-config-ot" class="w-full h-10 px-3 rounded-md border border-border-hair bg-canvas text-ink text-[13px]" />
+          <p class="text-[11px] text-ink-soft mt-1">새 OT 날짜를 지정하면 baseline (2026-05-24) 와의 차이만큼 모든 트랙 일정·공통 운영 안내의 날짜가 자동 shift 됩니다. 비우면 정적 일정 그대로.</p>
+          <button type="button" id="cohort-config-ot-clear" class="text-[11px] text-navy underline mt-1">OT 날짜 해제</button>
+        </div>
 
         <hr class="my-4 border-border-hair" />
 
@@ -2353,6 +2364,92 @@
       return `${iso}(${KOR_WEEKDAY[kstDay]})`;
     }
 
+    // ── OT 날짜 기반 일정 shift ──────────────────────────────────────
+    // baseline = 2026-05-24 (일). cohort-config 의 otDate 와 차이만큼
+    // '.col-date' / '.ot-date-text' / PREOPEN_TRACKS 의 모든 날짜 텍스트를 shift.
+    // 원본 텍스트는 dataset.scheduleOriginal 에 보존 — 두 번째 shift 부터 누적 안 됨.
+    const _OT_BASELINE_ISO = '2026-05-24';
+    let _activeOtDate = '';  // 마지막 적용된 otDate. 같으면 재적용 skip.
+    let _PREOPEN_TRACKS_BASELINE_SNAPSHOT = null;  // PREOPEN_TRACKS 원본 (lazy init).
+
+    /** "5/24 (일)" / "5/24(일)" / "5/24" 같은 텍스트 안의 모든 M/D 발견 후 shift 적용. */
+    function _shiftScheduleText(text, shiftDays) {
+      if (!shiftDays) return text;
+      const koreanWeekdays = ['일','월','화','수','목','금','토'];
+      // 우선 (월)/(화)... 포함 패턴 처리 → shift 후 요일도 재계산.
+      let out = String(text || '').replace(/(\d{1,2})\/(\d{1,2})\s*\(([월화수목금토일])\)/g, (_match, mm, dd) => {
+        const m = parseInt(mm, 10);
+        const d = parseInt(dd, 10);
+        const base = new Date(Date.UTC(2026, m - 1, d));
+        const shifted = new Date(base.getTime() + shiftDays * 86400000);
+        const newM = shifted.getUTCMonth() + 1;
+        const newD = shifted.getUTCDate();
+        const wd = koreanWeekdays[shifted.getUTCDay()];
+        return `${newM}/${newD} (${wd})`;
+      });
+      // 그 외 (요일) 없는 단순 M/D 패턴.
+      out = out.replace(/(\d{1,2})\/(\d{1,2})(?!\s*\([월화수목금토일]\))/g, (_match, mm, dd) => {
+        const m = parseInt(mm, 10);
+        const d = parseInt(dd, 10);
+        const base = new Date(Date.UTC(2026, m - 1, d));
+        const shifted = new Date(base.getTime() + shiftDays * 86400000);
+        const newM = shifted.getUTCMonth() + 1;
+        const newD = shifted.getUTCDate();
+        return `${newM}/${newD}`;
+      });
+      return out;
+    }
+
+    function _computeShiftDaysFromOtDate(otDateIso) {
+      if (!otDateIso || !/^\d{4}-\d{2}-\d{2}$/.test(otDateIso)) return 0;
+      const base = _parseISODate(_OT_BASELINE_ISO);
+      const target = _parseISODate(otDateIso);
+      if (!base || !target) return 0;
+      return Math.round((target.getTime() - base.getTime()) / 86400000);
+    }
+
+    /** otDate 적용 — 모든 일정 텍스트를 baseline 기준에서 shift 후 반영. */
+    function applyScheduleShiftFromOtDate(otDateIso) {
+      const shiftDays = _computeShiftDaysFromOtDate(otDateIso);
+      // NOTION_SCHEDULE 표 .col-date 텍스트 갱신.
+      document.querySelectorAll('.col-date').forEach(cell => {
+        if (!cell.dataset.scheduleOriginal) {
+          cell.dataset.scheduleOriginal = cell.textContent;
+        }
+        const original = cell.dataset.scheduleOriginal;
+        cell.textContent = shiftDays ? _shiftScheduleText(original, shiftDays) : original;
+      });
+      // OT 날짜 텍스트 (.ot-date-text) 갱신.
+      document.querySelectorAll('.ot-date-text').forEach(el => {
+        if (!el.dataset.scheduleOriginal) {
+          el.dataset.scheduleOriginal = el.textContent;
+        }
+        const original = el.dataset.scheduleOriginal;
+        el.textContent = shiftDays ? _shiftScheduleText(original, shiftDays) : original;
+      });
+      // PREOPEN_TRACKS — JS object 의 week.date in-place shift. baseline 스냅샷에서 매번 다시.
+      try {
+        if (typeof PREOPEN_TRACKS !== 'undefined' && Array.isArray(PREOPEN_TRACKS)) {
+          if (!_PREOPEN_TRACKS_BASELINE_SNAPSHOT) {
+            _PREOPEN_TRACKS_BASELINE_SNAPSHOT = JSON.parse(JSON.stringify(PREOPEN_TRACKS));
+          }
+          const baseline = _PREOPEN_TRACKS_BASELINE_SNAPSHOT;
+          baseline.forEach((track, ti) => {
+            const liveTrack = PREOPEN_TRACKS[ti];
+            if (!liveTrack || !Array.isArray(liveTrack.weeks)) return;
+            (track.weeks || []).forEach((week, wi) => {
+              const liveWeek = liveTrack.weeks[wi];
+              if (!liveWeek) return;
+              liveWeek.date = shiftDays ? _shiftScheduleText(week.date || '', shiftDays) : (week.date || '');
+            });
+          });
+          if (typeof renderTracksView === 'function') {
+            try { renderTracksView(); } catch (_) { /* render 실패해도 무시 */ }
+          }
+        }
+      } catch (_) { /* shift 실패해도 정적 일정 그대로 */ }
+    }
+
     function applyCohortConfigFromServer(cfg, opts) {
       if (!cfg || typeof cfg !== 'object') return;
       // opts.fromModalSave === true 면 URL param 우선 무시하고 cfg 강제 적용.
@@ -2407,6 +2504,16 @@
         APPLICATION_OPENS_LABEL = `Opens ${APPLICATION_START_DISPLAY} ${enWeekdays[kstDay]}`;
       }
 
+      // 🆕 OT 날짜 shift — cohort-config 에 otDate 있으면 모든 트랙 일정 텍스트 +
+      //    PREOPEN_TRACKS + 공통 운영 안내 OT 날짜를 baseline (5/24) 와의 차이만큼 shift.
+      try {
+        const otDateNext = cfg && cfg.otDate ? String(cfg.otDate).trim() : '';
+        if (otDateNext !== _activeOtDate) {
+          _activeOtDate = otDateNext;
+          applyScheduleShiftFromOtDate(otDateNext);
+        }
+      } catch (e) { /* shift 실패해도 정적 일정 그대로 표시 */ }
+
       // UI 재렌더.
       applyCohortLabels();
       applyWindowLabels();
@@ -2459,8 +2566,12 @@
       //   변경: applyCohortConfigFromServer 가 호출될 때마다 (initial fetch + 모달 저장)
       //   state 재평가 → 다른 state 로 변경 필요 시 즉시 applyState.
       // (admin / group-preview view 는 그대로 — 운영자가 의도해서 머무는 화면)
+      //
+      // 🆕 2026-06-22: admin (IS_VIEWER_ADMIN) 도 자동 전환 제외. 신청 시작일 전엔
+      //   학생은 upcoming 만 봐야 하지만 운영자는 폼/admin 등 자유롭게 미리보기 필요.
+      //   '자꾸 메인으로 돌아간다' 증상의 원인.
       const viewerStates = new Set(['logout', 'upcoming', 'open-new', 'open-edit', 'closed']);
-      if (!activeKey || viewerStates.has(activeKey)) {
+      if (!IS_VIEWER_ADMIN && (!activeKey || viewerStates.has(activeKey))) {
         const target = _evaluateViewerStateFromConfig();
         if (target && STATES[target] && target !== activeKey) {
           applyState(target);
@@ -2664,11 +2775,13 @@
       const startEl = document.getElementById('cohort-config-start');
       const endEl = document.getElementById('cohort-config-end');
       const todayEl = document.getElementById('cohort-config-today');
+      const otEl = document.getElementById('cohort-config-ot');
 
       labelEl.value = (cfg && cfg.cohortLabel) || COHORT_LABEL || '';
       startEl.value = (cfg && cfg.applicationStartDate) || APPLICATION_START_DATE || '';
       endEl.value = (cfg && cfg.applicationEndDate) || APPLICATION_END_DATE || '';
       todayEl.value = (cfg && cfg.todayOverride) || TODAY_OVERRIDE_DATE || '';
+      if (otEl) otEl.value = (cfg && cfg.otDate) || '';
 
       modal.classList.remove('hidden-view');
     }
@@ -2682,18 +2795,21 @@
       const startEl = document.getElementById('cohort-config-start');
       const endEl = document.getElementById('cohort-config-end');
       const todayEl = document.getElementById('cohort-config-today');
+      const otEl = document.getElementById('cohort-config-ot');
       const saveBtn = document.getElementById('cohort-config-save');
 
       const cohortLabel = _normalizeCohortInput(labelEl.value);
       const applicationStartDate = String(startEl.value || '').trim();
       const applicationEndDate = String(endEl.value || '').trim();
       const todayOverride = String(todayEl.value || '').trim() || null;
+      const otDate = otEl ? (String(otEl.value || '').trim() || null) : null;
 
       if (!cohortLabel) { alert('기수를 입력하세요.'); return; }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(applicationStartDate)) { alert('신청 시작일이 올바르지 않습니다 (YYYY-MM-DD).'); return; }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(applicationEndDate)) { alert('신청 종료일이 올바르지 않습니다 (YYYY-MM-DD).'); return; }
       if (applicationStartDate > applicationEndDate) { alert('시작일이 종료일보다 늦을 수 없습니다.'); return; }
       if (todayOverride && !/^\d{4}-\d{2}-\d{2}$/.test(todayOverride)) { alert('Today 오버라이드가 올바르지 않습니다.'); return; }
+      if (otDate && !/^\d{4}-\d{2}-\d{2}$/.test(otDate)) { alert('OT 날짜가 올바르지 않습니다.'); return; }
 
       saveBtn.disabled = true;
       saveBtn.textContent = '저장 중...';
@@ -2702,7 +2818,7 @@
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ cohortLabel, applicationStartDate, applicationEndDate, todayOverride }),
+          body: JSON.stringify({ cohortLabel, applicationStartDate, applicationEndDate, todayOverride, otDate }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -2744,6 +2860,10 @@
     document.getElementById('cohort-config-today-clear')?.addEventListener('click', () => {
       const todayEl = document.getElementById('cohort-config-today');
       if (todayEl) todayEl.value = '';
+    });
+    document.getElementById('cohort-config-ot-clear')?.addEventListener('click', () => {
+      const otEl = document.getElementById('cohort-config-ot');
+      if (otEl) otEl.value = '';
     });
 
     function _renderTrackOptionsReport(targets, canonical, mode) {
@@ -3036,6 +3156,9 @@
         const activeKey = (typeof getCurrentStateKey === 'function') ? getCurrentStateKey() : null;
         const viewerStates = new Set(['logout', 'upcoming', 'open-new', 'open-edit', 'closed']);
         if (activeKey && !viewerStates.has(activeKey)) return; // admin/group-preview 등 — 유지
+        // 🆕 2026-06-22: admin 도 폴링에서 제외. 운영자가 신청 폼/카운트다운/마감 화면을
+        //   자유롭게 미리볼 수 있도록. 학생만 시간에 따라 자동 전환.
+        if (IS_VIEWER_ADMIN) return;
 
         if (typeof _evaluateViewerStateFromConfig !== 'function') return;
         const target = _evaluateViewerStateFromConfig();

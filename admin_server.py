@@ -985,6 +985,9 @@ def _default_cohort_config():
         'applicationStartDate': '2026-05-20',
         'applicationEndDate': '2026-05-24',
         'todayOverride': None,  # null = 실제 KST today 사용
+        # 🆕 OT 일자 (YYYY-MM-DD) — frontend 가 baseline OT (2026-05-24) 와의 차이로
+        #    모든 트랙 일정 텍스트를 shift. null 이면 shift 없음 (HTML 정적 일정 그대로 사용).
+        'otDate': None,
         'updatedAt': None,
     }
 
@@ -1234,11 +1237,22 @@ def put_cohort_config_route():
         if not today_override:
             return jsonify({'status': 'error', 'message': 'invalid todayOverride (YYYY-MM-DD or null)'}), 400
 
+    # 🆕 otDate — 새 cohort 의 OT 일자. baseline (2026-05-24) 와의 차이로
+    #    frontend 가 모든 트랙 일정 텍스트를 일괄 shift.
+    ot_raw = body.get('otDate', current.get('otDate'))
+    if ot_raw in (None, '', 'null'):
+        ot_date = None
+    else:
+        ot_date = _validate_iso_date(ot_raw)
+        if not ot_date:
+            return jsonify({'status': 'error', 'message': 'invalid otDate (YYYY-MM-DD or null)'}), 400
+
     saved = _write_cohort_config({
         'cohortLabel': new_label,
         'applicationStartDate': new_start,
         'applicationEndDate': new_end,
         'todayOverride': today_override,
+        'otDate': ot_date,
     })
     if not saved:
         return jsonify({'status': 'error', 'message': 'persist failed'}), 500
