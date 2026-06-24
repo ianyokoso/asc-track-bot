@@ -5942,7 +5942,8 @@
     // - data-open-tracks 버튼 클릭 → 현재 view 저장하고 view-tracks로 전환
     // - data-back-from-tracks 클릭 → 이전 view로 복귀
     // ============================================================
-    let _previousState = 'logout';
+    // 🆕 2026-06-24: var (hoist) — init 자동 라우팅이 showTracksView 호출 시 TDZ 위반 방지.
+    var _previousState = 'logout';
 
     function getCurrentStateKey() {
       // 현재 보이는 .view 중에서 stateKey를 추출 (id가 'view-XYZ' 형식)
