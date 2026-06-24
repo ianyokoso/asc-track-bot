@@ -2543,7 +2543,9 @@
       //   학생은 upcoming 만 봐야 하지만 운영자는 폼/admin 등 자유롭게 미리보기 필요.
       //   '자꾸 메인으로 돌아간다' 증상의 원인.
       const viewerStates = new Set(['logout', 'upcoming', 'open-new', 'open-edit', 'closed']);
-      if (!IS_VIEWER_ADMIN && (!activeKey || viewerStates.has(activeKey))) {
+      const suppressActive = (typeof _suppressViewerAutoTransitionUntil === 'number')
+        && (Date.now() < _suppressViewerAutoTransitionUntil);
+      if (!IS_VIEWER_ADMIN && !suppressActive && (!activeKey || viewerStates.has(activeKey))) {
         const target = _evaluateViewerStateFromConfig();
         if (target && STATES[target] && target !== activeKey) {
           applyState(target);
@@ -3108,16 +3110,30 @@
     // 🆕 2026-06-24: OAuth 로그인 직후 학생(IS_VIEWER_ADMIN=false) 은 자동으로
     //   '트랙 미리보기' (view-tracks) 페이지로 이동. 재참여자가 커리큘럼을 빠르게
     //   훑고 신청서로 진입할 수 있도록.
-    //   admin / group-preview / closed 같은 의도된 진입은 영향 X (해당 initial 분기 우선).
+    //
+    //   strategy: showTracksView() 호출을 setTimeout(0) 으로 다음 tick 에 예약 →
+    //   동기 + 모든 microtask (fetchAndApplyCohortConfig 의 Promise 콜백 포함) 가 끝난 후 실행.
+    //   동시에 _suppressViewerAutoTransitionUntil 가드를 4초간 활성화 — 그 사이 다른
+    //   비동기 콜백 (60초 polling, refresh, applyCohortConfigFromServer 등) 이 viewer
+    //   자동 전환 시도해도 무시되도록.
+    //
+    //   admin / group-preview 같은 의도된 진입은 영향 X (해당 initial 분기 우선).
     //   첫 진입 후엔 URL 의 discord_auth=success 를 제거해 새로고침 시 재라우팅 안 됨.
+    let _suppressViewerAutoTransitionUntil = 0;
     try {
       const justLoggedIn = (mockupParams.get('discord_auth') || '').trim() === 'success';
       const isViewerView = ['logout','upcoming','open-new','open-edit','closed'].includes(_initialStateResolved);
-      if (justLoggedIn && !IS_VIEWER_ADMIN && isViewerView && typeof showTracksView === 'function') {
-        showTracksView();
+      if (justLoggedIn && !IS_VIEWER_ADMIN && isViewerView) {
+        _suppressViewerAutoTransitionUntil = Date.now() + 4000;
+        // setTimeout 으로 다음 macro task 에 호출 — 동시에 진행 중인
+        // fetchAndApplyCohortConfig 의 Promise 콜백 등 모든 microtask 가 먼저 끝남.
+        setTimeout(() => {
+          try {
+            if (typeof showTracksView === 'function') showTracksView();
+          } catch (_) { /* showTracksView 실패해도 기본 state 유지 */ }
+        }, 0);
       }
       if (justLoggedIn) {
-        // URL cleanup — 새로고침 후 같은 자동 라우팅 재발 방지.
         try {
           const cleanUrl = new URL(window.location.href);
           cleanUrl.searchParams.delete('discord_auth');
@@ -3150,10 +3166,12 @@
         // 변경: getCurrentStateKey() 로 .view 활성 상태에서 직접 추출.
         const activeKey = (typeof getCurrentStateKey === 'function') ? getCurrentStateKey() : null;
         const viewerStates = new Set(['logout', 'upcoming', 'open-new', 'open-edit', 'closed']);
-        if (activeKey && !viewerStates.has(activeKey)) return; // admin/group-preview 등 — 유지
+        if (activeKey && !viewerStates.has(activeKey)) return; // admin/group-preview/tracks 등 — 유지
         // 🆕 2026-06-22: admin 도 폴링에서 제외. 운영자가 신청 폼/카운트다운/마감 화면을
         //   자유롭게 미리볼 수 있도록. 학생만 시간에 따라 자동 전환.
         if (IS_VIEWER_ADMIN) return;
+        // 🆕 2026-06-24: OAuth 직후 view-tracks 자동 라우팅 윈도우 안에는 polling 도 skip.
+        if (typeof _suppressViewerAutoTransitionUntil === 'number' && Date.now() < _suppressViewerAutoTransitionUntil) return;
 
         if (typeof _evaluateViewerStateFromConfig !== 'function') return;
         const target = _evaluateViewerStateFromConfig();
