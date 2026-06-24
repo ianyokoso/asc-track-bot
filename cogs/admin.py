@@ -520,6 +520,108 @@ class AdminCog(commands.Cog):
         overwrites[role] = _role_overwrite_for_access(read_only=read_only)
         await channel.edit(overwrites=overwrites, reason=reason)
 
+    async def _grant_role_voice_access_to_channel(
+        self,
+        channel: Optional[discord.VoiceChannel],
+        role: Optional[discord.Role],
+        *,
+        reason: str,
+    ) -> None:
+        # 음성 채널에 역할 접근을 additive 로 부여 (기존 다른 역할 overwrite 보존).
+        if not channel or not role:
+            return
+        overwrites = dict(channel.overwrites)
+        overwrites[role] = discord.PermissionOverwrite(
+            view_channel=True,
+            connect=True,
+            speak=True,
+            stream=True,
+            use_voice_activation=True,
+            read_message_history=True,
+        )
+        await channel.edit(overwrites=overwrites, reason=reason)
+
+    async def _ensure_light_track_channel_access(
+        self,
+        guild: discord.Guild,
+        category: Optional[discord.CategoryChannel],
+        parent_track_name: str,
+        parent_track_short: str,
+        clean_cohort: str,
+        cohort_display: str,
+        light_role: discord.Role,
+        sub_form: Optional[str],
+        parent_roles: List[discord.Role],
+        reason: str,
+        summary: Dict[str, Any],
+        runtime_updates: Dict[str, Any],
+        assignment_channel_updates: Dict[str, str],
+    ) -> None:
+        """
+        라이트 트랙 멤버에게 부모 트랙의 전체 채널 세트 접근을 부여한다.
+        - 라이트도 정식과 동일하게 공지/과제-멘토링/네트워킹/라운지 전부 접근.
+        - 과제-인증은 sub_form 규칙: 숏폼 라이트=숏폼만, 롱폼 라이트=숏폼+롱폼, sub_form 없으면 단일.
+        - 채널이 없으면 생성(라이트만 있어도 전체 세트 보장), 있으면 overwrite 를 덮어쓰지 않고
+          additive 로 라이트 역할만 추가 (다른 라이트/정식 역할 grant 보존).
+        """
+        base = f"{parent_track_short}-{clean_cohort}기"
+        _norm = lambda s: (s or "").strip().lower()
+
+        def _find(channels, name):
+            t = _norm(name)
+            return next((c for c in channels if _norm(c.name) == t), None)
+
+        # (kind, name, mode) — mode: 'read'(공지) / 'write'(텍스트) / 'voice'
+        specs: List[Tuple[str, str, str]] = [("announcement", f"{base}-공지", "read")]
+        if parent_track_short == "크리에이터":
+            specs.append(("assignment", f"{base}-숏폼-과제-인증", "write"))
+            if sub_form == "롱폼":
+                specs.append(("assignment", f"{base}-롱폼-과제-인증", "write"))
+        else:
+            specs.append(("assignment", f"{base}-과제-인증", "write"))
+        specs += [
+            ("mentoring", f"{base}-과제-멘토링", "write"),
+            ("networking", f"{base}-네트워킹", "write"),
+            ("lounge", f"{base}-라운지", "voice"),
+        ]
+        _created_key = {
+            "announcement": "announcement_channels_created",
+            "assignment": "assignment_channels_created",
+            "mentoring": "mentoring_channels_created",
+            "networking": "networking_channels_created",
+        }
+
+        for kind, name, mode in specs:
+            if mode == "voice":
+                ch = _find(guild.voice_channels, name)
+                if ch is None:
+                    ch, created = await self._ensure_voice_channel(
+                        guild, category, name, reason,
+                        overwrites=self._build_voice_channel_overwrites(guild, parent_roles + [light_role]),
+                    )
+                    if created:
+                        summary["voice_channels_created"] += 1
+                    _persist_channel_resource(runtime_updates, parent_track_name, parent_track_short, "lounge", ch)
+                else:
+                    await self._grant_role_voice_access_to_channel(ch, light_role, reason=reason)
+            else:
+                read_only = mode == "read"
+                ch = _find(guild.text_channels, name)
+                if ch is None:
+                    ch, created = await self._ensure_text_channel(
+                        guild, category, name, reason,
+                        overwrites=self._build_channel_overwrites(guild, parent_roles + [light_role], read_only=read_only),
+                        topic=f"{cohort_display} {parent_track_name} 채널",
+                    )
+                    if created:
+                        summary[_created_key[kind]] += 1
+                    _persist_channel_resource(runtime_updates, parent_track_name, parent_track_short, kind, ch)
+                else:
+                    await self._grant_role_access_to_channel(ch, light_role, read_only=read_only, reason=reason)
+                if kind == "assignment" and ch:
+                    for config_key in _config_channel_keys_for_track(parent_track_name):
+                        assignment_channel_updates.setdefault(config_key, str(ch.id))
+
     def _build_light_track_targets(
         self,
         track_name: str,
@@ -957,100 +1059,26 @@ class AdminCog(commands.Cog):
                 if not category or not light_role:
                     continue
 
-                announcement_channel = self._resolve_runtime_text_channel(guild, runtime_track, "announcement")
-                if announcement_channel:
-                    try:
-                        await self._grant_role_access_to_channel(
-                            announcement_channel,
-                            light_role,
-                            read_only=True,
-                            reason=reason,
-                        )
-                    except Exception as e:
-                        logger.warning(f"[Channel] Failed to grant light access to announcement channel: {e}")
-                else:
-                    announcement_name = f"{parent_track_short}-{clean_cohort}기-공지"
-                    announcement_channel, created = await self._ensure_text_channel(
+                # 라이트 트랙 멤버에게 부모 트랙 전체 채널 세트 접근 부여 (additive).
+                # 채널이 없으면 생성(라이트만 있어도 전체 세트 보장), 있으면 overwrite 보존 + 라이트 역할만 추가.
+                try:
+                    await self._ensure_light_track_channel_access(
                         guild,
                         category,
-                        announcement_name,
-                        reason,
-                        overwrites=self._build_channel_overwrites(guild, allowed_roles, read_only=True),
-                        topic=f"{cohort_display} {parent_track_name} 공지 채널",
-                    )
-                    if created:
-                        summary["announcement_channels_created"] += 1
-                    _persist_channel_resource(
-                        runtime_updates,
                         parent_track_name,
                         parent_track_short,
-                        "announcement",
-                        announcement_channel,
-                    )
-
-                # 라이트 트랙의 과제-인증 채널 매칭.
-                # - sub_form 있음 (크리에이터 숏폼/롱폼): 해당 sub-form 채널 1개만 매칭
-                #   예) sub_form='숏폼' → '크리에이터-9기-숏폼-과제-인증' 만 매칭
-                # - sub_form 없음 (빌더 라이트, legacy 크리에이터 라이트): 부모 카테고리 안의
-                #   '{parent_short}-{cohort}기-...과제-인증' 모두 매칭 (기존 동작)
-                parent_cohort_prefix = f"{parent_track_short}-{clean_cohort}기-"
-                if sub_form:
-                    target_channel_name = f"{parent_track_short}-{clean_cohort}기-{sub_form}-과제-인증"
-                    assignment_channels = [
-                        ch for ch in (category.text_channels if category else [])
-                        if ch.name == target_channel_name
-                    ]
-                else:
-                    assignment_channels = [
-                        ch for ch in (category.text_channels if category else [])
-                        if ch.name.startswith(parent_cohort_prefix) and ch.name.endswith("-과제-인증")
-                    ]
-
-                # 매칭된 채널이 하나도 없으면 새로 생성.
-                # sub_form 있으면 sub-form 전용 채널, 없으면 단일 과제-인증 채널.
-                if not assignment_channels:
-                    if sub_form:
-                        assignment_name = f"{parent_track_short}-{clean_cohort}기-{sub_form}-과제-인증"
-                        topic = f"{cohort_display} {parent_track_name} {sub_form} 과제 인증 채널"
-                    else:
-                        assignment_name = f"{parent_track_short}-{clean_cohort}기-과제-인증"
-                        topic = f"{cohort_display} {parent_track_name} 과제 인증 채널"
-                    new_channel, created = await self._ensure_text_channel(
-                        guild,
-                        category,
-                        assignment_name,
+                        clean_cohort,
+                        cohort_display,
+                        light_role,
+                        sub_form,
+                        allowed_roles,
                         reason,
-                        overwrites=self._build_channel_overwrites(guild, allowed_roles, read_only=False),
-                        topic=topic,
+                        summary,
+                        runtime_updates,
+                        assignment_channel_updates,
                     )
-                    if created:
-                        summary["assignment_channels_created"] += 1
-                    if new_channel:
-                        assignment_channels.append(new_channel)
-                        _persist_channel_resource(
-                            runtime_updates,
-                            parent_track_name,
-                            parent_track_short,
-                            "assignment",
-                            new_channel,
-                        )
-
-                # 모든 과제-인증 채널에 라이트 역할 부여 (write 가능)
-                for ch in assignment_channels:
-                    try:
-                        await self._grant_role_access_to_channel(
-                            ch,
-                            light_role,
-                            read_only=False,
-                            reason=reason,
-                        )
-                    except Exception as e:
-                        logger.warning(f"[Channel] Failed to grant light access to {ch.name}: {e}")
-
-                # config 매핑은 첫 번째 채널 ID 사용 (호환)
-                if assignment_channels:
-                    for config_key in _config_channel_keys_for_track(parent_track_name):
-                        assignment_channel_updates[config_key] = str(assignment_channels[0].id)
+                except Exception as e:
+                    logger.warning(f"[Channel] Failed light channel-set for {parent_track_name}: {e}")
 
         if assignment_channel_updates:
             def _mutate(config: Dict[str, Any]) -> None:
