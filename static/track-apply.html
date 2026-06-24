@@ -1534,15 +1534,15 @@
 
       <!-- ═════════════════ 빌더 트랙 베타테스트 안내 ═════════════════
            정규 트랙과 라이트 트랙 사이. 라디오 없음, 신청 불가.
-           이번 기수는 베타테스트 형식으로 운영. -->
+           이번 기수는 베타테스트 진행예정. -->
       <section class="builder-renewal-section mb-10">
         <div class="builder-renewal-card">
-          <span class="builder-renewal-badge">베타테스트</span>
+          <span class="builder-renewal-badge">베타테스트 진행예정</span>
           <h2 class="builder-renewal-title">빌더 트랙</h2>
           <p class="builder-renewal-desc">
-            <strong class="text-ink">빌더 기초·실전 트랙</strong>은 이번 기수에 베타테스트 형식으로 진행합니다.
+            빌더 트랙은 이번 기수에 베타테스트 형식으로 진행합니다.
             <br class="hidden md:block">
-            정식 신청은 다음 기수부터 오픈될 예정입니다.
+            자세한 내용은 공지사항에서 확인해주세요.
           </p>
         </div>
       </section>
@@ -5726,10 +5726,10 @@
         ],
       },
       {
-        id: 'builder_advanced', label: '빌더 트랙', weekday: '리뉴얼 중',
+        id: 'builder_advanced', label: '빌더 트랙', weekday: '베타테스트 진행예정',
         comingSoon: true,
-        comingSoonNote: '리뉴얼 중',
-        tagline: '빌더 기초·실전 트랙은 더 좋은 모습으로 찾아뵙기 위해 리뉴얼 중이에요. 지금은 빌더 라이트로 빌딩 워밍업을 시작해보세요.',
+        comingSoonNote: '베타테스트 진행예정',
+        tagline: '빌더 트랙은 이번 기수에 베타테스트 형식으로 진행합니다. 자세한 내용은 공지사항에서 확인해주세요.',
         target: '',
         weeks: [],
       },
@@ -5738,8 +5738,8 @@
     const PREOPEN_LIGHT_TRACKS = [
       { parent: '크리에이터', label: '크리에이터 라이트 (숏폼)', note: '숏폼 글쓰기에 집중한 가벼운 코스' },
       { parent: '크리에이터', label: '크리에이터 라이트 (롱폼)', note: '롱폼 글쓰기 중심의 라이트 코스' },
-      { parent: '빌더', label: '빌더 라이트 (기초)', note: 'Lovable 기반 가벼운 빌더 입문' },
-      { parent: '빌더', label: '빌더 라이트 (심화)', note: 'Cursor 기반 가벼운 중급자 코스' },
+      // 빌더 라이트 트랙은 10기 정책으로 신청 불가 (UI 노출 제거). 정규 빌더 트랙은
+      // 베타테스트로 진행 → 라이트 트랙도 함께 보류. JS 식별자/legacy 데이터는 보존.
     ];
 
     function escHtml(s) {
