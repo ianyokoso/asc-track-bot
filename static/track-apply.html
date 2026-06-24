@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <!-- build: 2026-06-24-autoroutev3 — JS 캐시 강제 무효화 -->
+  <!-- build: 2026-06-24-autoroutev4 — JS 캐시 강제 무효화 -->
   <title>ASC 트랙 신청</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -3107,31 +3107,50 @@
         sessionStorage.removeItem('asc_track_apply_post_reload_state');
       }
     } catch (e) { /* noop */ }
-    applyState(_initialStateResolved);
-
-    // 🆕 2026-06-24 (v3): OAuth 로그인 직후 학생(IS_VIEWER_ADMIN=false) 은 자동으로
-    //   '트랙 미리보기' (view-tracks) 페이지로 즉시 이동.
-    //
-    //   전략 — applyState 직후 동기적으로 showTracksView() 호출.
-    //   cohort-config 도착 안 기다림 (PREOPEN_TRACKS 정적 데이터로 즉시 렌더).
-    //   cohort-config 가 늦게 도착해도 activeKey='tracks' 라 viewer transition 자동 skip.
-    //
-    //   admin / group-preview 같은 의도된 진입은 영향 X (initial state 평가에서 'admin' 우선).
-    //   첫 진입 후 URL discord_auth=success 제거 → 새로고침 시 재라우팅 안 됨.
+    // 🆕 2026-06-24 (v4): OAuth 직후 학생 자동 라우팅 — multi-layer defense.
+    //   applyState 가 에러 throw 해도 그 외 init 코드는 진행되도록 try-catch 분리.
+    //   showTracksView 호출은 setTimeout(0) + requestAnimationFrame 다중 안전망 —
+    //   어떤 race / async timing 이라도 view-tracks 가 최종 활성 view 가 되도록 보장.
     try {
-      const justLoggedIn = (mockupParams.get('discord_auth') || '').trim() === 'success';
-      if (justLoggedIn && !IS_VIEWER_ADMIN && typeof showTracksView === 'function') {
-        showTracksView();
-      }
-      if (justLoggedIn) {
+      applyState(_initialStateResolved);
+    } catch (e) {
+      try { console.warn('[init] applyState failed:', e); } catch (_) {}
+    }
+
+    const _justLoggedIn = (() => {
+      try { return (mockupParams.get('discord_auth') || '').trim() === 'success'; }
+      catch (_) { return false; }
+    })();
+
+    if (_justLoggedIn && !IS_VIEWER_ADMIN) {
+      // 다중 시점에 showTracksView 호출 — 안 호출되는 모든 race case 봉쇄.
+      const _ensureTracksView = () => {
         try {
-          const cleanUrl = new URL(window.location.href);
-          cleanUrl.searchParams.delete('discord_auth');
-          history.replaceState(null, '', cleanUrl.toString());
-          mockupParams.delete('discord_auth');
-        } catch (_) { /* URL API 실패해도 무시 */ }
-      }
-    } catch (_) { /* 초기 진입 실패해도 기본 state 유지 */ }
+          if (typeof showTracksView !== 'function') return;
+          const activeKey = (typeof getCurrentStateKey === 'function') ? getCurrentStateKey() : null;
+          if (activeKey === 'tracks') return; // 이미 view-tracks 면 noop
+          showTracksView();
+        } catch (e) {
+          try { console.warn('[init] showTracksView failed:', e); } catch (_) {}
+        }
+      };
+      // tier 1: 동기 즉시 호출 (가능한 한 빨리 view 전환)
+      _ensureTracksView();
+      // tier 2: macro task — applyCohortConfigFromServer 의 microtask 후 보강.
+      setTimeout(_ensureTracksView, 0);
+      // tier 3: next paint frame — DOM 안정화 후 한 번 더.
+      try { requestAnimationFrame(_ensureTracksView); } catch (_) {}
+      // tier 4: 200ms 후 fallback — 어떤 비동기 코드도 끝난 후 보장.
+      setTimeout(_ensureTracksView, 200);
+
+      // URL cleanup — 새로고침 시 재라우팅 안 됨.
+      try {
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete('discord_auth');
+        history.replaceState(null, '', cleanUrl.toString());
+        mockupParams.delete('discord_auth');
+      } catch (_) { /* URL API 실패해도 무시 */ }
+    }
 
     /**
      * 🔄 신청 윈도우 자동 view 전환 polling (2026-05-08).
@@ -3945,7 +3964,7 @@
     // 이전 footgun: localStorage 의 stale 또는 random chunking 결과로 commit 하면
     //   노션 inline DB 가 random 결과로 덮어써짐. 진입 시점에 노션 상태로 초기화.
     // build tag — JS 캐시 부스트 확인용 (브라우저 콘솔에서 GP_BUILD_TAG 으로 검사 가능).
-    window.GP_BUILD_TAG = '2026-06-24-autoroutev3';
+    window.GP_BUILD_TAG = '2026-06-24-autoroutev4';
     console.log('[group-preview] build tag:', window.GP_BUILD_TAG);
 
     let _gpNotionSyncedThisSession = false;
