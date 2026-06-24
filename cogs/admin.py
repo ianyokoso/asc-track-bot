@@ -69,6 +69,20 @@ def _track_short_name(track_name: str) -> str:
     return _TRACK_DISCORD_PREFIX.get(track_name, track_name.replace(" 트랙", "").replace(" ", "-"))
 
 
+def _creator_member_subform(member_data: Dict[str, Any]) -> str:
+    """
+    정규 크리에이터 멤버가 '숏폼만' 인지 '숏폼+롱폼' 인지 판정한다.
+    - rowTrackName 에 '롱폼' 포함 (예: '크리에이터 롱폼 트랙') → '롱폼'
+    - creatorSub == 'short_long' / '숏폼 + 롱폼' → '롱폼'
+    - 그 외(정보 없음 포함) → '숏폼' (보수적: 롱폼 과제 채널 접근을 부여하지 않음)
+    """
+    row = str(member_data.get("rowTrackName") or "")
+    sub = str(member_data.get("creatorSub") or "").strip().lower()
+    if "롱폼" in row or sub in ("short_long", "숏폼 + 롱폼", "숏폼+롱폼", "롱폼"):
+        return "롱폼"
+    return "숏폼"
+
+
 def _track_category_name(track_name: str) -> str:
     """
     트랙 카테고리명. 운영 디스코드 서버의 기존 카테고리 형식 (`=====세일즈 실전 트랙=====`)
@@ -125,6 +139,10 @@ def _persist_role_resource(
 
     if role_kind == "track":
         roles_bucket["track"] = payload
+    elif role_kind == "short":
+        roles_bucket["short"] = payload
+    elif role_kind == "long":
+        roles_bucket["long"] = payload
     elif role_kind == "leader":
         roles_bucket["leader"] = payload
     elif role_kind == "light":
@@ -498,6 +516,8 @@ class AdminCog(commands.Cog):
                 resolved.append(role)
 
         _append_role(roles_payload.get("track") or {})
+        _append_role(roles_payload.get("short") or {})
+        _append_role(roles_payload.get("long") or {})
         _append_role(roles_payload.get("leader") or {})
         _append_role(roles_payload.get("light") or {})
         for group_payload in (roles_payload.get("groups") or {}).values():
@@ -800,48 +820,69 @@ class AdminCog(commands.Cog):
             track_short = _track_short_name(track_name)
             reason = f"{reason_label} ({cohort_display})"
 
-            # 트랙당 단일 역할로 일원화 — 예) "앱개발-10기".
-            # 조장 역할(`...-조장`)·조별 역할(`...-N조`)은 더 이상 만들지 않고,
-            # 같은 트랙의 모든 멤버가 이 역할 하나만 받아 트랙 공용 채널 전체에 접근한다.
-            track_role_name = f"{track_short}-{clean_cohort}기"
-            track_role, created = await self._ensure_role(guild, track_role_name, reason)
-            if created:
-                summary["roles_created"] += 1
-            _persist_role_resource(runtime_updates, track_name, track_short, "track", track_role)
+            # 역할 — 일반 트랙은 단일 역할(예: '앱개발-10기').
+            # 크리에이터는 숏폼/롱폼 2개로 분리: 숏폼만→숏폼 역할, 숏폼+롱폼→롱폼 역할.
+            # (조장/조별 역할은 만들지 않음)
+            creator_roles = None
+            if track_short == "크리에이터":
+                short_role, created = await self._ensure_role(guild, f"{track_short}-{clean_cohort}기-숏폼", reason)
+                if created:
+                    summary["roles_created"] += 1
+                long_role, created = await self._ensure_role(guild, f"{track_short}-{clean_cohort}기-롱폼", reason)
+                if created:
+                    summary["roles_created"] += 1
+                _persist_role_resource(runtime_updates, track_name, track_short, "short", short_role)
+                _persist_role_resource(runtime_updates, track_name, track_short, "long", long_role)
+                creator_roles = (short_role, long_role)
+                track_role = long_role or short_role  # 채널 가드/대표용
+            else:
+                track_role_name = f"{track_short}-{clean_cohort}기"
+                track_role, created = await self._ensure_role(guild, track_role_name, reason)
+                if created:
+                    summary["roles_created"] += 1
+                _persist_role_resource(runtime_updates, track_name, track_short, "track", track_role)
 
-            if track_role:
-                for group_data in groups:
-                    for member_data in group_data.get("members", []):
-                        if self._should_skip_mock_member_sync(member_data):
-                            summary["mock_members_skipped"] += 1
-                            logger.info(
-                                "[Role] Skipping mock preview member: %s (%s)",
-                                member_data.get("name", "?"),
-                                member_data.get("handle") or member_data.get("discordId") or "?",
-                            )
-                            continue
-
-                        member_identifier = (
-                            member_data.get("discordId")
-                            or member_data.get("discord_id")
-                            or member_data.get("userId")
-                            or member_data.get("user_id")
-                            or member_data.get("handle")
-                            or member_data.get("name")
+            for group_data in groups:
+                for member_data in group_data.get("members", []):
+                    if self._should_skip_mock_member_sync(member_data):
+                        summary["mock_members_skipped"] += 1
+                        logger.info(
+                            "[Role] Skipping mock preview member: %s (%s)",
+                            member_data.get("name", "?"),
+                            member_data.get("handle") or member_data.get("discordId") or "?",
                         )
-                        discord_member = await self._resolve_discord_member(guild, str(member_identifier or ""))
-                        if not discord_member:
-                            logger.warning(f"[Role] Member not found: {member_data.get('name', '?')} ({member_identifier})")
-                            summary["role_failures"] += 1
-                            summary["member_lookup_failures"] += 1
-                            continue
+                        continue
 
-                        try:
-                            await discord_member.add_roles(track_role, reason=reason)
-                            summary["roles_assigned"] += 1
-                        except Exception as e:
-                            logger.warning(f"[Role] Failed for {member_data.get('name', '?')}: {e}")
-                            summary["role_failures"] += 1
+                    member_identifier = (
+                        member_data.get("discordId")
+                        or member_data.get("discord_id")
+                        or member_data.get("userId")
+                        or member_data.get("user_id")
+                        or member_data.get("handle")
+                        or member_data.get("name")
+                    )
+                    discord_member = await self._resolve_discord_member(guild, str(member_identifier or ""))
+                    if not discord_member:
+                        logger.warning(f"[Role] Member not found: {member_data.get('name', '?')} ({member_identifier})")
+                        summary["role_failures"] += 1
+                        summary["member_lookup_failures"] += 1
+                        continue
+
+                    # 크리에이터: 멤버의 숏폼/롱폼 선택에 따라 역할 부여.
+                    if creator_roles:
+                        sub = _creator_member_subform(member_data)
+                        role_to_add = creator_roles[1] if (sub == "롱폼" and creator_roles[1]) else creator_roles[0]
+                    else:
+                        role_to_add = track_role
+                    if not role_to_add:
+                        continue
+
+                    try:
+                        await discord_member.add_roles(role_to_add, reason=reason)
+                        summary["roles_assigned"] += 1
+                    except Exception as e:
+                        logger.warning(f"[Role] Failed for {member_data.get('name', '?')}: {e}")
+                        summary["role_failures"] += 1
 
             if not include_channels:
                 continue
@@ -857,9 +898,15 @@ class AdminCog(commands.Cog):
             if not category or not track_role:
                 continue
 
-            # 트랙 공용 채널 — 모두 단일 트랙 역할(track_role)만 view 가능.
-            # 공지는 읽기 전용, 나머지 텍스트 채널은 읽기/쓰기, 라운지는 음성.
-            allowed_roles = [track_role]
+            # 채널 접근 역할 — 일반 트랙은 단일 역할.
+            # 크리에이터는 숏폼+롱폼 역할 모두 공용 채널 접근, 단 롱폼-과제-인증은 롱폼 역할만.
+            # (공지는 읽기 전용, 나머지 텍스트는 읽기/쓰기, 라운지는 음성)
+            if creator_roles:
+                allowed_roles = [r for r in creator_roles if r]
+                creator_long_roles = [r for r in (creator_roles[1],) if r]
+            else:
+                allowed_roles = [track_role]
+                creator_long_roles = []
 
             announcement_name = f"{track_short}-{clean_cohort}기-공지"
             announcement_channel, created = await self._ensure_text_channel(
@@ -876,24 +923,26 @@ class AdminCog(commands.Cog):
 
             # 과제-인증 — 운영 서버 형식: '{prefix}-{cohort}기-과제-인증'.
             # 크리에이터 트랙만 숏폼/롱폼 두 채널로 분리.
+            #   - 숏폼-과제-인증: 숏폼+롱폼 역할 모두 (롱폼도 숏폼 과제 제출)
+            #   - 롱폼-과제-인증: 롱폼 역할만 (숏폼만 신청자는 초대 X)
             if track_short == "크리에이터":
                 assignment_specs = [
-                    (f"{track_short}-{clean_cohort}기-숏폼-과제-인증", "숏폼 과제 인증"),
-                    (f"{track_short}-{clean_cohort}기-롱폼-과제-인증", "롱폼 과제 인증"),
+                    (f"{track_short}-{clean_cohort}기-숏폼-과제-인증", "숏폼 과제 인증", allowed_roles),
+                    (f"{track_short}-{clean_cohort}기-롱폼-과제-인증", "롱폼 과제 인증", creator_long_roles),
                 ]
             else:
                 assignment_specs = [
-                    (f"{track_short}-{clean_cohort}기-과제-인증", "과제 인증"),
+                    (f"{track_short}-{clean_cohort}기-과제-인증", "과제 인증", allowed_roles),
                 ]
 
             assignment_channel = None
-            for assign_name, assign_label in assignment_specs:
+            for assign_name, assign_label, assign_roles in assignment_specs:
                 a_channel, created = await self._ensure_text_channel(
                     guild,
                     category,
                     assign_name,
                     reason,
-                    overwrites=self._build_channel_overwrites(guild, allowed_roles, read_only=False),
+                    overwrites=self._build_channel_overwrites(guild, assign_roles, read_only=False),
                     topic=f"{cohort_display} {track_name} {assign_label} 채널",
                 )
                 if created:
@@ -1132,6 +1181,7 @@ class AdminCog(commands.Cog):
                         ).strip(),
                         "handle": str(member.get("handle") or "").strip(),
                         "rowTrackName": str(member.get("rowTrackName") or "").strip(),
+                        "creatorSub": str(member.get("creatorSub") or "").strip(),
                         "isLeader": bool(member.get("leader") or member.get("isLeader")),
                     })
 
