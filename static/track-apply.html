@@ -1718,6 +1718,7 @@
           <!-- 🚫 조 배정 기능 숨김 (2026 개편 — 조 안 나눔). 되살리려면 hidden 제거 + GROUP_ASSIGNMENT_ENABLED=true -->
           <button type="button" class="btn-navy h-9 px-4 text-[13px] whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5" data-open-group-preview style="display:none">조 배정 <span aria-hidden="true">↗</span></button>
           <!-- ✅ 조 배정 대체: 노션 멤버→트랙 확정 + 디스코드 트랙별 역할/채널 일괄 반영 (조 안 나눔) -->
+          <button type="button" class="btn-ghost h-9 px-4 text-[13px] whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5" data-bulk-apply-notion title="디스코드는 건드리지 않고 노션에만 멤버→트랙 확정 반영 (조 안 나눔)">노션만 반영</button>
           <button type="button" class="btn-navy h-9 px-4 text-[13px] whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5" data-bulk-apply title="노션 멤버→트랙 확정 + 디스코드 트랙별 역할/채널 생성을 한 번에 반영 (조 안 나눔)">일괄 반영 <span aria-hidden="true">→</span></button>
         </div>
       </div>
@@ -6709,8 +6710,10 @@
       return { target: 'notion-test', noGroups: true, cohortLabel: GP_TEST_COHORT_LABEL, members, tracks };
     }
 
-    async function runBulkApply() {
+    async function runBulkApply(opts) {
+      const notionOnly = !!(opts && opts.notionOnly);  // true → 디스코드 건너뜀 (노션만)
       const payload = buildBulkApplyPayload();
+      if (notionOnly) payload.notionOnly = true;
       const totalMembers = payload.members.length;
       const totalTracks = payload.tracks.length;
       if (!totalTracks) {
@@ -6718,15 +6721,17 @@
         return;
       }
       const ok = confirm(
-        '노션·디스코드에 일괄 반영합니다 (조 안 나눔).\n\n' +
+        (notionOnly
+          ? '노션에만 반영합니다 (디스코드는 건드리지 않음, 조 안 나눔).\n\n'
+          : '노션·디스코드에 일괄 반영합니다 (조 안 나눔).\n\n') +
         `· 트랙 ${totalTracks}개 · 멤버 ${totalMembers}명\n` +
         '· Notion : 멤버별 트랙 확정 (조 DB 생성 안 함)\n' +
-        '· Discord: 트랙별 역할/채널 생성·부여\n\n' +
-        '테스트 환경에 실제 반영됩니다. 진행할까요?'
+        (notionOnly ? '· Discord: 건너뜀\n' : '· Discord: 트랙별 역할/채널 생성·부여\n') +
+        '\n테스트 환경에 실제 반영됩니다. 진행할까요?'
       );
       if (!ok) return;
 
-      const btn = document.querySelector('[data-bulk-apply]');
+      const btn = document.querySelector(notionOnly ? '[data-bulk-apply-notion]' : '[data-bulk-apply]');
       const orig = btn ? btn.textContent : null;
       if (btn) { btn.disabled = true; btn.textContent = '반영 중…'; }
       try {
@@ -6758,7 +6763,9 @@
             const d = s.discord || {};
             const memberCount = (s.members_updated || 0) + (s.members_created || 0);
             const trackCount = (s.tracks_touched || []).length || totalTracks;
-            showToast(`✅ 일괄 반영 완료 — 멤버 ${memberCount}명 · 트랙 ${trackCount}개 · 역할 ${d.roles_assigned || 0}건 부여`, 5000);
+            showToast(notionOnly
+              ? `✅ 노션 반영 완료 — 멤버 ${memberCount}명 · 트랙 ${trackCount}개 (디스코드 건너뜀)`
+              : `✅ 일괄 반영 완료 — 멤버 ${memberCount}명 · 트랙 ${trackCount}개 · 역할 ${d.roles_assigned || 0}건 부여`, 5000);
             const missing = Array.isArray(s.members_missing) ? s.members_missing.length : 0;
             if (missing) {
               showToast(`⚠️ 마스터 DB 미매칭 ${missing}명은 반영에서 제외됨 (신규 자동추가는 조 배정 메뉴 필요)`, 6000);
@@ -6770,7 +6777,7 @@
       } catch (e) {
         alert(`일괄 반영 실패: ${e?.message || e}`);
       } finally {
-        if (btn) { btn.disabled = false; btn.textContent = orig || '일괄 반영 →'; }
+        if (btn) { btn.disabled = false; btn.textContent = orig || (notionOnly ? '노션만 반영' : '일괄 반영 →'); }
       }
     }
 
@@ -7288,6 +7295,12 @@
       if (bulkApplyBtn) {
         e.preventDefault();
         runBulkApply();
+        return;
+      }
+      const bulkApplyNotionBtn = e.target.closest('[data-bulk-apply-notion]');
+      if (bulkApplyNotionBtn) {
+        e.preventDefault();
+        runBulkApply({ notionOnly: true });
         return;
       }
       const backGpBtn = e.target.closest('[data-back-from-group-preview]');
