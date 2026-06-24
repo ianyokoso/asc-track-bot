@@ -123,7 +123,9 @@ def _persist_role_resource(
     if group_number is not None:
         payload["groupNumber"] = str(group_number)
 
-    if role_kind == "leader":
+    if role_kind == "track":
+        roles_bucket["track"] = payload
+    elif role_kind == "leader":
         roles_bucket["leader"] = payload
     elif role_kind == "light":
         roles_bucket["light"] = payload
@@ -182,6 +184,8 @@ def _empty_discord_sync_summary() -> Dict[str, int]:
         "categories_created": 0,
         "announcement_channels_created": 0,
         "assignment_channels_created": 0,
+        "mentoring_channels_created": 0,
+        "networking_channels_created": 0,
         "group_channels_created": 0,
         "leader_channels_created": 0,
         "voice_channels_created": 0,
@@ -483,6 +487,7 @@ class AdminCog(commands.Cog):
             if role and role not in resolved:
                 resolved.append(role)
 
+        _append_role(roles_payload.get("track") or {})
         _append_role(roles_payload.get("leader") or {})
         _append_role(roles_payload.get("light") or {})
         for group_payload in (roles_payload.get("groups") or {}).values():
@@ -666,6 +671,8 @@ class AdminCog(commands.Cog):
             "categories_created": 0,
             "announcement_channels_created": 0,
             "assignment_channels_created": 0,
+            "mentoring_channels_created": 0,
+            "networking_channels_created": 0,
             "group_channels_created": 0,
             "leader_channels_created": 0,
             "voice_channels_created": 0,
@@ -680,71 +687,49 @@ class AdminCog(commands.Cog):
             summary["tracks_processed"] += 1
             track_short = _track_short_name(track_name)
             reason = f"{reason_label} ({cohort_display})"
-            leader_role_name = f"{track_short}-{clean_cohort}기-조장"
 
-            leader_role, created = await self._ensure_role(guild, leader_role_name, reason)
+            # 트랙당 단일 역할로 일원화 — 예) "앱개발-10기".
+            # 조장 역할(`...-조장`)·조별 역할(`...-N조`)은 더 이상 만들지 않고,
+            # 같은 트랙의 모든 멤버가 이 역할 하나만 받아 트랙 공용 채널 전체에 접근한다.
+            track_role_name = f"{track_short}-{clean_cohort}기"
+            track_role, created = await self._ensure_role(guild, track_role_name, reason)
             if created:
                 summary["roles_created"] += 1
-            _persist_role_resource(runtime_updates, track_name, track_short, "leader", leader_role)
+            _persist_role_resource(runtime_updates, track_name, track_short, "track", track_role)
 
-            track_group_roles: Dict[str, Optional[discord.Role]] = {}
-            for fallback_index, group_data in enumerate(groups, start=1):
-                group_number = self._extract_group_number(
-                    group_data.get("groupNumber") or group_data.get("groupName") or group_data.get("name"),
-                    fallback_index,
-                )
-                group_role_name = f"{track_short}-{clean_cohort}기-{group_number}조"
-                group_role, created = await self._ensure_role(guild, group_role_name, reason)
-                if created:
-                    summary["roles_created"] += 1
-                track_group_roles[str(group_number)] = group_role
-                _persist_role_resource(
-                    runtime_updates,
-                    track_name,
-                    track_short,
-                    "group",
-                    group_role,
-                    group_number=group_number,
-                )
+            if track_role:
+                for group_data in groups:
+                    for member_data in group_data.get("members", []):
+                        if self._should_skip_mock_member_sync(member_data):
+                            summary["mock_members_skipped"] += 1
+                            logger.info(
+                                "[Role] Skipping mock preview member: %s (%s)",
+                                member_data.get("name", "?"),
+                                member_data.get("handle") or member_data.get("discordId") or "?",
+                            )
+                            continue
 
-                for member_data in group_data.get("members", []):
-                    if self._should_skip_mock_member_sync(member_data):
-                        summary["mock_members_skipped"] += 1
-                        logger.info(
-                            "[Role] Skipping mock preview member: %s (%s)",
-                            member_data.get("name", "?"),
-                            member_data.get("handle") or member_data.get("discordId") or "?",
+                        member_identifier = (
+                            member_data.get("discordId")
+                            or member_data.get("discord_id")
+                            or member_data.get("userId")
+                            or member_data.get("user_id")
+                            or member_data.get("handle")
+                            or member_data.get("name")
                         )
-                        continue
+                        discord_member = await self._resolve_discord_member(guild, str(member_identifier or ""))
+                        if not discord_member:
+                            logger.warning(f"[Role] Member not found: {member_data.get('name', '?')} ({member_identifier})")
+                            summary["role_failures"] += 1
+                            summary["member_lookup_failures"] += 1
+                            continue
 
-                    member_identifier = (
-                        member_data.get("discordId")
-                        or member_data.get("discord_id")
-                        or member_data.get("userId")
-                        or member_data.get("user_id")
-                        or member_data.get("handle")
-                        or member_data.get("name")
-                    )
-                    discord_member = await self._resolve_discord_member(guild, str(member_identifier or ""))
-                    if not discord_member:
-                        logger.warning(f"[Role] Member not found: {member_data.get('name', '?')} ({member_identifier})")
-                        summary["role_failures"] += 1
-                        summary["member_lookup_failures"] += 1
-                        continue
-
-                    roles_to_add = [role for role in [group_role] if role]
-                    if member_data.get("isLeader") and leader_role:
-                        roles_to_add.append(leader_role)
-
-                    if not roles_to_add:
-                        continue
-
-                    try:
-                        await discord_member.add_roles(*roles_to_add, reason=reason)
-                        summary["roles_assigned"] += 1
-                    except Exception as e:
-                        logger.warning(f"[Role] Failed for {member_data.get('name', '?')}: {e}")
-                        summary["role_failures"] += 1
+                        try:
+                            await discord_member.add_roles(track_role, reason=reason)
+                            summary["roles_assigned"] += 1
+                        except Exception as e:
+                            logger.warning(f"[Role] Failed for {member_data.get('name', '?')}: {e}")
+                            summary["role_failures"] += 1
 
             if not include_channels:
                 continue
@@ -757,9 +742,12 @@ class AdminCog(commands.Cog):
                 summary["categories_created"] += 1
             _persist_channel_resource(runtime_updates, track_name, track_short, "category", category)
 
-            shared_roles = [role for role in track_group_roles.values() if role]
-            if not category or not shared_roles:
+            if not category or not track_role:
                 continue
+
+            # 트랙 공용 채널 — 모두 단일 트랙 역할(track_role)만 view 가능.
+            # 공지는 읽기 전용, 나머지 텍스트 채널은 읽기/쓰기, 라운지는 음성.
+            allowed_roles = [track_role]
 
             announcement_name = f"{track_short}-{clean_cohort}기-공지"
             announcement_channel, created = await self._ensure_text_channel(
@@ -767,15 +755,15 @@ class AdminCog(commands.Cog):
                 category,
                 announcement_name,
                 reason,
-                overwrites=self._build_channel_overwrites(guild, shared_roles, read_only=True),
+                overwrites=self._build_channel_overwrites(guild, allowed_roles, read_only=True),
                 topic=f"{cohort_display} {track_name} 공지 채널",
             )
             if created:
                 summary["announcement_channels_created"] += 1
             _persist_channel_resource(runtime_updates, track_name, track_short, "announcement", announcement_channel)
 
-            # 과제 채널 — 운영 서버 형식: '{prefix}-{cohort}기-과제-인증'.
-            # 크리에이터 트랙은 숏폼/롱폼 두 채널로 분리.
+            # 과제-인증 — 운영 서버 형식: '{prefix}-{cohort}기-과제-인증'.
+            # 크리에이터 트랙만 숏폼/롱폼 두 채널로 분리.
             if track_short == "크리에이터":
                 assignment_specs = [
                     (f"{track_short}-{clean_cohort}기-숏폼-과제-인증", "숏폼 과제 인증"),
@@ -793,7 +781,7 @@ class AdminCog(commands.Cog):
                     category,
                     assign_name,
                     reason,
-                    overwrites=self._build_channel_overwrites(guild, shared_roles, read_only=False),
+                    overwrites=self._build_channel_overwrites(guild, allowed_roles, read_only=False),
                     topic=f"{cohort_display} {track_name} {assign_label} 채널",
                 )
                 if created:
@@ -807,72 +795,48 @@ class AdminCog(commands.Cog):
                 for config_key in _config_channel_keys_for_track(track_name):
                     assignment_channel_updates[config_key] = str(assignment_channel.id)
 
-            # 조장 전용 텍스트 채널 — 조장 역할만 view 가능
-            if leader_role:
-                leader_channel_name = f"{track_short}-{clean_cohort}기-조장"
-                leader_channel, created = await self._ensure_text_channel(
-                    guild,
-                    category,
-                    leader_channel_name,
-                    reason,
-                    overwrites=self._build_channel_overwrites(guild, [leader_role], read_only=False),
-                    topic=f"{cohort_display} {track_name} 조장 전용 채널",
-                )
-                if created:
-                    summary["leader_channels_created"] += 1
-                _persist_channel_resource(runtime_updates, track_name, track_short, "leader", leader_channel)
+            # 과제-멘토링
+            mentoring_name = f"{track_short}-{clean_cohort}기-과제-멘토링"
+            mentoring_channel, created = await self._ensure_text_channel(
+                guild,
+                category,
+                mentoring_name,
+                reason,
+                overwrites=self._build_channel_overwrites(guild, allowed_roles, read_only=False),
+                topic=f"{cohort_display} {track_name} 과제 멘토링 채널",
+            )
+            if created:
+                summary["mentoring_channels_created"] += 1
+            _persist_channel_resource(runtime_updates, track_name, track_short, "mentoring", mentoring_channel)
 
-            for fallback_index, group_data in enumerate(groups, start=1):
-                group_number = self._extract_group_number(
-                    group_data.get("groupNumber") or group_data.get("groupName") or group_data.get("name"),
-                    fallback_index,
-                )
-                group_role = track_group_roles.get(str(group_number))
-                if not group_role:
-                    continue
+            # 네트워킹
+            networking_name = f"{track_short}-{clean_cohort}기-네트워킹"
+            networking_channel, created = await self._ensure_text_channel(
+                guild,
+                category,
+                networking_name,
+                reason,
+                overwrites=self._build_channel_overwrites(guild, allowed_roles, read_only=False),
+                topic=f"{cohort_display} {track_name} 네트워킹 채널",
+            )
+            if created:
+                summary["networking_channels_created"] += 1
+            _persist_channel_resource(runtime_updates, track_name, track_short, "networking", networking_channel)
 
-                group_channel_name = f"{track_short}-{clean_cohort}기-{group_number}조"
-                group_channel, created = await self._ensure_text_channel(
-                    guild,
-                    category,
-                    group_channel_name,
-                    reason,
-                    overwrites=self._build_channel_overwrites(guild, [group_role], read_only=False),
-                    topic=f"{cohort_display} {track_name} {group_number}조 전용 채널",
-                )
-                if created:
-                    summary["group_channels_created"] += 1
-                _persist_channel_resource(
-                    runtime_updates,
-                    track_name,
-                    track_short,
-                    "group",
-                    group_channel,
-                    group_number=group_number,
-                )
-
-                # 조별 화상미팅 (음성 채널) — 같은 조 역할만 입장 가능.
-                # 운영 서버 '비공개 채널' 토글과 동일하게 view + connect 모두 부여,
-                # 비디오/Go Live(stream) 권한도 명시 부여해야 화상미팅 정상 동작.
-                # (운영 서버 패턴: 그룹 역할 1개만 추가, 운영자 등 Administrator 역할은 자동 포함)
-                voice_channel_name = f"{track_short}-{clean_cohort}기-{group_number}조-화상미팅"
-                voice_channel, created = await self._ensure_voice_channel(
-                    guild,
-                    category,
-                    voice_channel_name,
-                    reason,
-                    overwrites=self._build_voice_channel_overwrites(guild, [group_role]),
-                )
-                if created:
-                    summary["voice_channels_created"] += 1
-                _persist_channel_resource(
-                    runtime_updates,
-                    track_name,
-                    track_short,
-                    "voice",
-                    voice_channel,
-                    group_number=group_number,
-                )
+            # 라운지 (음성 채널) — 트랙 역할 보유자만 입장.
+            # 운영 서버 '비공개 채널' 토글과 동일하게 view + connect 모두 부여,
+            # 비디오/Go Live(stream) 권한도 명시 부여해야 화상 모임이 정상 동작.
+            lounge_name = f"{track_short}-{clean_cohort}기-라운지"
+            lounge_channel, created = await self._ensure_voice_channel(
+                guild,
+                category,
+                lounge_name,
+                reason,
+                overwrites=self._build_voice_channel_overwrites(guild, allowed_roles),
+            )
+            if created:
+                summary["voice_channels_created"] += 1
+            _persist_channel_resource(runtime_updates, track_name, track_short, "lounge", lounge_channel)
 
         if assignment_channel_updates:
             def _mutate(config: Dict[str, Any]) -> None:

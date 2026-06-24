@@ -214,10 +214,15 @@ class IPCCog(commands.Cog):
             result = await admin_cog.sync_discord_group_preview(cohort, tracks)
             cmd['result'] = result
             logger.info(
-                "[IPC] group_preview_sync_discord completed. tracks=%s roles_created=%s group_channels=%s",
+                "[IPC] group_preview_sync_discord completed. tracks=%s roles_created=%s roles_assigned=%s announcement=%s assignment=%s mentoring=%s networking=%s lounge=%s",
                 result.get('tracks_processed', 0),
                 result.get('roles_created', 0),
-                result.get('group_channels_created', 0),
+                result.get('roles_assigned', 0),
+                result.get('announcement_channels_created', 0),
+                result.get('assignment_channels_created', 0),
+                result.get('mentoring_channels_created', 0),
+                result.get('networking_channels_created', 0),
+                result.get('voice_channels_created', 0),
             )
 
         elif cmd_type == 'get_discord_group_state':

@@ -6775,7 +6775,9 @@
           (discord.categories_created || 0) +
           (discord.announcement_channels_created || 0) +
           (discord.assignment_channels_created || 0) +
-          (discord.group_channels_created || 0);
+          (discord.mentoring_channels_created || 0) +
+          (discord.networking_channels_created || 0) +
+          (discord.voice_channels_created || 0);
 
         gpUpdateProgressStep('notion', 'done', `${summary.group_databases_created || sum.totalGroups}개 조 DB`);
         gpUpdateProgressStep('roles', 'done', `${discord.roles_created || 0}개 생성 · ${discord.roles_assigned || 0}명 부여`);
@@ -6885,8 +6887,9 @@
             Discord는 <strong class="text-ink font-semibold">${tracksProcessed}</strong>개 트랙에 대해 동기화되었습니다.
             새로 생성된 리소스는 카테고리 <strong class="text-ink font-semibold">${discord.categories_created || 0}</strong>개,
             공지 채널 <strong class="text-ink font-semibold">${discord.announcement_channels_created || 0}</strong>개,
-            과제 채널 <strong class="text-ink font-semibold">${discord.assignment_channels_created || 0}</strong>개,
-            조 채널 <strong class="text-ink font-semibold">${discord.group_channels_created || 0}</strong>개,
+            과제(인증·멘토링) 채널 <strong class="text-ink font-semibold">${(discord.assignment_channels_created || 0) + (discord.mentoring_channels_created || 0)}</strong>개,
+            네트워킹 채널 <strong class="text-ink font-semibold">${discord.networking_channels_created || 0}</strong>개,
+            라운지(음성) <strong class="text-ink font-semibold">${discord.voice_channels_created || 0}</strong>개,
             역할 <strong class="text-ink font-semibold">${discord.roles_created || 0}</strong>개입니다.
             실제 서버 멤버에게는 <strong class="text-ink font-semibold">${discord.roles_assigned || 0}</strong>건 반영되었고,
             목업 멤버 <strong class="text-ink font-semibold">${mockSkipped}</strong>명은 시뮬레이션용으로 건너뛰었습니다.
