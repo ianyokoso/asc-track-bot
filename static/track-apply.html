@@ -2554,9 +2554,12 @@
     }
 
     function _evaluateViewerStateFromConfig() {
-      // TODAY 결정 (override 우선, 없으면 KST 오늘)
+      // TODAY 결정 — 🆕 2026-06-24:
+      //   admin 만 todayOverride 사용 (closed/upcoming 미리보기 같은 demo 의도 보존).
+      //   학생은 항상 real KST today — admin 이 옛 todayOverride 박아둔 채로 두어도
+      //   학생이 'closed' 화면으로 잘못 빠지지 않게.
       let todayDate = null;
-      if (TODAY_OVERRIDE_DATE && /^\d{4}-\d{2}-\d{2}$/.test(TODAY_OVERRIDE_DATE)) {
+      if (IS_VIEWER_ADMIN && TODAY_OVERRIDE_DATE && /^\d{4}-\d{2}-\d{2}$/.test(TODAY_OVERRIDE_DATE)) {
         todayDate = _parseISODate(TODAY_OVERRIDE_DATE);
       } else {
         const now = new Date();
