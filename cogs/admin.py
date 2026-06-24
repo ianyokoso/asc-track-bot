@@ -25,7 +25,7 @@ _TRACK_DISCORD_PREFIX = {
     "빌더 심화 트랙":                "빌더-심화",
     "빌더 라이트 트랙 (심화)":       "빌더-심화",
     "세일즈 실전 트랙":              "세일즈-실전",
-    "AI 에이전트 트랙":              "AI에이전트-실전",
+    "AI 에이전트 트랙":              "AI에이전트",
     "앱 개발 트랙":                  "앱개발",
     "나 탐구 트랙":                  "나탐구",
 }
@@ -380,7 +380,13 @@ class AdminCog(commands.Cog):
         overwrites: Dict[Any, discord.PermissionOverwrite],
         topic: Optional[str] = None,
     ) -> Tuple[Optional[discord.TextChannel], bool]:
-        channel = discord.utils.get(guild.text_channels, name=channel_name)
+        # Discord 는 텍스트 채널명을 소문자로 정규화해 저장한다 (예: 'AI에이전트' → 'ai에이전트').
+        # 대소문자를 무시하고 매칭해야 이미 있는 채널을 못 찾아 중복 생성하는 일을 막는다.
+        _target = (channel_name or "").strip().lower()
+        channel = next(
+            (c for c in guild.text_channels if (c.name or "").strip().lower() == _target),
+            None,
+        )
         if channel:
             try:
                 await channel.edit(category=category, overwrites=overwrites, topic=topic, reason=reason)
@@ -411,7 +417,11 @@ class AdminCog(commands.Cog):
         *,
         overwrites: Dict[Any, discord.PermissionOverwrite],
     ) -> Tuple[Optional[discord.VoiceChannel], bool]:
-        channel = discord.utils.get(guild.voice_channels, name=channel_name)
+        _target = (channel_name or "").strip().lower()
+        channel = next(
+            (c for c in guild.voice_channels if (c.name or "").strip().lower() == _target),
+            None,
+        )
         if channel:
             try:
                 await channel.edit(category=category, overwrites=overwrites, reason=reason)
@@ -1398,6 +1408,7 @@ class AdminCog(commands.Cog):
             "빌더-라이트",
             "크리에이터-라이트",
             "AI에이전트",
+            "AI에이전트-실전",   # 구 prefix — 옛 '-실전' 채널/역할 정리용
         ]
         track_short_prefixes = sorted(
             set(list(_TRACK_DISCORD_PREFIX.values()) + _LEGACY_TRACK_PREFIXES),
