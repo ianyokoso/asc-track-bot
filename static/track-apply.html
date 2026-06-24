@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <!-- build: 2026-05-25-tracknamealias — JS 캐시 강제 무효화 -->
+  <!-- build: 2026-06-24-autoroutev3 — JS 캐시 강제 무효화 -->
   <title>ASC 트랙 신청</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -2550,16 +2550,6 @@
         }
       }
 
-      // 🆕 2026-06-24: OAuth 직후 학생 자동 view-tracks 진입은 cohort-config 적용 직후
-      //   (viewer transition 끝난 다음) 에 한 번만 호출. init 단계 setTimeout 으로는
-      //   APPLICATION_END_DATE default(5/24) → 'closed' 평가로 view-closed 가 먼저 떴다가
-      //   cohort-config 도착 후 transition 이 막혀 그대로 머무는 케이스 차단.
-      if (typeof _autoRouteToTracksPending !== 'undefined' && _autoRouteToTracksPending) {
-        _autoRouteToTracksPending = false;
-        try {
-          if (typeof showTracksView === 'function') showTracksView();
-        } catch (_) { /* showTracksView 실패해도 cohort-config 평가 결과 view 유지 */ }
-      }
     }
 
     function _evaluateViewerStateFromConfig() {
@@ -3119,32 +3109,19 @@
     } catch (e) { /* noop */ }
     applyState(_initialStateResolved);
 
-    // 🆕 2026-06-24: OAuth 로그인 직후 학생(IS_VIEWER_ADMIN=false) 은 자동으로
-    //   '트랙 미리보기' (view-tracks) 페이지로 이동. 재참여자가 커리큘럼을 빠르게
-    //   훑고 신청서로 진입할 수 있도록.
+    // 🆕 2026-06-24 (v3): OAuth 로그인 직후 학생(IS_VIEWER_ADMIN=false) 은 자동으로
+    //   '트랙 미리보기' (view-tracks) 페이지로 즉시 이동.
     //
-    //   동작: _autoRouteToTracksPending=true 박아두고, cohort-config 도착 후
-    //   applyCohortConfigFromServer 의 viewer transition 끝난 다음에 showTracksView() 호출.
-    //   이렇게 해야 init 단계 default endDate(5/24) 로 'closed' 평가된 view 가 사라지고
-    //   cohort-config 적용된 정확한 view 위에서 view-tracks 로 전환됨.
-    //   admin / group-preview 같은 의도된 진입은 영향 X.
+    //   전략 — applyState 직후 동기적으로 showTracksView() 호출.
+    //   cohort-config 도착 안 기다림 (PREOPEN_TRACKS 정적 데이터로 즉시 렌더).
+    //   cohort-config 가 늦게 도착해도 activeKey='tracks' 라 viewer transition 자동 skip.
+    //
+    //   admin / group-preview 같은 의도된 진입은 영향 X (initial state 평가에서 'admin' 우선).
     //   첫 진입 후 URL discord_auth=success 제거 → 새로고침 시 재라우팅 안 됨.
-    //
-    //   fallback: cohort-config 가 5초 안에 안 올 경우 강제 호출.
-    let _autoRouteToTracksPending = false;
     try {
       const justLoggedIn = (mockupParams.get('discord_auth') || '').trim() === 'success';
-      if (justLoggedIn && !IS_VIEWER_ADMIN) {
-        _autoRouteToTracksPending = true;
-        // safety fallback — cohort-config 가 5초 안에 안 올 경우 그냥 호출.
-        setTimeout(() => {
-          if (_autoRouteToTracksPending) {
-            _autoRouteToTracksPending = false;
-            try {
-              if (typeof showTracksView === 'function') showTracksView();
-            } catch (_) { /* noop */ }
-          }
-        }, 5000);
+      if (justLoggedIn && !IS_VIEWER_ADMIN && typeof showTracksView === 'function') {
+        showTracksView();
       }
       if (justLoggedIn) {
         try {
@@ -3968,7 +3945,7 @@
     // 이전 footgun: localStorage 의 stale 또는 random chunking 결과로 commit 하면
     //   노션 inline DB 가 random 결과로 덮어써짐. 진입 시점에 노션 상태로 초기화.
     // build tag — JS 캐시 부스트 확인용 (브라우저 콘솔에서 GP_BUILD_TAG 으로 검사 가능).
-    window.GP_BUILD_TAG = '2026-05-25-tracknamealias';
+    window.GP_BUILD_TAG = '2026-06-24-autoroutev3';
     console.log('[group-preview] build tag:', window.GP_BUILD_TAG);
 
     let _gpNotionSyncedThisSession = false;
