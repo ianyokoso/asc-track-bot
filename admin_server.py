@@ -214,6 +214,13 @@ GROUP_PREVIEW_DEFAULT_TRACK_APPLICATION_TEST_DB_ID = os.getenv(
     '3566400e926880e78335fcaba4914196',
 )
 GROUP_PREVIEW_TEST_NOTION_TOKEN = os.getenv('GROUP_PREVIEW_TEST_NOTION_TOKEN', '').strip()
+
+# 🚫 조 배정(조 나누기) 기능 잠금 — 2026 개편으로 조를 나누지 않고 기수를 진행함.
+#   - 기본값 OFF. 조 배정 commit 라우트가 423(Locked) 으로 거부된다 (UI 진입점도 별도 숨김).
+#   - 나중에 다시 조를 나누려면 서버 env 에 GROUP_ASSIGNMENT_ENABLED=1 (또는 true/yes/on) 로 실행.
+#   - 백엔드 로직(_commit_group_preview_to_notion 등)은 그대로 보존 → 플래그만 켜면 복구.
+GROUP_ASSIGNMENT_ENABLED = (os.getenv('GROUP_ASSIGNMENT_ENABLED', '') or '').strip().lower() in ('1', 'true', 'yes', 'on')
+
 DISCORD_API_BASE = 'https://discord.com/api/v10'
 _DISCORD_CLIENT_ID_CACHE = {
     "resolved": False,
@@ -4913,6 +4920,15 @@ def commit_group_preview_mockup():
     Vercel 프록시 30s timeout 회피 + 진행상황 폴링 가능.
     클라이언트는 GET /api/mockups/group-preview/commit/status?jobId=X 로 폴링.
     """
+    # 🚫 조 배정 기능 잠금 가드 — 2026 개편으로 조 미배정 운영. UI 숨김 우회(직접 API 호출)도 차단.
+    #    되살리려면 서버 env GROUP_ASSIGNMENT_ENABLED=1 로 실행.
+    if not GROUP_ASSIGNMENT_ENABLED:
+        return jsonify({
+            "status": "error",
+            "message": "조 배정 기능이 비활성화되어 있습니다 (2026 개편 — 조 미배정 운영). "
+                       "다시 사용하려면 서버 env GROUP_ASSIGNMENT_ENABLED=1 로 실행하세요."
+        }), 423
+
     if not _is_admin_session():
         return jsonify({
             "status": "error",

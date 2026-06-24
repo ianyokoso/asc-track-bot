@@ -1715,7 +1715,8 @@
         <p class="text-eyebrow">신청자 목록</p>
         <div class="flex items-center gap-2">
           <input id="admin-search-input" type="text" placeholder="이름·Discord 검색" class="h-9 w-64 px-3 text-[13px]" autocomplete="off" />
-          <button type="button" class="btn-navy h-9 px-4 text-[13px] whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5" data-open-group-preview>조 배정 <span aria-hidden="true">↗</span></button>
+          <!-- 🚫 조 배정 기능 숨김 (2026 개편 — 조 안 나눔). 되살리려면 hidden 제거 + GROUP_ASSIGNMENT_ENABLED=true -->
+          <button type="button" class="btn-navy h-9 px-4 text-[13px] whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5" data-open-group-preview hidden>조 배정 <span aria-hidden="true">↗</span></button>
         </div>
       </div>
 
@@ -2224,7 +2225,10 @@
     let APPLICATION_CLOSED_LABEL = (mockupParams.get('applicationClosedLabel') || '2026-05-24(일) 23:59 KST 마감').trim();
     let APPLICATION_OPENS_LABEL = (mockupParams.get('applicationOpensLabel') || 'Opens 05.20 Wed').trim();
     let TODAY_OVERRIDE_DATE = (mockupParams.get('todayOverride') || '').trim();
-    const IS_GROUP_PREVIEW_DIRECT = window.location.hash === '#group-preview';
+    // 🚫 조 배정(조 나누기) 기능 숨김 — 2026 개편으로 조를 나누지 않음.
+    //    되살리려면 GROUP_ASSIGNMENT_ENABLED = true 로만 바꾸면 됨 (백엔드 로직은 그대로 유지).
+    const GROUP_ASSIGNMENT_ENABLED = false;
+    const IS_GROUP_PREVIEW_DIRECT = GROUP_ASSIGNMENT_ENABLED && window.location.hash === '#group-preview';
     // 🔧 Mockup admin preview 모드 폐기 (2026-05-08).
     //   - 직전: ?state=admin 이면 IS_ADMIN_MOCK=true → preview 배너 + devtools panel
     //     노출 + mock-only API 경로 활성화. 그러나 OAuth 콜백 시 next=/apply?state=admin
@@ -2949,8 +2953,9 @@
           <button type="button" class="btn-ghost" id="admin-fill-mock-random" title="현재 목업 멤버 풀은 그대로, 트랙·조장·sub-form 을 매번 다른 랜덤 분배로 셔플">🎲 랜덤 채우기</button>
           <button type="button" class="btn-ghost" id="admin-clear-mock" title="목업 멤버 전부 리스트에서 완전히 제거 (실 OAuth 사용자만 남김)">🧹 목업 지우기</button>
           <button type="button" class="btn-ghost text-bad" id="admin-full-reset" title="신청 데이터 초기화 (서버 캐시 + 브라우저). 이전 기수 Discord 트랙 채널은 봇 '!채널삭제 &lt;기수&gt;' 별도 실행 필요.">🗑️ 전체 초기화</button>
-          <button type="button" class="btn-ghost" id="admin-notion-only-resync" title="조 배정 결과를 Notion 에만 다시 push (디스코드 안 건드림). 매칭 실패한 신규 멤버는 마스터 DB 에 자동 추가.">🔁 Notion 재실행 (신규 자동 추가)</button>
-          <button type="button" class="btn-ghost" id="admin-load-from-notion" title="디스코드 길드의 현재 역할 할당 상태 (조 배정 결과) 를 가져와 화면에 반영. 노션 비어있어도 디스코드 실제 운영 상태로 복원 가능.">📥 디스코드 상태 불러오기</button>
+          <!-- 🚫 조 배정 기능 숨김 (2026 개편 — 조 안 나눔). 되살리려면 hidden 제거 -->
+          <button type="button" class="btn-ghost" id="admin-notion-only-resync" hidden title="조 배정 결과를 Notion 에만 다시 push (디스코드 안 건드림). 매칭 실패한 신규 멤버는 마스터 DB 에 자동 추가.">🔁 Notion 재실행 (신규 자동 추가)</button>
+          <button type="button" class="btn-ghost" id="admin-load-from-notion" hidden title="디스코드 길드의 현재 역할 할당 상태 (조 배정 결과) 를 가져와 화면에 반영. 노션 비어있어도 디스코드 실제 운영 상태로 복원 가능.">📥 디스코드 상태 불러오기</button>
           <button class="btn-ghost" id="admin-track-apply-sync">Full Sync</button>
           <button class="btn-navy" id="admin-track-apply-refresh">Refresh</button>`;
         requestAnimationFrame(() => {
@@ -7158,6 +7163,7 @@
       const openGpBtn = e.target.closest('[data-open-group-preview]');
       if (openGpBtn) {
         e.preventDefault();
+        if (!GROUP_ASSIGNMENT_ENABLED) return; // 조 배정 기능 숨김 — 진입 차단
         // 같은 창/iframe 내에서 view 전환. 기존 admin 뷰로 '돌아가기' 버튼으로 복귀.
         showGroupPreviewView();
         return;
