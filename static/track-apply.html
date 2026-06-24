@@ -1716,7 +1716,9 @@
         <div class="flex items-center gap-2">
           <input id="admin-search-input" type="text" placeholder="이름·Discord 검색" class="h-9 w-64 px-3 text-[13px]" autocomplete="off" />
           <!-- 🚫 조 배정 기능 숨김 (2026 개편 — 조 안 나눔). 되살리려면 hidden 제거 + GROUP_ASSIGNMENT_ENABLED=true -->
-          <button type="button" class="btn-navy h-9 px-4 text-[13px] whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5" data-open-group-preview hidden>조 배정 <span aria-hidden="true">↗</span></button>
+          <button type="button" class="btn-navy h-9 px-4 text-[13px] whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5" data-open-group-preview style="display:none">조 배정 <span aria-hidden="true">↗</span></button>
+          <!-- ✅ 조 배정 대체: 노션 멤버→트랙 확정 + 디스코드 트랙별 역할/채널 일괄 반영 (조 안 나눔) -->
+          <button type="button" class="btn-navy h-9 px-4 text-[13px] whitespace-nowrap flex-shrink-0 inline-flex items-center gap-1.5" data-bulk-apply title="노션 멤버→트랙 확정 + 디스코드 트랙별 역할/채널 생성을 한 번에 반영 (조 안 나눔)">일괄 반영 <span aria-hidden="true">→</span></button>
         </div>
       </div>
 
@@ -2954,8 +2956,8 @@
           <button type="button" class="btn-ghost" id="admin-clear-mock" title="목업 멤버 전부 리스트에서 완전히 제거 (실 OAuth 사용자만 남김)">🧹 목업 지우기</button>
           <button type="button" class="btn-ghost text-bad" id="admin-full-reset" title="신청 데이터 초기화 (서버 캐시 + 브라우저). 이전 기수 Discord 트랙 채널은 봇 '!채널삭제 &lt;기수&gt;' 별도 실행 필요.">🗑️ 전체 초기화</button>
           <!-- 🚫 조 배정 기능 숨김 (2026 개편 — 조 안 나눔). 되살리려면 hidden 제거 -->
-          <button type="button" class="btn-ghost" id="admin-notion-only-resync" hidden title="조 배정 결과를 Notion 에만 다시 push (디스코드 안 건드림). 매칭 실패한 신규 멤버는 마스터 DB 에 자동 추가.">🔁 Notion 재실행 (신규 자동 추가)</button>
-          <button type="button" class="btn-ghost" id="admin-load-from-notion" hidden title="디스코드 길드의 현재 역할 할당 상태 (조 배정 결과) 를 가져와 화면에 반영. 노션 비어있어도 디스코드 실제 운영 상태로 복원 가능.">📥 디스코드 상태 불러오기</button>
+          <button type="button" class="btn-ghost" id="admin-notion-only-resync" style="display:none" title="조 배정 결과를 Notion 에만 다시 push (디스코드 안 건드림). 매칭 실패한 신규 멤버는 마스터 DB 에 자동 추가.">🔁 Notion 재실행 (신규 자동 추가)</button>
+          <button type="button" class="btn-ghost" id="admin-load-from-notion" style="display:none" title="디스코드 길드의 현재 역할 할당 상태 (조 배정 결과) 를 가져와 화면에 반영. 노션 비어있어도 디스코드 실제 운영 상태로 복원 가능.">📥 디스코드 상태 불러오기</button>
           <button class="btn-ghost" id="admin-track-apply-sync">Full Sync</button>
           <button class="btn-navy" id="admin-track-apply-refresh">Refresh</button>`;
         requestAnimationFrame(() => {
@@ -6595,6 +6597,12 @@
      * onProgress(phase, detail, extra) — modal step 갱신 콜백 (선택).
      */
     async function gpCallSyncApi(payload, onProgress) {
+      // 🚫 조 배정 기능 잠금 (2026 개편 — 조 미배정). 뷰 안에서 '조 배정 완료'를 눌러도
+      //    commit API 호출 자체를 차단 → 노션/디스코드에 변경 없음. (백엔드도 423 으로 이중 차단)
+      if (!GROUP_ASSIGNMENT_ENABLED) {
+        alert('조 배정 기능이 비활성화되어 있습니다 (조 미배정 운영). 노션/디스코드에 반영되지 않습니다.');
+        return { locked: true };
+      }
       if (MOCKUP_MODE) {
         console.warn('[조 배정 목업] 외부 API 호출 차단됨 — Notion/Discord 에 실제 변경 없음');
         return { mocked: true };
@@ -6658,6 +6666,111 @@
           throw new Error(job.error || '서버에서 commit 작업이 실패했습니다.');
         }
         // status === 'queued' or 'running' — 계속 폴링
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  일괄 반영 (조 배정 대체 워크플로우 — 2026 개편, 조 안 나눔)
+    //  트랙별 전체 멤버를 단일 버킷으로 묶어 한 번에:
+    //    · Notion : 멤버 마스터 DB 에 멤버→트랙 확정 (조 inline DB 생성 안 함 = noGroups)
+    //    · Discord: 기존 group_preview_sync_discord 봇 커맨드로 트랙별 역할/채널 생성·부여
+    //  서버는 noGroups=true 면 조 잠금(GROUP_ASSIGNMENT_ENABLED)을 우회해 정상 실행.
+    // ══════════════════════════════════════════════════════════════════
+    function buildBulkApplyPayload() {
+      const members = MOCK_MEMBERS.map(member => ({
+        id: getMemberIdentityKey(member),
+        userId: getMemberIdentityKey(member),
+        name: getMemberDisplayName(member),
+        handle: member.handle,
+        initials: member.initials,
+        avatarUrl: member.avatarUrl || '',
+        tracks: Array.isArray(member.tracks) ? member.tracks.map(t => ({ ...t })) : [],
+        trackNames: gpBuildMemberTrackNames(member),
+      }));
+
+      const tracks = GP_TABS.map(tab => {
+        const groupDbName = GP_GROUP_DB_NAME_MAP[tab.id] || tab.label;
+        const entries = gpGetTabEntries(tab);
+        const groupMembers = entries.map(entry => ({
+          id: getMemberIdentityKey(entry.member),
+          userId: getMemberIdentityKey(entry.member),
+          name: getMemberDisplayName(entry.member),
+          handle: entry.member.handle,
+          leader: !!entry.leader,
+          rowTrackName: gpBuildGroupRowTrackName(tab, entry),
+        }));
+        // 조 안 나눔 → 트랙당 단일 버킷(전 멤버). 봇이 트랙별 역할/채널 생성에 사용.
+        const groups = groupMembers.length
+          ? [{ name: `${GP_TEST_COHORT_LABEL} ${groupDbName}`, members: groupMembers }]
+          : [];
+        return { tabId: tab.id, tabLabel: tab.label, groupDbName, groups };
+      }).filter(t => t.groups.length > 0);
+
+      return { target: 'notion-test', noGroups: true, cohortLabel: GP_TEST_COHORT_LABEL, members, tracks };
+    }
+
+    async function runBulkApply() {
+      const payload = buildBulkApplyPayload();
+      const totalMembers = payload.members.length;
+      const totalTracks = payload.tracks.length;
+      if (!totalTracks) {
+        alert('반영할 트랙/멤버가 없습니다. 신청자 목록을 먼저 불러오세요.');
+        return;
+      }
+      const ok = confirm(
+        '노션·디스코드에 일괄 반영합니다 (조 안 나눔).\n\n' +
+        `· 트랙 ${totalTracks}개 · 멤버 ${totalMembers}명\n` +
+        '· Notion : 멤버별 트랙 확정 (조 DB 생성 안 함)\n' +
+        '· Discord: 트랙별 역할/채널 생성·부여\n\n' +
+        '테스트 환경에 실제 반영됩니다. 진행할까요?'
+      );
+      if (!ok) return;
+
+      const btn = document.querySelector('[data-bulk-apply]');
+      const orig = btn ? btn.textContent : null;
+      if (btn) { btn.disabled = true; btn.textContent = '반영 중…'; }
+      try {
+        const startResp = await fetch(`${GP_API_BASE}/api/mockups/group-preview/commit`, {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const startData = await startResp.json().catch(() => ({}));
+        if (startResp.status !== 202 || !startData.jobId) {
+          throw new Error(startData.message || `반영 시작 실패 (HTTP ${startResp.status})`);
+        }
+        const jobId = startData.jobId;
+        const startTs = Date.now();
+        while (true) {
+          if (Date.now() - startTs > 10 * 60 * 1000) {
+            throw new Error('10분 안에 끝나지 않았습니다. 서버 로그를 확인해주세요.');
+          }
+          await new Promise(r => setTimeout(r, 2000));
+          const sResp = await fetch(
+            `${GP_API_BASE}/api/mockups/group-preview/commit/status?jobId=${encodeURIComponent(jobId)}`,
+            { credentials: 'include' }
+          );
+          const job = await sResp.json().catch(() => ({}));
+          if (!sResp.ok) throw new Error(job.message || `상태 조회 실패 (HTTP ${sResp.status})`);
+          if (btn && job.phaseDetail) btn.textContent = String(job.phaseDetail).slice(0, 20);
+          if (job.status === 'completed') {
+            const s = (job.result && job.result.summary) || {};
+            const d = s.discord || {};
+            const memberCount = (s.members_updated || 0) + (s.members_created || 0);
+            const trackCount = (s.tracks_touched || []).length || totalTracks;
+            showToast(`✅ 일괄 반영 완료 — 멤버 ${memberCount}명 · 트랙 ${trackCount}개 · 역할 ${d.roles_assigned || 0}건 부여`, 5000);
+            const missing = Array.isArray(s.members_missing) ? s.members_missing.length : 0;
+            if (missing) {
+              showToast(`⚠️ 마스터 DB 미매칭 ${missing}명은 반영에서 제외됨 (신규 자동추가는 조 배정 메뉴 필요)`, 6000);
+            }
+            break;
+          }
+          if (job.status === 'failed') throw new Error(job.error || '서버에서 반영 작업이 실패했습니다.');
+        }
+      } catch (e) {
+        alert(`일괄 반영 실패: ${e?.message || e}`);
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = orig || '일괄 반영 →'; }
       }
     }
 
@@ -7169,6 +7282,12 @@
         if (!GROUP_ASSIGNMENT_ENABLED) return; // 조 배정 기능 숨김 — 진입 차단
         // 같은 창/iframe 내에서 view 전환. 기존 admin 뷰로 '돌아가기' 버튼으로 복귀.
         showGroupPreviewView();
+        return;
+      }
+      const bulkApplyBtn = e.target.closest('[data-bulk-apply]');
+      if (bulkApplyBtn) {
+        e.preventDefault();
+        runBulkApply();
         return;
       }
       const backGpBtn = e.target.closest('[data-back-from-group-preview]');

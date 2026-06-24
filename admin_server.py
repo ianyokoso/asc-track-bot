@@ -3490,6 +3490,9 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
     # 🔧 운영자가 success modal 의 '🔧 마스터 DB 자동 추가' 버튼 클릭 시 활성화.
     #   매칭 실패 (master DB 에 row 없음) 멤버를 자동으로 신규 생성. 기본은 false (skip).
     auto_create_missing = bool(payload.get('autoCreateMissing'))
+    # 🆕 일괄 반영(조 안 나눔) 모드 — Notion 조 inline DB 생성을 전부 스킵하고
+    #    멤버→트랙 확정 + Discord 디스패치만 수행. (조 배정 대체 워크플로우)
+    no_groups = bool(payload.get('noGroups'))
 
     if not members:
         raise ValueError('No mock members were provided.')
@@ -3517,7 +3520,8 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
         )
     notion_api = _load_notion_api(notion_token_override=notion_token_to_use)
     member_db_id = _resolve_database_target_id(notion_api, member_db_id)
-    member_group_labels = _collect_member_group_labels(tracks)
+    # 조 안 나눔 모드면 '소속 조' 라벨을 비워 멤버에 조 정보가 안 들어가게 함.
+    member_group_labels = {} if no_groups else _collect_member_group_labels(tracks)
 
     print(f"[group-commit:diag] === commit start === cohort={cohort_label} "
           f"member_db_id={member_db_id} group_db_id={group_db_id} "
@@ -3557,8 +3561,9 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
     # 라이트 트랙은 조 배정 없이 부모 트랙의 공지 / 과제-인증 채널만 접근 → Notion 조 inline DB 생성 X.
     LIGHT_TRACK_NAME_KEYWORDS = ('라이트 트랙', '라이트트랙')
 
+    # no_groups 모드: 조 inline DB 생성 루프를 통째로 스킵 (멤버 upsert + Discord 디스패치만).
     eligible_tracks = []
-    for track in tracks:
+    for track in (tracks if not no_groups else []):
         groups = [group for group in track.get('groups', []) if group.get('members')]
         if not groups:
             continue
@@ -4920,9 +4925,11 @@ def commit_group_preview_mockup():
     Vercel 프록시 30s timeout 회피 + 진행상황 폴링 가능.
     클라이언트는 GET /api/mockups/group-preview/commit/status?jobId=X 로 폴링.
     """
-    # 🚫 조 배정 기능 잠금 가드 — 2026 개편으로 조 미배정 운영. UI 숨김 우회(직접 API 호출)도 차단.
-    #    되살리려면 서버 env GROUP_ASSIGNMENT_ENABLED=1 로 실행.
-    if not GROUP_ASSIGNMENT_ENABLED:
+    # 🚫 조(group) 배정 모드만 잠금. '일괄 반영'(noGroups=조 안 나눔)은 허용 — 2026 개편.
+    #    조 배정을 다시 켜려면 서버 env GROUP_ASSIGNMENT_ENABLED=1 로 실행. UI 숨김 우회(직접 API)도 차단.
+    _peek = request.get_json(silent=True) or {}
+    _is_bulk_apply = bool(_peek.get('noGroups'))
+    if not GROUP_ASSIGNMENT_ENABLED and not _is_bulk_apply:
         return jsonify({
             "status": "error",
             "message": "조 배정 기능이 비활성화되어 있습니다 (2026 개편 — 조 미배정 운영). "
