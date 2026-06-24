@@ -4227,7 +4227,10 @@
     let editCount = 0;
 
     // 마감 뷰에서 재사용할 마지막 제출 스냅샷
-    let lastSubmittedData = null;
+    // 🆕 2026-06-24: var (hoist) 로 변경. let 일 때 applyState('closed') →
+    //   renderClosedSummary() 가 init 시점에 호출되면서 TDZ 에러 발생 → 후속 코드
+    //   (자동 라우팅, click 핸들러 등록) 모두 실행 안 됨 footgun.
+    var lastSubmittedData = null;
     let locallyPersistedMembers = [];
 
     function findLocallyPersistedViewerMember() {
