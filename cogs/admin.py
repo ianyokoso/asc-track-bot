@@ -1258,12 +1258,14 @@ class AdminCog(commands.Cog):
 
     @commands.command(name='채널검사', aliases=['inspect_cohort_cleanup'])
     @commands.has_permissions(administrator=True)
-    async def inspect_cohort_cleanup(self, ctx, cohort: Optional[str] = None):
+    async def inspect_cohort_cleanup(self, ctx, cohort: Optional[str] = None, option: Optional[str] = None):
         """
         Read-only — `!채널삭제 {기수}` 실행 전 prod 채널·역할 전수 점검.
 
-        사용법: `!채널검사 9`  → 길드의 모든 채널/역할을 카테고리별로 dump,
-                              9기 정리 시 🔴 삭제 / 🟢 보존 표시.
+        사용법:
+          `!채널검사 9`            → 9기 정리 시 🔴 삭제 / 🟢 보존 표시
+          `!채널검사 9 prev`       → 위 + 이전 기수(8기) 공지 채널도 🔴 로 표시
+                                     (alias: `이전공지`)
 
         삭제 규칙은 `!채널삭제` 와 100% 동일하게 평가하지만 실제 삭제 안 함.
         prod 작업 전 안전 확인용.
@@ -1279,11 +1281,16 @@ class AdminCog(commands.Cog):
             )
             return
         cohort_num = raw_cohort
+        prev_mode = (option or '').strip().lower() in {
+            'prev', '이전공지', '+이전공지', '이전기수공지', 'with-prev-notices'
+        }
 
         # `!채널삭제` 와 동일한 prefix 세트 + cohort marker
+        # 🔧 'AI에이전트-실전' 추가 — prod 역할 `AI에이전트-실전-N기-...` 매칭.
         _LEGACY_TRACK_PREFIXES = [
             "빌더-라이트",
             "크리에이터-라이트",
+            "AI에이전트-실전",
             "AI에이전트",
         ]
         track_short_prefixes = sorted(
@@ -1317,6 +1324,26 @@ class AdminCog(commands.Cog):
                 return False
             return _name_matches_cohort_track(name)
 
+        def _is_prev_cohort_notice(channel: discord.abc.GuildChannel) -> bool:
+            """prev 옵션 — 트랙 카테고리 안의 `-{N-1}기...-공지` 패턴.
+            prefix 표기 다양 (예: '나-탐구-8기-공지', '빌더-기초-8기-공지') 잡기 위해
+            카테고리 가드 + cohort marker substring + '-공지' suffix 만 체크.
+            """
+            if isinstance(channel, discord.CategoryChannel):
+                return False
+            if not _is_track_category(getattr(channel, 'category', None)):
+                return False
+            name = channel.name or ''
+            if not name.endswith('-공지'):
+                return False
+            try:
+                prev_n = int(cohort_num) - 1
+            except ValueError:
+                return False
+            if prev_n < 1:
+                return False
+            return f"-{prev_n}기" in name
+
         def _is_cohort_track_role(role: discord.Role) -> bool:
             if role.managed or role.is_default():
                 return False
@@ -1340,6 +1367,7 @@ class AdminCog(commands.Cog):
         sections: List[str] = []
 
         delete_total = 0
+        prev_delete_total = 0
         for cat_name in sorted(by_category.keys()):
             channels = sorted(by_category[cat_name], key=lambda c: (c.position, c.name))
             is_track_cat = (
@@ -1350,10 +1378,16 @@ class AdminCog(commands.Cog):
             for ch in channels:
                 kind = '🔊' if isinstance(ch, discord.VoiceChannel) else '💬'
                 will_delete = _is_cohort_track_channel(ch)
-                mark = '🔴' if will_delete else '🟢'
-                lines.append(f"  {mark} {kind} `{ch.name}`")
+                is_prev_notice = prev_mode and _is_prev_cohort_notice(ch)
                 if will_delete:
+                    mark = '🔴'
                     delete_total += 1
+                elif is_prev_notice:
+                    mark = '🟠'  # prev 옵션 활성 시 추가 삭제 대상
+                    prev_delete_total += 1
+                else:
+                    mark = '🟢'
+                lines.append(f"  {mark} {kind} `{ch.name}`")
             sections.append("\n".join(lines))
 
         if orphans:
@@ -1379,11 +1413,17 @@ class AdminCog(commands.Cog):
             role_lines.append(f"  {mark} `{role.name}` (멤버 {len(role.members)}명){note}")
         sections.append("\n".join(role_lines))
 
+        prev_n_disp = int(cohort_num) - 1 if cohort_num.isdigit() else None
+        prev_line = (
+            f"🟠 추가 (prev): 이전 기수({prev_n_disp}기) 공지 채널 **{prev_delete_total}**개\n"
+            if prev_mode else ''
+        )
         header = (
-            f"🔍 **{cohort_num}기 정리 검사** (read-only)\n"
+            f"🔍 **{cohort_num}기 정리 검사** (read-only{' · +이전공지' if prev_mode else ''})\n"
             f"길드: **{guild.name}** · 총 채널 {len([c for c in guild.channels if not isinstance(c, discord.CategoryChannel)])}개 "
             f"/ 카테고리 {len([c for c in guild.channels if isinstance(c, discord.CategoryChannel)])}개 / 역할 {len(guild.roles)}개\n"
             f"🔴 삭제 예정: 채널 **{delete_total}**개 / 역할 **{role_delete_total}**개\n"
+            + prev_line +
             f"🟢 보존: 그 외 전부 (공지·자유채널·다른 기수·시스템 역할 포함)\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         )
@@ -1410,18 +1450,24 @@ class AdminCog(commands.Cog):
                 await ctx.send(chunk)
             await asyncio.sleep(0.3)
 
+        run_hint = (
+            f"`!채널삭제 {cohort_num} prev`" if prev_mode else f"`!채널삭제 {cohort_num}`"
+        )
         await ctx.send(
-            f"✅ 검사 완료. 위 목록 확인 후 안전하면 `!채널삭제 {cohort_num}` 로 본 실행 → "
+            f"✅ 검사 완료. 위 목록 확인 후 안전하면 {run_hint} 로 본 실행 → "
             f"`확인` 입력 시 30초 안에 진행."
         )
 
     @commands.command(name='채널삭제', aliases=['cleanup_cohort_channels'])
     @commands.has_permissions(administrator=True)
-    async def cleanup_cohort_channels(self, ctx, cohort: Optional[str] = None):
+    async def cleanup_cohort_channels(self, ctx, cohort: Optional[str] = None, option: Optional[str] = None):
         """
         지난 기수의 트랙 채널 + 트랙 역할 삭제. 공지 채널은 보존.
 
-        사용법: `!채널삭제 8`  → 8기 트랙 채널·역할 정리
+        사용법:
+          `!채널삭제 8`            → 8기 트랙 채널·역할 정리 (공지 보존)
+          `!채널삭제 9 prev`       → 9기 정리 + **이전 기수(8기) 공지 채널** 추가 삭제
+                                     (alias: `이전공지`)
 
         삭제 대상:
           [채널] 모두 만족
@@ -1432,10 +1478,12 @@ class AdminCog(commands.Cog):
             1) 이름이 `{트랙 prefix}-{기수}기-...` 형식 또는 `{트랙 prefix}-{기수}기`
             2) 봇/통합 관리 역할 아님 (`role.managed=False`)
             3) `@everyone` 아님
+          [prev 옵션] 추가 채널
+            - 트랙 카테고리 안 + 이름에 `-{N-1}기` 포함 + `-공지` 로 끝남
 
         보존 대상:
           - 트랙 카테고리 자체 (다음 기수가 같은 카테고리 누적)
-          - `-공지` 채널 (역사 보존)
+          - 현재 기수(N)의 `-공지` 채널 (prev 옵션이어도 N기 공지는 보존)
           - 카테고리 밖 채널 (자유게시판, 전체-공지 등)
           - 다른 기수의 트랙 역할 / 시스템·봇 역할 / @everyone
 
@@ -1454,11 +1502,16 @@ class AdminCog(commands.Cog):
             )
             return
         cohort_num = raw_cohort  # 문자열로 유지 — `-{cohort}기-` 매칭에 그대로 사용
+        prev_mode = (option or '').strip().lower() in {
+            'prev', '이전공지', '+이전공지', '이전기수공지', 'with-prev-notices'
+        }
 
         # 현재 매핑된 트랙 prefix + 과거 사용된 레거시 prefix
+        # 🔧 'AI에이전트-실전' 추가 — prod 역할 `AI에이전트-실전-N기-...` 매칭.
         _LEGACY_TRACK_PREFIXES = [
             "빌더-라이트",
             "크리에이터-라이트",
+            "AI에이전트-실전",  # prod 실제 prefix
             "AI에이전트",       # 'AI에이전트-실전' 의 짧은 변형
         ]
         track_short_prefixes = sorted(
@@ -1499,6 +1552,26 @@ class AdminCog(commands.Cog):
                 return False
             return _name_matches_cohort_track(name)
 
+        def _is_prev_cohort_notice(channel: discord.abc.GuildChannel) -> bool:
+            """prev 옵션 — 트랙 카테고리 안의 `-{N-1}기...-공지` 패턴.
+            prefix 표기 다양성(예: '나-탐구-8기-공지' vs '나탐구-8기-공지') 흡수 위해
+            prefix 검사 생략하고 카테고리 + cohort marker substring + '-공지' suffix 만 사용.
+            """
+            if isinstance(channel, discord.CategoryChannel):
+                return False
+            if not _is_track_category(getattr(channel, 'category', None)):
+                return False
+            name = channel.name or ''
+            if not name.endswith('-공지'):
+                return False
+            try:
+                prev_n = int(cohort_num) - 1
+            except ValueError:
+                return False
+            if prev_n < 1:
+                return False
+            return f"-{prev_n}기" in name
+
         def _is_cohort_track_role(role: discord.Role) -> bool:
             """역할 삭제 후보:
               - 시스템/봇 통합 역할 / @everyone 아님
@@ -1512,11 +1585,15 @@ class AdminCog(commands.Cog):
         channel_candidates: List[discord.abc.GuildChannel] = [
             ch for ch in guild.channels if _is_cohort_track_channel(ch)
         ]
+        prev_notice_candidates: List[discord.abc.GuildChannel] = (
+            [ch for ch in guild.channels if _is_prev_cohort_notice(ch)]
+            if prev_mode else []
+        )
         role_candidates: List[discord.Role] = [
             r for r in guild.roles if _is_cohort_track_role(r)
         ]
 
-        if not channel_candidates and not role_candidates:
+        if not channel_candidates and not role_candidates and not prev_notice_candidates:
             await ctx.reply(
                 f"ℹ️ {cohort_num}기 트랙 채널·역할 중 삭제 대상이 없습니다. "
                 f"(공지 채널 제외, `=====...=====` 카테고리 내 `{{prefix}}-{cohort_num}기-...` 채널 + "
@@ -1534,6 +1611,17 @@ class AdminCog(commands.Cog):
             ch_more = len(channel_candidates) - min(15, len(channel_candidates))
             if ch_more > 0:
                 preview_lines.append(f"  … 외 {ch_more}개")
+        if prev_notice_candidates:
+            prev_n_disp = int(cohort_num) - 1
+            preview_lines.append(
+                f"**🟠 이전 기수({prev_n_disp}기) 공지 ({len(prev_notice_candidates)}개)**"
+            )
+            for ch in prev_notice_candidates[:15]:
+                cat_name = ch.category.name if ch.category else '(없음)'
+                preview_lines.append(f"  • `{ch.name}` — `{cat_name}`")
+            pn_more = len(prev_notice_candidates) - min(15, len(prev_notice_candidates))
+            if pn_more > 0:
+                preview_lines.append(f"  … 외 {pn_more}개")
         if role_candidates:
             preview_lines.append(f"**역할 ({len(role_candidates)}개)**")
             for r in role_candidates[:15]:
@@ -1542,10 +1630,15 @@ class AdminCog(commands.Cog):
             if r_more > 0:
                 preview_lines.append(f"  … 외 {r_more}개")
 
+        prev_summary = (
+            f" + 이전 기수 공지 **{len(prev_notice_candidates)}개**"
+            if prev_mode else ''
+        )
         await ctx.reply(
-            f"⚠️ **{cohort_num}기 트랙 정리** — 채널 **{len(channel_candidates)}개** + "
+            f"⚠️ **{cohort_num}기 트랙 정리{' (+이전공지)' if prev_mode else ''}** — "
+            f"채널 **{len(channel_candidates)}개**{prev_summary} + "
             f"역할 **{len(role_candidates)}개** 삭제 예정\n"
-            f"공지(`-공지`) 채널 · 트랙 카테고리(`=====...=====`) · 카테고리 밖 채널 · "
+            f"{cohort_num}기 공지(`-공지`) 채널 · 트랙 카테고리(`=====...=====`) · 카테고리 밖 채널 · "
             f"시스템 역할은 보존됩니다.\n\n"
             + "\n".join(preview_lines)
             + f"\n\n**30초 안에 `확인`** 이라고 답글 주시면 진행, 아니면 취소됩니다."
@@ -1564,12 +1657,17 @@ class AdminCog(commands.Cog):
             await ctx.reply("❌ 30초 초과. 삭제 취소됨.")
             return
 
-        status = await ctx.reply(f"🗑️ {cohort_num}기 트랙 채널·역할 삭제 진행 중...")
+        status_msg = f"🗑️ {cohort_num}기 트랙 채널·역할 삭제 진행 중"
+        if prev_mode:
+            status_msg += f" (+ 이전 기수 공지 {len(prev_notice_candidates)}개)"
+        status_msg += "..."
+        status = await ctx.reply(status_msg)
 
         deleted_channels = 0
+        deleted_prev_notices = 0
         deleted_roles = 0
         errors = 0
-        reason = f"{cohort_num}기 트랙 정리 (공지·카테고리 보존)"
+        reason = f"{cohort_num}기 트랙 정리" + (" (+이전공지)" if prev_mode else "")
 
         # 1) 채널 삭제 — 직전 재검사 (동시 변경 방어)
         for channel in channel_candidates:
@@ -1583,6 +1681,20 @@ class AdminCog(commands.Cog):
                 deleted_channels += 1
             except Exception as e:
                 logger.warning(f"[Cleanup] 채널 삭제 실패 {channel.name}: {e}")
+                errors += 1
+
+        # 1-b) prev 옵션 — 이전 기수 공지 채널 삭제 (직전 재검사)
+        for channel in prev_notice_candidates:
+            if not _is_prev_cohort_notice(channel):
+                logger.warning(
+                    f"[Cleanup] 이전공지 {channel.name} 재검사 실패 — 카테고리/이름 변경, skip"
+                )
+                continue
+            try:
+                await channel.delete(reason=reason + " 이전 기수 공지 정리")
+                deleted_prev_notices += 1
+            except Exception as e:
+                logger.warning(f"[Cleanup] 이전공지 삭제 실패 {channel.name}: {e}")
                 errors += 1
 
         # 2) 역할 삭제 — 직전 재검사
@@ -1599,13 +1711,18 @@ class AdminCog(commands.Cog):
                 logger.warning(f"[Cleanup] 역할 삭제 실패 {role.name}: {e}")
                 errors += 1
 
-        await status.edit(content=(
-            f"✅ {cohort_num}기 트랙 정리 완료\n"
-            f"• 채널 삭제: **{deleted_channels}**개\n"
-            f"• 역할 삭제: **{deleted_roles}**개\n"
-            f"• 실패: {errors}개\n"
-            f"• 보존: 공지 채널 / 카테고리 / 카테고리 밖 채널 / 시스템·다른 기수 역할"
-        ))
+        result_lines = [
+            f"✅ {cohort_num}기 트랙 정리 완료",
+            f"• 채널 삭제: **{deleted_channels}**개",
+        ]
+        if prev_mode:
+            result_lines.append(f"• 이전 기수 공지 삭제: **{deleted_prev_notices}**개")
+        result_lines.extend([
+            f"• 역할 삭제: **{deleted_roles}**개",
+            f"• 실패: {errors}개",
+            f"• 보존: {cohort_num}기 공지 / 카테고리 / 카테고리 밖 채널 / 시스템·다른 기수 역할",
+        ])
+        await status.edit(content="\n".join(result_lines))
 
     @commands.command(name='역할삭제', aliases=['cleanup_cohort_roles'])
     @commands.has_permissions(administrator=True)
