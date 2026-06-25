@@ -1256,6 +1256,165 @@ class AdminCog(commands.Cog):
 
         return summary
 
+    @commands.command(name='채널검사', aliases=['inspect_cohort_cleanup'])
+    @commands.has_permissions(administrator=True)
+    async def inspect_cohort_cleanup(self, ctx, cohort: Optional[str] = None):
+        """
+        Read-only — `!채널삭제 {기수}` 실행 전 prod 채널·역할 전수 점검.
+
+        사용법: `!채널검사 9`  → 길드의 모든 채널/역할을 카테고리별로 dump,
+                              9기 정리 시 🔴 삭제 / 🟢 보존 표시.
+
+        삭제 규칙은 `!채널삭제` 와 100% 동일하게 평가하지만 실제 삭제 안 함.
+        prod 작업 전 안전 확인용.
+        """
+        if not ctx.guild:
+            await ctx.reply("❌ 길드 채널에서만 실행 가능합니다.")
+            return
+
+        raw_cohort = (cohort or '').strip().replace('기', '')
+        if not raw_cohort.isdigit():
+            await ctx.reply(
+                "❌ 기수를 숫자로 지정해주세요. 예: `!채널검사 9`"
+            )
+            return
+        cohort_num = raw_cohort
+
+        # `!채널삭제` 와 동일한 prefix 세트 + cohort marker
+        _LEGACY_TRACK_PREFIXES = [
+            "빌더-라이트",
+            "크리에이터-라이트",
+            "AI에이전트",
+        ]
+        track_short_prefixes = sorted(
+            set(list(_TRACK_DISCORD_PREFIX.values()) + _LEGACY_TRACK_PREFIXES),
+            key=len,
+            reverse=True,
+        )
+        cohort_marker = f"-{cohort_num}기"
+
+        def _is_track_category(category: Optional[discord.CategoryChannel]) -> bool:
+            if not category or not category.name:
+                return False
+            return category.name.startswith('=====') and category.name.endswith('=====')
+
+        def _name_matches_cohort_track(name: str) -> bool:
+            if not name:
+                return False
+            for prefix in track_short_prefixes:
+                head = f"{prefix}{cohort_marker}"
+                if name == head or name.startswith(f"{head}-"):
+                    return True
+            return False
+
+        def _is_cohort_track_channel(channel: discord.abc.GuildChannel) -> bool:
+            if isinstance(channel, discord.CategoryChannel):
+                return False
+            if not _is_track_category(getattr(channel, 'category', None)):
+                return False
+            name = channel.name or ''
+            if name.endswith('-공지'):
+                return False
+            return _name_matches_cohort_track(name)
+
+        def _is_cohort_track_role(role: discord.Role) -> bool:
+            if role.managed or role.is_default():
+                return False
+            return _name_matches_cohort_track(role.name or '')
+
+        guild = ctx.guild
+
+        # ── 채널 분류: 카테고리별 그룹 ──
+        by_category: Dict[str, List[discord.abc.GuildChannel]] = {}
+        orphans: List[discord.abc.GuildChannel] = []
+        for ch in guild.channels:
+            if isinstance(ch, discord.CategoryChannel):
+                continue
+            cat = getattr(ch, 'category', None)
+            if cat:
+                by_category.setdefault(cat.name, []).append(ch)
+            else:
+                orphans.append(ch)
+
+        # ── 메시지 빌드 (카테고리별 섹션, 채널마다 🔴/🟢) ──
+        sections: List[str] = []
+
+        delete_total = 0
+        for cat_name in sorted(by_category.keys()):
+            channels = sorted(by_category[cat_name], key=lambda c: (c.position, c.name))
+            is_track_cat = (
+                cat_name.startswith('=====') and cat_name.endswith('=====')
+            )
+            head_emoji = '📂' if is_track_cat else '📁'
+            lines = [f"{head_emoji} **{cat_name}**"]
+            for ch in channels:
+                kind = '🔊' if isinstance(ch, discord.VoiceChannel) else '💬'
+                will_delete = _is_cohort_track_channel(ch)
+                mark = '🔴' if will_delete else '🟢'
+                lines.append(f"  {mark} {kind} `{ch.name}`")
+                if will_delete:
+                    delete_total += 1
+            sections.append("\n".join(lines))
+
+        if orphans:
+            lines = ["📁 **(카테고리 없음)**"]
+            for ch in sorted(orphans, key=lambda c: c.name):
+                kind = '🔊' if isinstance(ch, discord.VoiceChannel) else '💬'
+                lines.append(f"  🟢 {kind} `{ch.name}`")
+            sections.append("\n".join(lines))
+
+        # ── 역할 분류 ──
+        role_lines = ["**[역할 점검]**"]
+        role_delete_total = 0
+        for role in sorted(guild.roles, key=lambda r: -r.position):
+            if role.is_default():
+                continue
+            will_delete = _is_cohort_track_role(role)
+            mark = '🔴' if will_delete else ('⚙️' if role.managed else '🟢')
+            note = ''
+            if role.managed:
+                note = ' _(관리형, 보존)_'
+            elif will_delete:
+                role_delete_total += 1
+            role_lines.append(f"  {mark} `{role.name}` (멤버 {len(role.members)}명){note}")
+        sections.append("\n".join(role_lines))
+
+        header = (
+            f"🔍 **{cohort_num}기 정리 검사** (read-only)\n"
+            f"길드: **{guild.name}** · 총 채널 {len([c for c in guild.channels if not isinstance(c, discord.CategoryChannel)])}개 "
+            f"/ 카테고리 {len([c for c in guild.channels if isinstance(c, discord.CategoryChannel)])}개 / 역할 {len(guild.roles)}개\n"
+            f"🔴 삭제 예정: 채널 **{delete_total}**개 / 역할 **{role_delete_total}**개\n"
+            f"🟢 보존: 그 외 전부 (공지·자유채널·다른 기수·시스템 역할 포함)\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        )
+
+        # ── Discord 2000자 한도 — 섹션 단위로 split ──
+        DISCORD_LIMIT = 1900
+        chunks: List[str] = []
+        buf = header
+        for section in sections:
+            if len(buf) + len(section) + 2 > DISCORD_LIMIT:
+                chunks.append(buf)
+                buf = section + "\n"
+            else:
+                buf += "\n" + section + "\n"
+        if buf.strip():
+            chunks.append(buf)
+
+        first = True
+        for chunk in chunks:
+            if first:
+                await ctx.reply(chunk)
+                first = False
+            else:
+                await ctx.send(chunk)
+            await asyncio.sleep(0.3)
+
+        await ctx.send(
+            f"✅ 검사 완료. 위 목록 확인 후 안전하면 `!채널삭제 {cohort_num}` 로 본 실행 → "
+            f"`확인` 입력 시 30초 안에 진행."
+        )
+
     @commands.command(name='채널삭제', aliases=['cleanup_cohort_channels'])
     @commands.has_permissions(administrator=True)
     async def cleanup_cohort_channels(self, ctx, cohort: Optional[str] = None):
