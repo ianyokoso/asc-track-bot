@@ -6796,16 +6796,21 @@
     //  서버는 noGroups=true 면 조 잠금(GROUP_ASSIGNMENT_ENABLED)을 우회해 정상 실행.
     // ══════════════════════════════════════════════════════════════════
     function buildBulkApplyPayload() {
-      const members = MOCK_MEMBERS.map(member => ({
-        id: getMemberIdentityKey(member),
-        userId: getMemberIdentityKey(member),
-        name: getMemberDisplayName(member),
-        handle: member.handle,
-        initials: member.initials,
-        avatarUrl: member.avatarUrl || '',
-        tracks: Array.isArray(member.tracks) ? member.tracks.map(t => ({ ...t })) : [],
-        trackNames: gpBuildMemberTrackNames(member),
-      }));
+      // 마스터 DB 는 '트랙 신청' 기준으로 채운다 → 트랙이 1개 이상 있는 신청자만 포함.
+      //   (미신청자는 제외 — autoCreateMissing 으로 빈 트랙 row 가 만들어지지 않도록.
+      //    이미 마스터 DB 에 있는 미신청자는 서버의 Option C 가 트랙·조를 비워준다.)
+      const members = MOCK_MEMBERS
+        .map(member => ({
+          id: getMemberIdentityKey(member),
+          userId: getMemberIdentityKey(member),
+          name: getMemberDisplayName(member),
+          handle: member.handle,
+          initials: member.initials,
+          avatarUrl: member.avatarUrl || '',
+          tracks: Array.isArray(member.tracks) ? member.tracks.map(t => ({ ...t })) : [],
+          trackNames: gpBuildMemberTrackNames(member),
+        }))
+        .filter(m => Array.isArray(m.trackNames) && m.trackNames.length > 0);
 
       const tracks = GP_TABS.map(tab => {
         const groupDbName = GP_GROUP_DB_NAME_MAP[tab.id] || tab.label;
@@ -6832,6 +6837,10 @@
       const notionOnly = !!(opts && opts.notionOnly);  // true → 디스코드 건너뜀 (노션만)
       const payload = buildBulkApplyPayload();
       if (notionOnly) payload.notionOnly = true;
+      // 🔑 마스터 DB 는 '트랙 신청 DB(정답)' 를 기준으로 채워나가는 DB.
+      //    → 마스터 DB 에 아직 없는 신청자는 항상 신규 row 로 생성한다 (autoCreateMissing).
+      //    신규 row 에는 Discord 사용자 ID/ID 가 함께 저장되므로 다음 실행부터는 정상 매칭(중복 X).
+      payload.autoCreateMissing = true;
       const totalMembers = payload.members.length;
       const totalTracks = payload.tracks.length;
       if (!totalTracks) {
@@ -6843,7 +6852,7 @@
           ? '노션에만 반영합니다 (디스코드는 건드리지 않음, 조 안 나눔).\n\n'
           : '노션·디스코드에 일괄 반영합니다 (조 안 나눔).\n\n') +
         `· 트랙 ${totalTracks}개 · 멤버 ${totalMembers}명\n` +
-        '· Notion : 멤버별 트랙 확정 (조 DB 생성 안 함)\n' +
+        '· Notion : 멤버별 트랙 확정 + 마스터 DB 미등록 신청자 자동 추가\n' +
         (notionOnly ? '· Discord: 건너뜀\n' : '· Discord: 트랙별 역할/채널 생성·부여\n') +
         '\n테스트 환경에 실제 반영됩니다. 진행할까요?'
       );
@@ -6879,14 +6888,19 @@
           if (job.status === 'completed') {
             const s = (job.result && job.result.summary) || {};
             const d = s.discord || {};
-            const memberCount = (s.members_updated || 0) + (s.members_created || 0);
+            const created = s.members_created || 0;
+            const memberCount = (s.members_updated || 0) + created;
             const trackCount = (s.tracks_touched || []).length || totalTracks;
             showToast(notionOnly
-              ? `✅ 노션 반영 완료 — 멤버 ${memberCount}명 · 트랙 ${trackCount}개 (디스코드 건너뜀)`
-              : `✅ 일괄 반영 완료 — 멤버 ${memberCount}명 · 트랙 ${trackCount}개 · 역할 ${d.roles_assigned || 0}건 부여`, 5000);
-            const missing = Array.isArray(s.members_missing) ? s.members_missing.length : 0;
-            if (missing) {
-              showToast(`⚠️ 마스터 DB 미매칭 ${missing}명은 반영에서 제외됨 (신규 자동추가는 조 배정 메뉴 필요)`, 6000);
+              ? `✅ 노션 반영 완료 — 멤버 ${memberCount}명 (신규 ${created}명) · 트랙 ${trackCount}개 (디스코드 건너뜀)`
+              : `✅ 일괄 반영 완료 — 멤버 ${memberCount}명 (신규 ${created}명) · 트랙 ${trackCount}개 · 역할 ${d.roles_assigned || 0}건 부여`, 5000);
+            // autoCreateMissing=true 인데도 남은 미매칭 = payload 에 Discord ID 가 아예 없는 케이스.
+            const missing = Array.isArray(s.members_missing) ? s.members_missing : [];
+            if (missing.length) {
+              const names = missing.slice(0, 10)
+                .map(m => (m.name || m.handle || m.userId || '').toString()).filter(Boolean);
+              const more = missing.length > names.length ? ` 외 ${missing.length - names.length}명` : '';
+              showToast(`⚠️ ${missing.length}명은 자동 생성 실패 (Discord ID 누락 등): ${names.join(', ')}${more}`, 8000);
             }
             break;
           }
@@ -7412,13 +7426,21 @@
       const bulkApplyBtn = e.target.closest('[data-bulk-apply]');
       if (bulkApplyBtn) {
         e.preventDefault();
-        runBulkApply();
+        // 🐛 fire-and-forget 였던 호출 — buildBulkApplyPayload()/confirm() 가 try 밖에서
+        //    던지면 unhandled rejection 으로 삼켜져 '아무 반응 없음' 처럼 보였음. .catch 로 표면화.
+        runBulkApply().catch(err => {
+          console.error('[bulkApply]', err);
+          alert('일괄 반영 오류: ' + (err && err.message ? err.message : err));
+        });
         return;
       }
       const bulkApplyNotionBtn = e.target.closest('[data-bulk-apply-notion]');
       if (bulkApplyNotionBtn) {
         e.preventDefault();
-        runBulkApply({ notionOnly: true });
+        runBulkApply({ notionOnly: true }).catch(err => {
+          console.error('[bulkApply:notion]', err);
+          alert('노션만 반영 오류: ' + (err && err.message ? err.message : err));
+        });
         return;
       }
       const backGpBtn = e.target.closest('[data-back-from-group-preview]');
