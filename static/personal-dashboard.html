@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <!-- build: 2026-06-30-personal-dashboard-mockup-v1 -->
+  <title>ASC 개인 대시보드 (목업)</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // track-apply.html 과 동일한 테마 (asc-bot-admin-dashboard tailwind config)
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Pretendard Variable', 'Pretendard', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'Roboto', 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'sans-serif'],
+          },
+          colors: {
+            canvas: '#FFFFFF', surface: '#F4F6F8', 'surface-2': '#EDEFF2',
+            ink: '#141E3C', 'ink-muted': '#4B5563', 'ink-soft': '#9CA3AF',
+            'border-hair': '#E5E7EB', 'border-strong': '#D1D5DB',
+            navy: '#1E2A4A', 'navy-strong': '#141E3C', 'navy-soft': '#EEF0F6',
+            ok: '#16A34A', bad: '#DC2626', warn: '#D97706',
+          },
+          borderRadius: { 'xs': '4px', 'sm': '6px', 'md': '8px', 'lg': '12px' },
+          letterSpacing: { 'eyebrow': '0.14em' },
+        },
+      },
+    };
+  </script>
+  <style>
+    body { font-family: 'Pretendard Variable', Pretendard, sans-serif; }
+    .eyebrow { letter-spacing: 0.14em; }
+    .skeleton { background: linear-gradient(90deg,#EDEFF2 25%,#F4F6F8 37%,#EDEFF2 63%); background-size:400% 100%; animation: shimmer 1.4s ease infinite; }
+    @keyframes shimmer { 0%{background-position:100% 0} 100%{background-position:-100% 0} }
+  </style>
+</head>
+<body class="bg-surface text-ink min-h-screen">
+  <!-- 목업 배지 -->
+  <div class="w-full bg-navy-strong text-white text-[11px] tracking-eyebrow uppercase text-center py-1.5">
+    Mockup Preview · 개인 대시보드 (test 모드 전용)
+  </div>
+
+  <main class="max-w-3xl mx-auto px-4 py-8">
+    <!-- 상단 헤더 -->
+    <header class="flex items-center justify-between mb-6">
+      <div>
+        <p class="text-[11px] eyebrow uppercase text-ink-soft mb-0.5">ASC TRACK</p>
+        <h1 class="text-xl font-bold text-ink" id="page-title">내 대시보드</h1>
+      </div>
+      <button id="btn-logout"
+        class="hidden text-[13px] h-9 px-3 rounded-sm border border-border-strong text-ink-muted hover:bg-surface-2 transition">
+        로그아웃
+      </button>
+    </header>
+
+    <!-- OAuth 결과 배너 -->
+    <div id="auth-banner" class="hidden mb-4 rounded-md px-4 py-3 text-[13px]"></div>
+
+    <!-- 로딩 -->
+    <section id="state-loading" class="space-y-3">
+      <div class="skeleton h-24 rounded-lg"></div>
+      <div class="skeleton h-32 rounded-lg"></div>
+      <div class="skeleton h-32 rounded-lg"></div>
+    </section>
+
+    <!-- 비로그인 -->
+    <section id="state-login" class="hidden">
+      <div class="bg-canvas border border-border-hair rounded-lg p-8 text-center shadow-sm">
+        <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-navy-soft flex items-center justify-center">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1E2A4A" stroke-width="1.8"><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <h2 class="text-lg font-semibold mb-1">로그인이 필요해요</h2>
+        <p class="text-[13px] text-ink-muted mb-6 leading-relaxed">
+          Discord 로그인 후 본인의 트랙 · 신청 현황 · 크리에이터 일정을<br/>한눈에 볼 수 있어요.
+        </p>
+        <a id="btn-login" href="#"
+          class="inline-flex items-center gap-2 h-11 px-6 rounded-md bg-[#5865F2] hover:bg-[#4752C4] text-white text-[14px] font-medium transition">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.2.5a18 18 0 0 1 4.3 1.3 16 16 0 0 0-14.9 0A18 18 0 0 1 8.8 3.5L8.6 3a19.8 19.8 0 0 0-4.9 1.4C.6 9 .1 13.5.3 17.9a20 20 0 0 0 6 3l.8-1.1c-.7-.3-1.4-.6-2-1l.5-.4a14.3 14.3 0 0 0 12.3 0l.5.4c-.6.4-1.3.7-2 1l.8 1.1a20 20 0 0 0 6-3c.3-5.1-.5-9.5-3.2-13.5ZM8.3 15.3c-1.2 0-2.1-1.1-2.1-2.4S7.1 10.5 8.3 10.5s2.1 1.1 2.1 2.4-.9 2.4-2.1 2.4Zm7.4 0c-1.2 0-2.1-1.1-2.1-2.4s.9-2.4 2.1-2.4 2.1 1.1 2.1 2.4-.9 2.4-2.1 2.4Z"/></svg>
+          Discord 로 로그인
+        </a>
+        <p id="login-disabled-note" class="hidden text-[12px] text-bad mt-4"></p>
+      </div>
+    </section>
+
+    <!-- 로그인됨: 대시보드 -->
+    <section id="state-dashboard" class="hidden space-y-4">
+
+      <!-- 프로필 카드 -->
+      <div class="bg-canvas border border-border-hair rounded-lg p-5 shadow-sm flex items-center gap-4">
+        <img id="p-avatar" src="" alt="" class="w-14 h-14 rounded-full bg-surface-2 object-cover" />
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2">
+            <p id="p-name" class="text-base font-semibold text-ink truncate">—</p>
+            <span id="p-admin" class="hidden text-[10px] eyebrow uppercase bg-navy-strong text-white px-1.5 py-0.5 rounded-xs">Admin</span>
+          </div>
+          <p id="p-handle" class="text-[13px] text-ink-muted truncate">—</p>
+          <p id="p-id" class="text-[11px] text-ink-soft mt-0.5">Discord ID —</p>
+        </div>
+      </div>
+
+      <!-- 멤버 마스터 미등록 안내 -->
+      <div id="card-no-member" class="hidden bg-[#FFF7ED] border border-warn/30 rounded-lg p-4 text-[13px] text-[#92400E]">
+        ⚠️ 아직 <b>멤버 마스터 DB</b>에 등록되지 않은 계정이에요. 트랙을 신청하면 일괄 반영 시 자동으로 등록됩니다.
+      </div>
+
+      <!-- 내 트랙 -->
+      <div class="bg-canvas border border-border-hair rounded-lg p-5 shadow-sm">
+        <p class="text-[11px] eyebrow uppercase text-ink-soft mb-3">내 트랙</p>
+        <div id="p-tracks" class="flex flex-wrap gap-2">
+          <span class="text-[13px] text-ink-soft">—</span>
+        </div>
+      </div>
+
+      <!-- 신청 현황 -->
+      <div class="bg-canvas border border-border-hair rounded-lg p-5 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-[11px] eyebrow uppercase text-ink-soft">신청 현황</p>
+          <span id="p-submit-count" class="text-[12px] text-ink-muted"></span>
+        </div>
+        <p id="p-last-submit" class="text-[12px] text-ink-soft mb-3"></p>
+        <ul id="p-submissions" class="space-y-2"></ul>
+        <p id="p-no-submissions" class="hidden text-[13px] text-ink-soft">아직 제출한 신청이 없어요.</p>
+      </div>
+
+      <!-- 크리에이터 일정/과제 -->
+      <div id="card-assignments" class="hidden bg-canvas border border-border-hair rounded-lg p-5 shadow-sm">
+        <p class="text-[11px] eyebrow uppercase text-ink-soft mb-3">크리에이터 과제 · 마감</p>
+        <ul id="p-assignments" class="space-y-2"></ul>
+        <p id="p-no-assignments" class="hidden text-[13px] text-ink-soft">예정된 과제가 없어요.</p>
+      </div>
+
+      <p class="text-[11px] text-ink-soft text-center pt-2">
+        데이터 출처: 멤버 마스터 DB · 트랙 신청 DB · Notion 과제 DB
+      </p>
+    </section>
+  </main>
+
+  <script>
+    // 이 페이지는 vercel `/static/*` rewrite 를 타고 Oracle:8001 이 서빙한다.
+    // API 는 relative `/api/...` 로 호출 → vercel `/api/*` rewrite → Oracle (track-apply.html 과 동일 패턴).
+    const SELF_PATH = '/static/personal-dashboard.html';
+    const LOGIN_URL = `/api/auth/discord?next=${encodeURIComponent(SELF_PATH)}`;
+    const $ = (id) => document.getElementById(id);
+
+    function show(stateId) {
+      ['state-loading', 'state-login', 'state-dashboard'].forEach(s => $(s).classList.toggle('hidden', s !== stateId));
+    }
+
+    function showBanner(kind) {
+      const map = {
+        success:        ['로그인되었습니다.', 'bg-ok/10 text-ok border border-ok/20'],
+        error:          ['로그인 중 오류가 발생했어요. 다시 시도해 주세요.', 'bg-bad/10 text-bad border border-bad/20'],
+        token_error:    ['로그인 토큰 처리에 실패했어요. 다시 시도해 주세요.', 'bg-bad/10 text-bad border border-bad/20'],
+        callback_error: ['로그인 처리 중 오류가 발생했어요.', 'bg-bad/10 text-bad border border-bad/20'],
+        invalid_state:  ['세션이 만료됐어요. 다시 로그인해 주세요.', 'bg-warn/10 text-warn border border-warn/20'],
+        not_guild_member: ['ASC 디스코드 서버 멤버만 이용할 수 있어요.', 'bg-bad/10 text-bad border border-bad/20'],
+        not_configured: ['로그인이 아직 설정되지 않았어요(관리자 확인 필요).', 'bg-warn/10 text-warn border border-warn/20'],
+        disabled:       ['이 기능은 현재 비활성화되어 있어요.', 'bg-warn/10 text-warn border border-warn/20'],
+      };
+      const entry = map[kind];
+      if (!entry) return;
+      const el = $('auth-banner');
+      el.textContent = entry[0];
+      el.className = `mb-4 rounded-md px-4 py-3 text-[13px] ${entry[1]}`;
+      el.classList.remove('hidden');
+    }
+
+    function fmtDate(s) {
+      if (!s) return '';
+      const d = new Date(s);
+      if (isNaN(d)) return s;
+      return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+    }
+
+    function renderDashboard(data) {
+      const user = data.user || {};
+      const summary = data.summary || {};
+
+      $('p-avatar').src = user.avatarUrl || `https://cdn.discordapp.com/embed/avatars/0.png`;
+      $('p-name').textContent = user.displayName || user.username || '이름 없음';
+      $('p-handle').textContent = user.username ? `@${user.username}` : '';
+      $('p-id').textContent = `Discord ID ${user.id || '—'}`;
+      if (data.isAdmin) $('p-admin').classList.remove('hidden');
+
+      // 멤버 마스터 등록 여부
+      $('card-no-member').classList.toggle('hidden', !!data.member);
+
+      // 트랙
+      const tracks = summary.tracks || [];
+      const tracksEl = $('p-tracks');
+      if (tracks.length) {
+        tracksEl.innerHTML = tracks.map(t =>
+          `<span class="text-[13px] px-3 py-1 rounded-full bg-navy-soft text-navy-strong font-medium">${escapeHtml(t)}</span>`
+        ).join('');
+      } else {
+        tracksEl.innerHTML = `<span class="text-[13px] text-ink-soft">신청한 트랙이 없어요.</span>`;
+      }
+
+      // 신청 현황
+      const subs = data.submissions || [];
+      $('p-submit-count').textContent = summary.totalSubmitted ? `제출 ${summary.totalSubmitted}건` : '';
+      $('p-last-submit').textContent = summary.lastSubmittedAt ? `최근 제출: ${fmtDate(summary.lastSubmittedAt)}` : '';
+      const subEl = $('p-submissions');
+      if (subs.length) {
+        subEl.innerHTML = subs.map(s => {
+          const label = s.trackLabel || s.track || s.trackId || '신청';
+          const status = s.status === 'submitted' ? '제출됨' : (s.status || '작성중');
+          const cls = s.status === 'submitted' ? 'text-ok' : 'text-ink-soft';
+          return `<li class="flex items-center justify-between text-[13px] border-b border-border-hair pb-2 last:border-0 last:pb-0">
+            <span class="text-ink">${escapeHtml(label)}</span>
+            <span class="flex items-center gap-2"><span class="text-ink-soft">${fmtDate(s.date)}</span><span class="${cls} font-medium">${escapeHtml(status)}</span></span>
+          </li>`;
+        }).join('');
+        $('p-no-submissions').classList.add('hidden');
+      } else {
+        subEl.innerHTML = '';
+        $('p-no-submissions').classList.remove('hidden');
+      }
+
+      // 크리에이터 과제 (자격 있을 때만 fetch)
+      if (summary.creatorTrackEligible) loadAssignments();
+
+      $('btn-logout').classList.remove('hidden');
+      show('state-dashboard');
+    }
+
+    async function loadAssignments() {
+      try {
+        const res = await fetch('/api/auth/creator-assignments', { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = (data.assignments || []);
+        const card = $('card-assignments');
+        card.classList.remove('hidden');
+        const el = $('p-assignments');
+        if (!list.length) { $('p-no-assignments').classList.remove('hidden'); return; }
+        el.innerHTML = list.map(a => {
+          const due = a.dueDate ? `~ ${fmtDate(a.dueDate)}` : '';
+          const link = a.url ? `<a href="${escapeAttr(a.url)}" target="_blank" class="text-navy hover:underline">열기 ↗</a>` : '';
+          return `<li class="flex items-center justify-between text-[13px] border-b border-border-hair pb-2 last:border-0 last:pb-0">
+            <span class="text-ink">${escapeHtml(a.title || a.dashboardTrack || '과제')}</span>
+            <span class="flex items-center gap-3"><span class="text-warn">${due}</span>${link}</span>
+          </li>`;
+        }).join('');
+      } catch (e) { /* 과제 로드 실패는 조용히 무시 */ }
+    }
+
+    function escapeHtml(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+    function escapeAttr(s){ return escapeHtml(s).replace(/`/g,'&#96;'); }
+
+    async function init() {
+      const params = new URLSearchParams(location.search);
+      if (params.get('discord_auth')) {
+        showBanner(params.get('discord_auth'));
+        // 주소창에서 쿼리 제거 (새로고침 시 배너 반복 방지)
+        history.replaceState(null, '', SELF_PATH);
+      }
+
+      $('btn-login').href = LOGIN_URL;
+      $('btn-logout').addEventListener('click', async () => {
+        try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch (e) {}
+        location.href = SELF_PATH;
+      });
+
+      try {
+        const res = await fetch(`/api/auth/me?next=${encodeURIComponent(SELF_PATH)}`, { credentials: 'include' });
+        const data = await res.json();
+
+        if (res.status === 403 || data.featureEnabled === false) {
+          $('login-disabled-note').textContent = data.message || '이 기능은 test 모드에서만 사용할 수 있어요.';
+          $('login-disabled-note').classList.remove('hidden');
+          $('btn-login').classList.add('opacity-40', 'pointer-events-none');
+          show('state-login');
+          return;
+        }
+
+        if (!data.authenticated) {
+          if (data.loginUrl) $('btn-login').href = data.loginUrl;
+          show('state-login');
+          return;
+        }
+
+        renderDashboard(data);
+      } catch (e) {
+        console.error('auth/me failed', e);
+        show('state-login');
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

@@ -141,6 +141,10 @@ def _restore_notion_token_after_request(response):
     return response
 TRACK_APPLICATION_DEFAULT_PATH = '/apply'
 TEST_PERSONAL_DASHBOARD_PATH = '/__preview/personal-dashboard'
+# 개인 대시보드 목업 — /static/ 으로 서빙해 기존 Vercel `/static/*` rewrite 를 그대로 탄다
+# (vercel.json 수정/재배포 불필요). OAuth 게이팅은 아래 PERSONAL_DASHBOARD_PATHS 로 묶어 처리.
+PERSONAL_DASHBOARD_STATIC_PATH = '/static/personal-dashboard.html'
+PERSONAL_DASHBOARD_PATHS = {TEST_PERSONAL_DASHBOARD_PATH, PERSONAL_DASHBOARD_STATIC_PATH}
 TRACK_APPLICATION_PATHS = {TRACK_APPLICATION_DEFAULT_PATH, '/track-apply'}
 TRACK_APPLICATION_CACHE_ENV = (
     (env_info.get('env_name') or '').lower()
@@ -569,7 +573,7 @@ def _is_admin_session():
 
 def _is_oauth_enabled_for_path(path):
     safe_path = _sanitize_relative_path(path)
-    if safe_path == TEST_PERSONAL_DASHBOARD_PATH:
+    if safe_path in PERSONAL_DASHBOARD_PATHS:
         return _is_test_personal_dashboard_enabled()
     if safe_path in TRACK_APPLICATION_PATHS:
         return _is_track_application_oauth_enabled()
@@ -577,7 +581,7 @@ def _is_oauth_enabled_for_path(path):
 
 
 def _is_test_only_auth_path(path):
-    return _sanitize_relative_path(path) == TEST_PERSONAL_DASHBOARD_PATH
+    return _sanitize_relative_path(path) in PERSONAL_DASHBOARD_PATHS
 
 
 def _build_auth_disabled_payload(path):
