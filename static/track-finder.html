@@ -6,77 +6,75 @@
 <title>ASC 온보딩 — 나에게 맞는 트랙 찾기</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 <style>
+  /* track-apply.html 톤앤매너 정렬: 화이트 canvas · 네이비 액센트 · hairline 보더 · 미세 그림자 · Pretendard */
   :root{
-    --navy-900:#1a2a4a; --navy-950:#102a43; --heading:#0A0E1A;
-    --brand-50:#EEF4FF; --brand-100:#DCE8FE; --brand-200:#B8D2FD;
-    --brand-500:#477FE9; --brand-600:#2F62CC; --brand-700:#254FA8;
-    --cream-50:#faf8f5; --cream-100:#f5f2ed; --cream-200:#ebe6de;
-    --body:#4B5563; --sub:#6B7280; --line:#e7e2d9;
-    --shadow:0 20px 45px -20px rgba(16,42,67,.22); --shadow-sm:0 6px 20px -12px rgba(16,42,67,.25);
+    --ink:#141E3C; --ink-muted:#4B5563; --ink-soft:#9CA3AF;
+    --navy:#1E2A4A; --navy-strong:#141E3C; --navy-soft:#EEF0F6;
+    --canvas:#FFFFFF; --surface:#F4F6F8; --surface-2:#EDEFF2;
+    --hair:#E5E7EB; --strong:#D1D5DB;
+    --shadow-card:0 1px 2px 0 rgba(20,30,60,.05);
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{
-    font-family:'Pretendard','Apple SD Gothic Neo',system-ui,-apple-system,sans-serif;
-    background:var(--cream-50); color:var(--body);
+    font-family:'Pretendard Variable','Pretendard','Apple SD Gothic Neo',system-ui,-apple-system,sans-serif;
+    background:var(--canvas); color:var(--ink-muted);
     min-height:100vh; display:flex; align-items:center; justify-content:center;
     padding:28px 22px; line-height:1.5; -webkit-font-smoothing:antialiased;
   }
   .wrap{width:100%;max-width:560px}
-  .eyebrow{font-size:12px;font-weight:800;letter-spacing:.14em;color:var(--brand-500);text-transform:uppercase;margin-bottom:14px}
-  .progress{height:6px;background:var(--cream-200);border-radius:99px;overflow:hidden;margin-bottom:30px}
-  .progress > i{display:block;height:100%;width:0;background:var(--brand-500);border-radius:99px;transition:width .4s ease}
+  .eyebrow{font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--ink-soft);text-transform:uppercase;margin-bottom:14px}
+  .progress{height:6px;background:var(--surface-2);border-radius:99px;overflow:hidden;margin-bottom:30px}
+  .progress > i{display:block;height:100%;width:0;background:var(--navy);border-radius:99px;transition:width .4s ease}
   .progress.hidden{visibility:hidden}
-  .q-count{font-size:13px;font-weight:600;color:var(--sub);margin-bottom:10px}
-  h1{font-size:34px;font-weight:900;letter-spacing:-.03em;line-height:1.22;color:var(--navy-900);margin-bottom:16px}
-  h2.q{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.35;color:var(--navy-900);margin-bottom:24px}
-  .lead{color:var(--sub);font-size:16px;line-height:1.75;margin-bottom:14px}
-  .note{background:var(--brand-50);border:1px solid var(--brand-100);border-radius:14px;padding:14px 16px;
-    font-size:13.5px;color:var(--brand-700);line-height:1.6;margin-bottom:28px}
+  .q-count{font-size:12px;font-weight:600;letter-spacing:.02em;color:var(--ink-soft);margin-bottom:12px}
+  h1{font-size:33px;font-weight:700;letter-spacing:-.02em;line-height:1.14;color:var(--ink);margin-bottom:16px}
+  h2.q{font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1.36;color:var(--ink);margin-bottom:24px}
+  .lead{color:var(--ink-muted);font-size:16px;line-height:1.75;margin-bottom:14px}
+  .note{background:var(--surface);border:1px solid var(--hair);border-radius:8px;padding:14px 16px;
+    font-size:13px;color:var(--ink-muted);line-height:1.65;margin-bottom:28px}
   .opt{
     display:flex;align-items:center;gap:13px;width:100%;text-align:left;cursor:pointer;
-    background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-sm);
-    padding:16px 18px;margin-bottom:11px;color:var(--navy-900);font-size:15.5px;font-weight:600;
-    transition:transform .12s ease, border-color .15s, background .15s;
+    background:var(--canvas);border:1px solid var(--hair);border-radius:10px;box-shadow:var(--shadow-card);
+    padding:15px 18px;margin-bottom:10px;color:var(--ink);font-size:15px;font-weight:600;
+    transition:border-color .15s, background .15s;
   }
-  .opt:hover{border-color:var(--brand-500);background:var(--brand-50)}
-  .opt:active{transform:scale(.99)}
+  .opt:hover{border-color:var(--navy);background:var(--navy-soft)}
+  .opt:active{background:var(--surface-2)}
   .opt .em{font-size:20px;line-height:1}
   .btns{display:flex;justify-content:space-between;align-items:center;margin-top:20px}
-  .ghost{background:none;border:none;color:var(--sub);font-size:14px;font-weight:600;cursor:pointer;padding:8px 4px}
-  .ghost:hover{color:var(--navy-900)}
+  .ghost{background:none;border:none;color:var(--ink-muted);font-size:13px;font-weight:600;cursor:pointer;padding:8px 4px}
+  .ghost:hover{color:var(--ink)}
   .cta{
-    display:inline-flex;align-items:center;gap:6px;background:var(--brand-500);color:#fff;font-weight:700;font-size:16px;
-    padding:16px 26px;border-radius:12px;text-decoration:none;border:none;cursor:pointer;
-    box-shadow:0 12px 26px -12px rgba(71,127,233,.7);transition:background .15s, transform .12s;
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--navy);color:#fff;font-weight:600;font-size:15px;
+    padding:0 24px;height:48px;border-radius:8px;text-decoration:none;border:none;cursor:pointer;
+    transition:background .15s;
   }
-  .cta:hover{background:var(--brand-600)}
-  .cta:active{transform:scale(.99)}
-  .cta.full{width:100%;justify-content:center}
+  .cta:hover{background:var(--navy-strong)}
+  .cta.full{width:100%}
   /* result */
-  .result-card{background:#fff;border:1px solid var(--line);border-radius:22px;padding:30px;margin-bottom:14px;box-shadow:var(--shadow)}
-  .match{font-size:13px;font-weight:700;color:var(--sub);margin-bottom:18px}
-  .match b{color:var(--brand-500);font-size:16px}
-  .match-bar{height:6px;background:var(--cream-200);border-radius:99px;margin-top:8px;overflow:hidden}
-  .match-bar > i{display:block;height:100%;background:var(--brand-500);border-radius:99px;transition:width .6s ease}
-  .typeline{font-size:15px;font-weight:800;color:var(--brand-700);margin-bottom:6px;letter-spacing:-.01em}
-  .result-em{font-size:46px;line-height:1;margin-bottom:16px}
-  .badge{display:inline-block;font-size:12px;font-weight:800;color:var(--brand-700);background:var(--brand-50);
-    border:1px solid var(--brand-100);padding:5px 11px;border-radius:99px;margin-bottom:15px}
-  .result-card h3{font-size:29px;font-weight:900;letter-spacing:-.02em;color:var(--navy-900);margin-bottom:6px}
-  .result-card .tag{color:var(--sub);font-size:15px;font-weight:600;margin-bottom:16px}
-  .result-card p.why{font-size:14.5px;color:var(--body);line-height:1.7}
+  .result-card{background:var(--canvas);border:1px solid var(--hair);border-radius:12px;padding:28px;margin-bottom:12px;box-shadow:var(--shadow-card)}
+  .match{font-size:13px;font-weight:600;color:var(--ink-muted);margin-bottom:18px}
+  .match b{color:var(--navy);font-size:16px}
+  .match-bar{height:6px;background:var(--surface-2);border-radius:99px;margin-top:8px;overflow:hidden}
+  .match-bar > i{display:block;height:100%;background:var(--navy);border-radius:99px;transition:width .6s ease}
+  .typeline{font-size:13px;font-weight:600;color:var(--navy);margin-bottom:6px;letter-spacing:-.01em}
+  .result-em{font-size:44px;line-height:1;margin-bottom:14px}
+  .badge{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--navy);background:var(--navy-soft);
+    border:1px solid var(--hair);padding:5px 11px;border-radius:99px;margin-bottom:15px}
+  .result-card h3{font-size:27px;font-weight:700;letter-spacing:-.02em;color:var(--ink);margin-bottom:6px}
+  .result-card .tag{color:var(--ink-muted);font-size:15px;font-weight:500;margin-bottom:16px}
+  .result-card p.why{font-size:14.5px;color:var(--ink-muted);line-height:1.72}
   .sub-card{width:100%;text-align:left;cursor:pointer;font-family:inherit;
-    background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow-sm);
-    display:flex;gap:12px;align-items:center;margin-bottom:24px;transition:border-color .15s, background .15s, transform .12s}
-  .sub-card:hover{border-color:var(--brand-500);background:var(--brand-50)}
-  .sub-card:active{transform:scale(.99)}
-  .sub-card .sub-cta{font-size:13px;font-weight:700;color:var(--brand-500);white-space:nowrap}
+    background:var(--canvas);border:1px solid var(--hair);border-radius:10px;padding:15px 18px;box-shadow:var(--shadow-card);
+    display:flex;gap:12px;align-items:center;margin-bottom:24px;transition:border-color .15s, background .15s}
+  .sub-card:hover{border-color:var(--navy);background:var(--navy-soft)}
+  .sub-card .sub-cta{font-size:13px;font-weight:600;color:var(--navy);white-space:nowrap}
   .sub-card .em{font-size:26px}
-  .sub-card .t{font-size:12px;font-weight:600;color:var(--sub);margin-bottom:2px}
-  .sub-card .n{font-size:15px;font-weight:800;color:var(--navy-900)}
+  .sub-card .t{font-size:12px;font-weight:600;color:var(--ink-soft);margin-bottom:2px}
+  .sub-card .n{font-size:15px;font-weight:700;color:var(--ink)}
   .fade{animation:fade .4s ease}
-  @keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-  .foot{margin-top:30px;font-size:12px;font-weight:600;color:#bcb4a7;text-align:center;letter-spacing:.02em}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .foot{margin-top:30px;font-size:11px;font-weight:600;color:var(--ink-soft);text-align:center;letter-spacing:.04em}
   .welcome-em{font-size:40px;margin-bottom:18px}
 </style>
 </head>
@@ -204,8 +202,8 @@ function renderWelcome(){
     <div class="welcome-em">👋</div>
     <h1>ASC에 오신 것을<br/>진심으로 환영합니다.</h1>
     <p class="lead">
-      합류를 축하드려요! 7개 트랙 중에서 <b style="color:var(--navy-900)">무엇부터 시작해야 할지</b> 막막하실 수 있어요.<br/>
-      간단한 5가지 질문으로, 지금 여러분에게 <b style="color:var(--navy-900)">가장 잘 맞는 트랙</b>을 찾아드릴게요.
+      합류를 축하드려요! 7개 트랙 중에서 <b style="color:var(--ink)">무엇부터 시작해야 할지</b> 막막하실 수 있어요.<br/>
+      간단한 5가지 질문으로, 지금 여러분에게 <b style="color:var(--ink)">가장 잘 맞는 트랙</b>을 찾아드릴게요.
     </p>
     <div class="note">
       ⏱️ 1분이면 충분해요. 한 달에 하나씩, 1년이면 모든 트랙을 경험하게 되니 부담 갖지 않으셔도 돼요.
