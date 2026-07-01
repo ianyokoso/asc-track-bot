@@ -79,6 +79,12 @@ def serve_apply_page():
     return _no_cache_headers(send_from_directory(STATIC_DIR, 'track-apply.html'))
 
 
+@app.route('/track-finder')
+def serve_track_finder_page():
+    """트랙 파인더(온보딩 진단) 정적 HTML 서빙. 결과 CTA → /apply 로 연결."""
+    return _no_cache_headers(send_from_directory(STATIC_DIR, 'track-finder.html'))
+
+
 @app.route('/static/<path:filename>')
 def serve_static_assets(filename):
     return _no_cache_headers(send_from_directory(STATIC_DIR, filename))
@@ -2893,6 +2899,158 @@ def get_authenticated_discord_tracks():
         "creatorEligible": data['creatorEligible'],
         "generatedAt": datetime.now().isoformat(),
     })
+
+
+# 과제 제출 히트맵 ────────────────────────────────────────────────
+# 제출 데이터는 asc-discord-bot 이 공유 Supabase(dashboard_cache)에 실시간 적재.
+# 레코드: {memberId, date(YYYY-MM-DD), status:'submitted', tracks:[displayName], ...}
+#   - weekly 트랙: date 가 그 주 '일요일'로 정렬 저장됨 → 주차 매핑 clean.
+#   - Shortform: date 가 실제 제출일(월~금) → 요일별 셀.
+# displayName 은 asc-discord-bot trackConfig 기준 (아래 매핑과 일치).
+_SUBMISSION_TRACK_BY_DISCORD = {
+    '빌더-기초': ('Builder Basic', 'weekly', '빌더 기초'),
+    '빌더-심화': ('Builder Advanced', 'weekly', '빌더 심화'),
+    '세일즈-실전': ('Sales', 'weekly', '세일즈 실전'),
+    'AI에이전트': ('AI Agent', 'weekly', 'AI 에이전트'),
+    '앱개발': ('App Development Track', 'weekly', '앱 개발'),
+    '나탐구': ('Self Inquiry Track', 'weekly', '나 탐구'),
+}
+_SUBMISSION_WEEKS = 4
+
+
+def _discord_track_to_submission(prefix, suffix):
+    """디스코드 트랙 역할(prefix/suffix) → (제출 displayName, cadence, 한글라벨) 또는 None."""
+    suffix = suffix or ''
+    if prefix == '크리에이터':
+        if '숏폼' in suffix:
+            return ('Shortform', 'daily', '크리에이터 숏폼')
+        if '롱폼' in suffix:
+            return ('Longform', 'weekly', '크리에이터 롱폼')
+        return None  # 숏/롱 suffix 역할이 실제 트랙 판정 → base 역할만이면 skip
+    return _SUBMISSION_TRACK_BY_DISCORD.get(prefix)
+
+
+def _build_submission_heatmap(discord_user):
+    """
+    로그인 유저의 트랙별 과제 제출 현황(히트맵) 구성.
+    반환: {onboarded, cohortStart, currentWeek, weeks, grids:[...]}
+      - onboarded=False: 멤버 마스터 DB 에 없음(제출 이력 매칭 불가).
+      - grids[].cadence='daily'  → rows:[{week, days:[{wd,state,date}]}]  (월~금)
+      - grids[].cadence='weekly' → cells:[{week, state}]
+      - state: done | today | current | missed | upcoming
+    """
+    result = {'onboarded': False, 'grids': [], 'currentWeek': None,
+              'cohortStart': None, 'weeks': _SUBMISSION_WEEKS}
+
+    cohort_start_raw = str(os.getenv('COHORT_START_DATE', '')).strip()
+    result['cohortStart'] = cohort_start_raw or None
+    try:
+        start = datetime.strptime(cohort_start_raw, '%Y-%m-%d').date()
+    except ValueError:
+        start = None
+
+    dashboard = _load_dashboard_cache_data() or {}
+    member = None
+    for m in (dashboard.get('members') or []):
+        if str(m.get('discordId', '')).strip() == str(discord_user['id']).strip():
+            member = m
+            break
+    if not member:
+        return result
+    result['onboarded'] = True
+
+    member_id = member.get('id')
+    my_subs = [s for s in (dashboard.get('submissions') or []) if s.get('memberId') == member_id]
+
+    # 디스코드 트랙 → 제출 트랙 매핑 (표시할 그리드 결정)
+    track_data = _fetch_user_track_data(discord_user['id'])
+    mapped = {}  # displayName -> (cadence, ko)
+    for t in track_data.get('tracks', []):
+        m = _discord_track_to_submission(t.get('prefix'), t.get('suffix'))
+        if m:
+            mapped[m[0]] = (m[1], m[2])
+
+    if start is None or not mapped:
+        return result
+
+    week1_monday = start - timedelta(days=start.weekday())
+    today = (datetime.utcnow() + timedelta(hours=9)).date()  # KST
+
+    def week_of(d):
+        return ((d - week1_monday).days // 7) + 1
+
+    result['currentWeek'] = week_of(today)
+
+    # 제출 인덱스
+    daily_dates, weekly_weeks = {}, {}
+    for s in my_subs:
+        try:
+            d = datetime.strptime(str(s.get('date')), '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            continue
+        for tr in (s.get('tracks') or []):
+            if tr not in mapped:
+                continue
+            if mapped[tr][0] == 'daily':
+                daily_dates.setdefault(tr, set()).add(d)
+            else:
+                weekly_weeks.setdefault(tr, set()).add(week_of(d))
+
+    grids = []
+    for display, (cadence, ko) in mapped.items():
+        if cadence == 'daily':
+            done = daily_dates.get(display, set())
+            rows, done_count = [], 0
+            for w in range(1, _SUBMISSION_WEEKS + 1):
+                days = []
+                for wd in range(0, 5):  # 월~금
+                    cell = week1_monday + timedelta(days=(w - 1) * 7 + wd)
+                    if cell in done:
+                        state = 'done'; done_count += 1
+                    elif cell < today:
+                        state = 'missed'
+                    elif cell == today:
+                        state = 'today'
+                    else:
+                        state = 'upcoming'
+                    days.append({'wd': wd, 'state': state, 'date': cell.isoformat()})
+                rows.append({'week': w, 'days': days})
+            grids.append({'track': ko, 'cadence': 'daily', 'rows': rows,
+                          'submitted': done_count, 'total': _SUBMISSION_WEEKS * 5})
+        else:
+            done = weekly_weeks.get(display, set())
+            cells, done_count = [], 0
+            cur = result['currentWeek']
+            for w in range(1, _SUBMISSION_WEEKS + 1):
+                if w in done:
+                    state = 'done'; done_count += 1
+                elif w < cur:
+                    state = 'missed'
+                elif w == cur:
+                    state = 'current'
+                else:
+                    state = 'upcoming'
+                cells.append({'week': w, 'state': state})
+            grids.append({'track': ko, 'cadence': 'weekly', 'cells': cells,
+                          'submitted': done_count, 'total': _SUBMISSION_WEEKS})
+
+    grids.sort(key=lambda g: g['track'])
+    result['grids'] = grids
+    return result
+
+
+@app.route('/api/auth/submissions', methods=['GET'])
+def get_authenticated_submissions():
+    """로그인 유저의 트랙별 과제 제출 히트맵."""
+    if not _is_test_personal_dashboard_enabled():
+        return jsonify({"status": "error", "message": "Disabled outside test environment."}), 403
+    discord_user = _get_authenticated_discord_user()
+    if not discord_user:
+        return jsonify({"status": "error", "message": "Authentication required."}), 401
+    data = _build_submission_heatmap(discord_user)
+    data['status'] = 'success'
+    data['generatedAt'] = datetime.now().isoformat()
+    return jsonify(data)
 
 
 def _pick_db_property(properties, expected_type, preferred_names):

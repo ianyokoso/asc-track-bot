@@ -123,15 +123,23 @@
         <div id="p-spaces" class="space-y-4"></div>
       </div>
 
-      <!-- 신청 현황 -->
-      <div class="bg-canvas border border-border-hair rounded-lg p-5 shadow-sm">
-        <div class="flex items-center justify-between mb-3">
-          <p class="text-[11px] eyebrow uppercase text-ink-soft">신청 현황</p>
-          <span id="p-submit-count" class="text-[12px] text-ink-muted"></span>
+      <!-- 과제 제출 현황 (히트맵) -->
+      <div id="card-submissions" class="hidden bg-canvas border border-border-hair rounded-lg p-5 shadow-sm">
+        <div class="flex items-center justify-between mb-4">
+          <p class="text-[11px] eyebrow uppercase text-ink-soft">과제 제출 현황</p>
+          <span id="p-week-badge" class="text-[10px] eyebrow uppercase text-ink-soft bg-surface-2 px-1.5 py-0.5 rounded-xs"></span>
         </div>
-        <p id="p-last-submit" class="text-[12px] text-ink-soft mb-3"></p>
-        <ul id="p-submissions" class="space-y-2"></ul>
-        <p id="p-no-submissions" class="hidden text-[13px] text-ink-soft">아직 제출한 신청이 없어요.</p>
+        <div id="p-heatmaps" class="space-y-6"></div>
+        <div class="mt-4 pt-3 border-t border-border-hair flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-ink-soft">
+          <span><span class="inline-block w-3 h-3 rounded-sm align-middle" style="background:#16A34A"></span> 제출</span>
+          <span><span class="inline-block w-3 h-3 rounded-sm align-middle" style="background:#1E2A4A"></span> 오늘·이번주</span>
+          <span><span class="inline-block w-3 h-3 rounded-sm align-middle" style="background:#FCA5A5"></span> 놓침</span>
+          <span><span class="inline-block w-3 h-3 rounded-sm align-middle" style="background:#EDEFF2"></span> 예정</span>
+        </div>
+      </div>
+      <div id="card-submissions-empty" class="hidden bg-canvas border border-border-hair rounded-lg p-5 shadow-sm">
+        <p class="text-[11px] eyebrow uppercase text-ink-soft mb-2">과제 제출 현황</p>
+        <p id="p-submissions-empty-msg" class="text-[13px] text-ink-soft"></p>
       </div>
 
       <!-- 크리에이터 일정/과제 -->
@@ -142,7 +150,7 @@
       </div>
 
       <p class="text-[11px] text-ink-soft text-center pt-2">
-        데이터 출처: 멤버 마스터 DB · 트랙 신청 DB · Notion 과제 DB
+        데이터 출처: 디스코드 역할 · 과제 제출(Supabase 공유) · Notion 과제 DB
       </p>
     </section>
   </main>
@@ -196,30 +204,69 @@
 
       // 트랙 — 디스코드 역할 기준 (비동기 로드)
       loadDiscordTracks();
-
-      // 신청 현황
-      const subs = data.submissions || [];
-      $('p-submit-count').textContent = summary.totalSubmitted ? `제출 ${summary.totalSubmitted}건` : '';
-      $('p-last-submit').textContent = summary.lastSubmittedAt ? `최근 제출: ${fmtDate(summary.lastSubmittedAt)}` : '';
-      const subEl = $('p-submissions');
-      if (subs.length) {
-        subEl.innerHTML = subs.map(s => {
-          const label = s.trackLabel || s.track || s.trackId || '신청';
-          const status = s.status === 'submitted' ? '제출됨' : (s.status || '작성중');
-          const cls = s.status === 'submitted' ? 'text-ok' : 'text-ink-soft';
-          return `<li class="flex items-center justify-between text-[13px] border-b border-border-hair pb-2 last:border-0 last:pb-0">
-            <span class="text-ink">${escapeHtml(label)}</span>
-            <span class="flex items-center gap-2"><span class="text-ink-soft">${fmtDate(s.date)}</span><span class="${cls} font-medium">${escapeHtml(status)}</span></span>
-          </li>`;
-        }).join('');
-        $('p-no-submissions').classList.add('hidden');
-      } else {
-        subEl.innerHTML = '';
-        $('p-no-submissions').classList.remove('hidden');
-      }
+      // 과제 제출 현황 히트맵 (비동기 로드)
+      loadSubmissions();
 
       $('btn-logout').classList.remove('hidden');
       show('state-dashboard');
+    }
+
+    // ── 과제 제출 히트맵 ─────────────────────────────────────────
+    const HEAT_COLOR = { done: '#16A34A', today: '#1E2A4A', current: '#1E2A4A', missed: '#FCA5A5', upcoming: '#EDEFF2' };
+    const WD_LABEL = ['월', '화', '수', '목', '금'];
+
+    function cell(state, title) {
+      return `<span title="${escapeAttr(title || '')}" class="inline-block w-6 h-6 rounded-sm align-middle"
+                    style="background:${HEAT_COLOR[state] || '#EDEFF2'}"></span>`;
+    }
+
+    function renderHeatmapGrid(g) {
+      const head = `<div class="flex items-center justify-between mb-2">
+          <p class="text-[13px] font-semibold text-ink">${escapeHtml(g.track)}</p>
+          <span class="text-[12px] text-ink-muted">${g.submitted}/${g.total}</span>
+        </div>`;
+      if (g.cadence === 'daily') {
+        const header = `<div class="flex gap-1.5 mb-1 pl-9">${WD_LABEL.map(d =>
+          `<span class="inline-block w-6 text-center text-[11px] text-ink-soft">${d}</span>`).join('')}</div>`;
+        const rows = g.rows.map(r =>
+          `<div class="flex items-center gap-1.5 mb-1">
+             <span class="w-8 text-[11px] text-ink-soft">${r.week}주</span>
+             ${r.days.map(d => cell(d.state, `${d.date} (${WD_LABEL[d.wd]})`)).join('')}
+           </div>`).join('');
+        return `<div>${head}${header}${rows}</div>`;
+      }
+      // weekly: 4칸
+      const cells = g.cells.map(c => `<div class="flex flex-col items-center gap-1">
+          <span class="text-[11px] text-ink-soft">${c.week}주</span>${cell(c.state, `${c.week}주차`)}
+        </div>`).join('');
+      return `<div>${head}<div class="flex gap-3">${cells}</div>
+        <p class="text-[11px] text-ink-soft mt-1.5">주 1회 제출</p></div>`;
+    }
+
+    async function loadSubmissions() {
+      try {
+        const res = await fetch('/api/auth/submissions', { credentials: 'include' });
+        const data = await res.json();
+        const card = $('card-submissions'), emptyCard = $('card-submissions-empty');
+
+        if (!data.onboarded) {
+          $('p-submissions-empty-msg').textContent = '아직 과제 제출 이력이 없어요. 기수가 시작되고 과제-인증 채널에 올리면 여기에 표시됩니다.';
+          emptyCard.classList.remove('hidden');
+          return;
+        }
+        if (!data.grids || !data.grids.length) {
+          $('p-submissions-empty-msg').textContent = data.cohortStart
+            ? '표시할 트랙 과제가 없어요.'
+            : '기수 시작일이 설정되면 제출 현황이 표시됩니다.';
+          emptyCard.classList.remove('hidden');
+          return;
+        }
+        if (data.currentWeek) $('p-week-badge').textContent = `현재 ${data.currentWeek}주차`;
+        $('p-heatmaps').innerHTML = data.grids.map(renderHeatmapGrid).join('');
+        card.classList.remove('hidden');
+      } catch (e) {
+        console.error('submissions load failed', e);
+      }
     }
 
     // 디스코드 트랙 역할 이름을 사람이 읽기 좋은 라벨로 (prefix/suffix 대시 → 공백)
