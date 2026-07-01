@@ -311,8 +311,9 @@ function paintResult(){
   });
   document.getElementById('restart').addEventListener('click',renderWelcome);
   document.getElementById('apply').addEventListener('click',()=>{
-    /* 트랙 신청 폼 (asc-track-bot: Discord 로그인 → apply form) */
-    window.open('https://asc-track-bot.vercel.app/apply','_blank');
+    /* 트랙 신청 폼으로 이동 (같은 탭). 상대경로라 vercel 프록시/오라클 직결 모두 동작.
+       /apply 히어로 → 트랙 찾기 → 신청 으로 이어지는 단일 탭 루프 유지. */
+    location.href='/apply';
   });
 }
 

@@ -2103,10 +2103,14 @@
           본인에게 맞는 트랙을 미리 둘러보고, 신청 시 빠르게 선택하실 수 있도록 정리했습니다.
         </p>
         <!-- 10기 정책: 상단에도 '신청하러 가기' CTA 노출. 재참여자가 커리큘럼 다 안 봐도 바로 신청 가능. -->
-        <div class="mt-7">
+        <!-- 자기선택(self-select) 듀얼 CTA: 경험자(0~9기)는 좌측 '신청하러 가기', 처음 온 10기는 우측 '트랙 찾기'(온보딩 진단). 강요 없이 각자 맞는 경로로. -->
+        <div class="mt-7 flex flex-col sm:flex-row sm:items-center gap-3">
           <button type="button" class="btn-navy h-11 px-7 text-[14px]" data-back-from-tracks>
             신청하러 가기 →
           </button>
+          <a href="/track-finder" class="btn-ghost h-11 px-7 text-[14px] no-underline">
+            처음이신가요? 나에게 맞는 트랙 찾기 →
+          </a>
         </div>
       </div>
     </div>
