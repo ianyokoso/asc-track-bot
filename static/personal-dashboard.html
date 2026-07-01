@@ -114,6 +114,15 @@
         </div>
       </div>
 
+      <!-- 내 트랙 공간 바로가기 (디스코드 채널 딥링크) -->
+      <div id="card-spaces" class="hidden bg-canvas border border-border-hair rounded-lg p-5 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-[11px] eyebrow uppercase text-ink-soft">내 트랙 공간 바로가기</p>
+          <span class="text-[10px] eyebrow uppercase text-ink-soft bg-surface-2 px-1.5 py-0.5 rounded-xs">Discord</span>
+        </div>
+        <div id="p-spaces" class="space-y-4"></div>
+      </div>
+
       <!-- 신청 현황 -->
       <div class="bg-canvas border border-border-hair rounded-lg p-5 shadow-sm">
         <div class="flex items-center justify-between mb-3">
@@ -236,11 +245,33 @@
         } else {
           el.innerHTML = `<span class="text-[13px] text-ink-soft">디스코드에 부여된 트랙 역할이 없어요.</span>`;
         }
+        renderSpaces(data.spaces || []);
         // 크리에이터 역할 있으면 과제 카드 로드
         if (data.creatorEligible) loadAssignments();
       } catch (e) {
         el.innerHTML = `<span class="text-[13px] text-bad">트랙 역할을 불러오지 못했어요.</span>`;
       }
+    }
+
+    function renderSpaces(spaces) {
+      const card = $('card-spaces');
+      const wrap = $('p-spaces');
+      if (!spaces.length) { card.classList.add('hidden'); return; }
+      wrap.innerHTML = spaces.map(sp => {
+        const head = `${escapeHtml((sp.trackKey || sp.trackName).replace(/-/g, ' '))}${sp.cohort ? ' · ' + escapeHtml(sp.cohort) + (String(sp.cohort).match(/기$/) ? '' : '기') : ''}`;
+        const btns = (sp.channels || []).map(c =>
+          `<a href="${escapeAttr(c.url)}" target="_blank" rel="noopener"
+              title="${escapeAttr(c.name)}"
+              class="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border-strong text-[13px] text-ink hover:bg-surface-2 transition">
+             <span>${c.emoji}</span><span>${escapeHtml(c.label)}</span>
+           </a>`
+        ).join('');
+        return `<div>
+          <p class="text-[13px] font-semibold text-ink mb-2">${head}</p>
+          <div class="flex flex-wrap gap-2">${btns}</div>
+        </div>`;
+      }).join('');
+      card.classList.remove('hidden');
     }
 
     async function loadAssignments() {

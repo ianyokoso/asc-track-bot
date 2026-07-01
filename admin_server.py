@@ -777,18 +777,60 @@ def _fetch_guild_roles_map(guild_id, bot_token):
     return role_map
 
 
-def _fetch_user_track_roles(user_id):
+# 봇이 만든 트랙 채널 kind → (표시 라벨, 이모지). 정렬 순서도 이 순서.
+_TRACK_CHANNEL_KINDS = [
+    ('announcement', '공지', '📢'),
+    ('assignment', '과제 인증', '📝'),
+    ('mentoring', '과제 멘토링', '🧑‍🏫'),
+    ('networking', '네트워킹', '🤝'),
+    ('lounge', '라운지 (음성)', '🎥'),
+]
+
+
+def _load_discord_runtime_resources():
+    """bot_config 의 discord_runtime_resources (기수→트랙→역할/채널 ID 매핑) 로드."""
+    try:
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+            cfg = json.load(f)
+        return cfg.get('discord_runtime_resources', {}) or {}
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _collect_bucket_role_ids(track_bucket):
+    """트랙 버킷(roles)의 모든 역할 ID 집합 (track/short/long/light/leader/groups)."""
+    ids = set()
+    roles = (track_bucket or {}).get('roles', {}) or {}
+    for kind, payload in roles.items():
+        if kind == 'groups' and isinstance(payload, dict):
+            for gp in payload.values():
+                if isinstance(gp, dict) and gp.get('id'):
+                    ids.add(str(gp['id']))
+        elif isinstance(payload, dict) and payload.get('id'):
+            ids.add(str(payload['id']))
+    return ids
+
+
+def _fetch_user_track_data(user_id):
     """
-    로그인 유저의 디스코드 트랙 역할을 target/prod 길드에서 조회.
-    반환: [{roleName, prefix, cohort, suffix}, ...] (중복 역할명 제거).
-    봇 토큰/유저ID 없거나 어떤 길드에도 멤버 아니면 [].
+    로그인 유저의 (a) 트랙 역할 목록 + (b) 트랙별 디스코드 채널 바로가기(spaces) 조회.
+
+    - 트랙 칩: 역할 이름 정규식 매칭 (runtime store 없어도 동작).
+    - 채널 바로가기: discord_runtime_resources 에서 유저 역할 ID 와 트랙 버킷
+      역할 ID 의 교집합으로 정확히 매칭 → 그 트랙 채널들의 딥링크 생성.
+
+    반환: {'tracks': [...], 'spaces': [...], 'creatorEligible': bool}
     """
+    empty = {'tracks': [], 'spaces': [], 'creatorEligible': False}
     user_id = str(user_id or '').strip()
     bot_token = str(os.getenv('DISCORD_BOT_TOKEN', '')).strip()
     if not user_id or not bot_token:
-        return []
-    seen = set()
-    results = []
+        return empty
+
+    runtime = _load_discord_runtime_resources()
+    tracks, seen_track_names = [], set()
+    spaces, seen_space_keys = [], set()
+
     for gid in _get_track_role_guild_ids():
         try:
             mr = requests.get(
@@ -799,31 +841,69 @@ def _fetch_user_track_roles(user_id):
             if mr.status_code == 404:
                 continue
             mr.raise_for_status()
-            role_ids = (mr.json() or {}).get('roles') or []
-            if not role_ids:
+            member_role_ids = set(str(r) for r in ((mr.json() or {}).get('roles') or []))
+            if not member_role_ids:
                 continue
+
+            # (a) 트랙 칩 — 역할 이름 정규식
             roles_map = _fetch_guild_roles_map(gid, bot_token)
-            for rid in role_ids:
-                name = (roles_map.get(str(rid)) or '').strip()
+            for rid in member_role_ids:
+                name = (roles_map.get(rid) or '').strip()
                 match = _TRACK_ROLE_RE.match(name)
-                if not match or name in seen:
+                if match and name not in seen_track_names:
+                    seen_track_names.add(name)
+                    tracks.append({
+                        'roleName': name,
+                        'prefix': match.group('prefix'),
+                        'cohort': match.group('cohort'),
+                        'suffix': match.group('suffix') or '',
+                    })
+
+            # (b) 채널 바로가기 — runtime store 역할 ID 교집합
+            for cohort_key, cohort_bucket in (runtime or {}).items():
+                bucket_guild = str((cohort_bucket or {}).get('guildId') or '')
+                if bucket_guild and bucket_guild != str(gid):
                     continue
-                seen.add(name)
-                results.append({
-                    'roleName': name,
-                    'prefix': match.group('prefix'),
-                    'cohort': match.group('cohort'),
-                    'suffix': match.group('suffix') or '',
-                })
+                for track_name, track_bucket in ((cohort_bucket or {}).get('tracks', {}) or {}).items():
+                    if not (_collect_bucket_role_ids(track_bucket) & member_role_ids):
+                        continue
+                    space_key = f'{gid}:{cohort_key}:{track_name}'
+                    if space_key in seen_space_keys:
+                        continue
+                    seen_space_keys.add(space_key)
+                    channels_bucket = (track_bucket or {}).get('channels', {}) or {}
+                    channels = []
+                    for kind, label, emoji in _TRACK_CHANNEL_KINDS:
+                        ch = channels_bucket.get(kind)
+                        if isinstance(ch, dict) and ch.get('id'):
+                            channels.append({
+                                'kind': kind,
+                                'label': label,
+                                'emoji': emoji,
+                                'name': ch.get('name') or '',
+                                'url': f'https://discord.com/channels/{bucket_guild or gid}/{ch["id"]}',
+                            })
+                    if channels:
+                        spaces.append({
+                            'trackName': track_name,
+                            'trackKey': (track_bucket or {}).get('trackKey') or '',
+                            'cohort': str(cohort_key),
+                            'channels': channels,
+                        })
         except requests.RequestException as e:
-            print(f"[WARN] _fetch_user_track_roles({user_id}, gid={gid}) network error: {e}")
+            print(f"[WARN] _fetch_user_track_data({user_id}, gid={gid}) network error: {e}")
             continue
         except Exception as e:
-            print(f"[WARN] _fetch_user_track_roles({user_id}, gid={gid}) error: {e}")
+            print(f"[WARN] _fetch_user_track_data({user_id}, gid={gid}) error: {e}")
             continue
-    # 기수 내림차순 → 이름순 정렬 (최신 기수 먼저)
-    results.sort(key=lambda t: (-int(t['cohort']), t['roleName']))
-    return results
+
+    tracks.sort(key=lambda t: (-int(t['cohort']), t['roleName']))
+    spaces.sort(key=lambda s: (-(int(s['cohort']) if str(s['cohort']).isdigit() else 0), s['trackName']))
+    return {
+        'tracks': tracks,
+        'spaces': spaces,
+        'creatorEligible': any(t.get('prefix') == '크리에이터' for t in tracks),
+    }
 
 
 def _is_user_in_admin_guild(user_id):
@@ -2804,11 +2884,12 @@ def get_authenticated_discord_tracks():
     if not discord_user:
         return jsonify({"status": "error", "message": "Authentication required."}), 401
 
-    tracks = _fetch_user_track_roles(discord_user['id'])
+    data = _fetch_user_track_data(discord_user['id'])
     return jsonify({
         "status": "success",
-        "tracks": tracks,
-        "creatorEligible": any(t.get('prefix') == '크리에이터' for t in tracks),
+        "tracks": data['tracks'],
+        "spaces": data['spaces'],
+        "creatorEligible": data['creatorEligible'],
         "generatedAt": datetime.now().isoformat(),
     })
 
