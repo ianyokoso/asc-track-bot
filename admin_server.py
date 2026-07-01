@@ -2915,6 +2915,18 @@ _SUBMISSION_TRACK_BY_DISCORD = {
     '앱개발': ('App Development Track', 'weekly', '앱 개발'),
     '나탐구': ('Self Inquiry Track', 'weekly', '나 탐구'),
 }
+# 멤버(노션) 트랙 displayName → (cadence, 한글라벨). 제출 레코드 tracks[] 와 동일 표기.
+# Shortform 만 월~금 daily, 나머지는 주 1회.
+_SUBMISSION_TRACK_META = {
+    'Shortform': ('daily', '크리에이터 숏폼'),
+    'Longform': ('weekly', '크리에이터 롱폼'),
+    'Builder Basic': ('weekly', '빌더 기초'),
+    'Builder Advanced': ('weekly', '빌더 심화'),
+    'Sales': ('weekly', '세일즈 실전'),
+    'AI Agent': ('weekly', 'AI 에이전트'),
+    'App Development Track': ('weekly', '앱 개발'),
+    'Self Inquiry Track': ('weekly', '나 탐구'),
+}
 _SUBMISSION_WEEKS = 4
 
 
@@ -3017,13 +3029,16 @@ def _build_submission_heatmap(discord_user):
     member_id = member.get('id')
     my_subs = [s for s in (dashboard.get('submissions') or []) if s.get('memberId') == member_id]
 
-    # 디스코드 트랙 → 제출 트랙 매핑 (표시할 그리드 결정)
-    track_data = _fetch_user_track_data(discord_user['id'])
+    # 표시할 그리드 = 멤버(노션) 트랙 기준. 제출 레코드 tracks[] 와 같은 표기라 매칭 정확.
+    # (디스코드 역할이 아직 없어도 노션 트랙만 있으면 뜸 — 이안 같은 케이스 포함.)
+    member_tracks = list(member.get('tracks') or [])
+    if not member_tracks and member.get('track'):
+        member_tracks = [member['track']]
     mapped = {}  # displayName -> (cadence, ko)
-    for t in track_data.get('tracks', []):
-        m = _discord_track_to_submission(t.get('prefix'), t.get('suffix'))
-        if m:
-            mapped[m[0]] = (m[1], m[2])
+    for tr in member_tracks:
+        meta = _SUBMISSION_TRACK_META.get(tr)
+        if meta:
+            mapped[tr] = meta
 
     if start is None or not mapped:
         return result
