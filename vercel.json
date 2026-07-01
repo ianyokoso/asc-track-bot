@@ -10,6 +10,10 @@
       "destination": "http://168.107.16.76:8001/apply"
     },
     {
+      "source": "/track-finder",
+      "destination": "http://168.107.16.76:8001/track-finder"
+    },
+    {
       "source": "/static/:path*",
       "destination": "http://168.107.16.76:8001/static/:path*"
     },

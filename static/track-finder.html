@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ASC 온보딩 — 나에게 맞는 트랙 찾기</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<style>
+  :root{
+    --navy-900:#1a2a4a; --navy-950:#102a43; --heading:#0A0E1A;
+    --brand-50:#EEF4FF; --brand-100:#DCE8FE; --brand-200:#B8D2FD;
+    --brand-500:#477FE9; --brand-600:#2F62CC; --brand-700:#254FA8;
+    --cream-50:#faf8f5; --cream-100:#f5f2ed; --cream-200:#ebe6de;
+    --body:#4B5563; --sub:#6B7280; --line:#e7e2d9;
+    --shadow:0 20px 45px -20px rgba(16,42,67,.22); --shadow-sm:0 6px 20px -12px rgba(16,42,67,.25);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Pretendard','Apple SD Gothic Neo',system-ui,-apple-system,sans-serif;
+    background:var(--cream-50); color:var(--body);
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    padding:28px 22px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{width:100%;max-width:560px}
+  .eyebrow{font-size:12px;font-weight:800;letter-spacing:.14em;color:var(--brand-500);text-transform:uppercase;margin-bottom:14px}
+  .progress{height:6px;background:var(--cream-200);border-radius:99px;overflow:hidden;margin-bottom:30px}
+  .progress > i{display:block;height:100%;width:0;background:var(--brand-500);border-radius:99px;transition:width .4s ease}
+  .progress.hidden{visibility:hidden}
+  .q-count{font-size:13px;font-weight:600;color:var(--sub);margin-bottom:10px}
+  h1{font-size:34px;font-weight:900;letter-spacing:-.03em;line-height:1.22;color:var(--navy-900);margin-bottom:16px}
+  h2.q{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.35;color:var(--navy-900);margin-bottom:24px}
+  .lead{color:var(--sub);font-size:16px;line-height:1.75;margin-bottom:14px}
+  .note{background:var(--brand-50);border:1px solid var(--brand-100);border-radius:14px;padding:14px 16px;
+    font-size:13.5px;color:var(--brand-700);line-height:1.6;margin-bottom:28px}
+  .opt{
+    display:flex;align-items:center;gap:13px;width:100%;text-align:left;cursor:pointer;
+    background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-sm);
+    padding:16px 18px;margin-bottom:11px;color:var(--navy-900);font-size:15.5px;font-weight:600;
+    transition:transform .12s ease, border-color .15s, background .15s;
+  }
+  .opt:hover{border-color:var(--brand-500);background:var(--brand-50)}
+  .opt:active{transform:scale(.99)}
+  .opt .em{font-size:20px;line-height:1}
+  .btns{display:flex;justify-content:space-between;align-items:center;margin-top:20px}
+  .ghost{background:none;border:none;color:var(--sub);font-size:14px;font-weight:600;cursor:pointer;padding:8px 4px}
+  .ghost:hover{color:var(--navy-900)}
+  .cta{
+    display:inline-flex;align-items:center;gap:6px;background:var(--brand-500);color:#fff;font-weight:700;font-size:16px;
+    padding:16px 26px;border-radius:12px;text-decoration:none;border:none;cursor:pointer;
+    box-shadow:0 12px 26px -12px rgba(71,127,233,.7);transition:background .15s, transform .12s;
+  }
+  .cta:hover{background:var(--brand-600)}
+  .cta:active{transform:scale(.99)}
+  .cta.full{width:100%;justify-content:center}
+  /* result */
+  .result-card{background:#fff;border:1px solid var(--line);border-radius:22px;padding:30px;margin-bottom:14px;box-shadow:var(--shadow)}
+  .match{font-size:13px;font-weight:700;color:var(--sub);margin-bottom:18px}
+  .match b{color:var(--brand-500);font-size:16px}
+  .match-bar{height:6px;background:var(--cream-200);border-radius:99px;margin-top:8px;overflow:hidden}
+  .match-bar > i{display:block;height:100%;background:var(--brand-500);border-radius:99px;transition:width .6s ease}
+  .typeline{font-size:15px;font-weight:800;color:var(--brand-700);margin-bottom:6px;letter-spacing:-.01em}
+  .result-em{font-size:46px;line-height:1;margin-bottom:16px}
+  .badge{display:inline-block;font-size:12px;font-weight:800;color:var(--brand-700);background:var(--brand-50);
+    border:1px solid var(--brand-100);padding:5px 11px;border-radius:99px;margin-bottom:15px}
+  .result-card h3{font-size:29px;font-weight:900;letter-spacing:-.02em;color:var(--navy-900);margin-bottom:6px}
+  .result-card .tag{color:var(--sub);font-size:15px;font-weight:600;margin-bottom:16px}
+  .result-card p.why{font-size:14.5px;color:var(--body);line-height:1.7}
+  .sub-card{width:100%;text-align:left;cursor:pointer;font-family:inherit;
+    background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow-sm);
+    display:flex;gap:12px;align-items:center;margin-bottom:24px;transition:border-color .15s, background .15s, transform .12s}
+  .sub-card:hover{border-color:var(--brand-500);background:var(--brand-50)}
+  .sub-card:active{transform:scale(.99)}
+  .sub-card .sub-cta{font-size:13px;font-weight:700;color:var(--brand-500);white-space:nowrap}
+  .sub-card .em{font-size:26px}
+  .sub-card .t{font-size:12px;font-weight:600;color:var(--sub);margin-bottom:2px}
+  .sub-card .n{font-size:15px;font-weight:800;color:var(--navy-900)}
+  .fade{animation:fade .4s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .foot{margin-top:30px;font-size:12px;font-weight:600;color:#bcb4a7;text-align:center;letter-spacing:.02em}
+  .welcome-em{font-size:40px;margin-bottom:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="progress hidden" id="progWrap"><i id="bar"></i></div>
+  <div id="app"></div>
+  <div class="foot">ASC · AI Solopreneur Club</div>
+</div>
+
+<script>
+/* ===== 트랙 정의 ===== */
+const TRACKS = {
+  creator:      {em:'🎬', name:'크리에이터 트랙', type:'무대 체질 스토리텔러', badge:'숏폼 20개', tag:'콘텐츠로 팬을 모으는 사람',
+    why:'매일 콘텐츠를 만들고 올리며 팔로워를 모아요. 스레드·링크드인·유튜브에서 5만+ 팔로워를 모은 조쉬가 직접 가이드하고, 4주간 숏폼 20개를 제작·업로드해 팬을 만드는 게 목표예요.'},
+  builder_basic:{em:'🛠️', name:'빌더 기초 트랙', type:'겁 없는 0→1 메이커', badge:'프로덕트 1개', tag:'코드 0으로 첫 제품 출시',
+    why:'코딩 경험이 전혀 없어도 4주 만에 Lovable로 나만의 서비스를 만들고 출시해요. 아이디어 → 핵심 기능 → 결제 연동 → 배포까지 단계별로 진행합니다.'},
+  builder_adv:  {em:'⚙️', name:'빌더 심화 트랙', type:'끝까지 파는 빌더', badge:'풀스택 MVP 1개', tag:'제대로 된 MVP를 운영 수준까지',
+    why:'개발·바이브코딩 경험이 있는 분이 대상이에요. Cursor 기반으로 운영까지 가능한 풀스택 구조로 확장하고, 배포·도메인·보안 검토까지 전 과정을 다뤄요.'},
+  app:          {em:'📱', name:'앱 개발 트랙', type:'손에 잡히는 걸 만드는 앱 메이커', badge:'앱 1개', tag:'내 앱을 마켓에 등록',
+    why:'비개발자도 4주 만에 Antigravity로 나만의 앱을 완성하고 iOS/Android 마켓에 등록해요. PRD → 제작 → 수익화 → 마켓 등록까지 직접 실행합니다.'},
+  sales:        {em:'💰', name:'세일즈 트랙', type:'파는 감각의 세일즈 해커', badge:'첫 매출 1건', tag:'실제로 파는 사람',
+    why:'랜딩페이지·광고·퍼널을 세팅하고 실제로 팔아봐요. 2024년 2.7억+ 실전 세일즈 경험 기반으로, 디지털·지식 상품을 파는 분에게 최적화되어 있어요.'},
+  agent:        {em:'🤖', name:'AI 에이전트 트랙', type:'자동화 설계자', badge:'AI 에이전트 1개', tag:'나 대신 일하는 자동화',
+    why:'클로드 코드로 나만의 업무 자동화 시스템을 직접 만들어요. 멀티에이전트·MCP를 활용해 반복 업무를 자동화하는 나만의 AI 팀을 구성합니다.'},
+  self:         {em:'🧭', name:'나 탐구 트랙', type:'길을 찾는 탐험가', badge:'포트폴리오 1개', tag:'방향부터 잡기',
+    why:'합류했지만 뭘 해야 할지 막막한 분들을 위한 과정이에요. 나다움을 발견하고, 구체적인 개인 브랜딩과 프로젝트 아이템으로 연결해요. (with 마이온 컴퍼니)'},
+};
+
+/* ===== 질문 (답 → 트랙 점수) ===== */
+const QUESTIONS = [
+  { q:'주말 오후 3시, 나도 모르게 시간이 순삭될 것 같은 일은?',
+    opts:[
+      {em:'✍️', t:'관심사에 대한 글·영상을 만들어 올리기', s:{creator:3,sales:1}},
+      {em:'🔧', t:'머릿속 아이디어를 뭔가로 뚝딱 만들어보기', s:{builder_basic:2,app:2,builder_adv:1}},
+      {em:'🗣️', t:'좋은 걸 발견해 남에게 추천하고 반응 보기', s:{sales:3,creator:1}},
+      {em:'⚙️', t:'귀찮은 반복 작업을 자동으로 돌리는 세팅', s:{agent:3}},
+      {em:'📓', t:'나에 대해 정리하고 앞으로를 계획하기', s:{self:3}},
+    ]},
+  { q:'새로운 AI 툴 소식을 들으면 드는 첫 생각은?',
+    opts:[
+      {em:'📣', t:'"일단 써보고 후기부터 공유해야지"', s:{creator:3}},
+      {em:'🧱', t:'"이걸로 뭘 만들 수 있지?"', s:{builder_basic:2,builder_adv:2,app:2}},
+      {em:'💵', t:'"이걸로 어떻게 돈 벌지?"', s:{sales:3}},
+      {em:'🤖', t:'"내 반복 업무 중 뭘 대체하지?"', s:{agent:3}},
+      {em:'🤷', t:'"관심은 가는데… 나랑 상관있나?"', s:{self:2,creator:1}},
+    ]},
+  { q:"'아, 성공했다' 하고 짜릿한 순간은?",
+    opts:[
+      {em:'❤️', t:'내 콘텐츠에 사람들이 반응하고 팔로우할 때', s:{creator:3}},
+      {em:'🖥️', t:'내가 만든 게 실제로 작동해서 누가 쓸 때', s:{builder_basic:2,builder_adv:2,app:2}},
+      {em:'🧾', t:'통장에 첫 매출이 찍힐 때', s:{sales:3}},
+      {em:'♾️', t:'손 안 대도 시스템이 알아서 굴러갈 때', s:{agent:3}},
+      {em:'🧭', t:'내가 뭘 원하는지 확실해질 때', s:{self:3}},
+    ]},
+  { q:'코드·개발에 대한 나의 거리감은?',
+    opts:[
+      {em:'🙈', t:'코드는 무섭다, 최대한 안 보고 싶다', s:{creator:2,self:1,sales:1,builder_basic:1}},
+      {em:'🧩', t:'노코드 툴은 재밌게 써봤다', s:{builder_basic:3,app:1,agent:1}},
+      {em:'💻', t:'터미널·깃허브가 낯설지 않다', s:{builder_adv:3,agent:2}},
+    ]},
+  { q:'팀플·모임에서 나는 주로 어떤 사람?',
+    opts:[
+      {em:'🎉', t:'분위기 만들고 사람들 연결하는 사람', s:{creator:2,sales:2}},
+      {em:'🔨', t:'묵묵히 실제 결과물 만드는 사람', s:{builder_basic:2,builder_adv:2,app:1}},
+      {em:'📋', t:'역할·프로세스 정리하는 사람', s:{agent:2,builder_adv:1}},
+      {em:'👀', t:'관찰하며 방향을 고민하는 사람', s:{self:3}},
+    ]},
+  { q:'더 끌리는 하루는?',
+    opts:[
+      {em:'📆', t:'매일 조금씩 올리고 반응 확인하는 하루', s:{creator:3,sales:1}},
+      {em:'🎯', t:'하나에 며칠 몰입해 완성하는 하루', s:{builder_adv:2,app:2,builder_basic:1}},
+      {em:'🛸', t:'한 번 세팅해두고 자동으로 굴러가게 하는 하루', s:{agent:3}},
+      {em:'🌀', t:'딱히 안 정해진, 탐색하며 흘러가는 하루', s:{self:3}},
+    ]},
+  { q:"지금 내가 가진(또는 갖고 싶은) '무기'는?",
+    opts:[
+      {em:'🎤', t:'하고 싶은 말·이야기가 많다', s:{creator:3}},
+      {em:'💡', t:'만들고 싶은 서비스·앱 아이디어가 있다', s:{builder_basic:2,builder_adv:1,app:2}},
+      {em:'📦', t:'이미 팔 물건·서비스·지식이 있다', s:{sales:3}},
+      {em:'🔁', t:'자동화하고 싶은 반복 업무가 쌓여 있다', s:{agent:3}},
+      {em:'❓', t:'아직 내 무기가 뭔지 모르겠다', s:{self:3}},
+    ]},
+  { q:"'내 결과물'을 상상하면 어떤 그림이 그려져요?",
+    opts:[
+      {em:'📊', t:'팔로워·조회수·구독자 숫자', s:{creator:3}},
+      {em:'🌐', t:'화면에 뜨는 내 웹서비스', s:{builder_basic:2,builder_adv:2}},
+      {em:'📱', t:'앱스토어에 올라간 내 앱 아이콘', s:{app:3}},
+      {em:'📈', t:'판매 페이지와 우상향 매출 그래프', s:{sales:3}},
+      {em:'⚡', t:'나 대신 일하는 봇·워크플로우', s:{agent:3}},
+      {em:'🗺️', t:'잘 정리된 나의 방향과 포트폴리오', s:{self:3}},
+    ]},
+  { q:'상상만 해도 가장 두려운 건?',
+    opts:[
+      {em:'🦗', t:'열심히 올렸는데 아무도 안 봐주는 것', s:{creator:3}},
+      {em:'🏗️', t:'만들다가 끝까지 못 가고 흐지부지되는 것', s:{builder_basic:2,builder_adv:2,app:1}},
+      {em:'💸', t:'만들었는데 하나도 안 팔리는 것', s:{sales:3}},
+      {em:'⏳', t:'계속 똑같은 일에 시간만 쓰는 것', s:{agent:3}},
+      {em:'🌫️', t:'방향 없이 이것저것 하다 마는 것', s:{self:3}},
+    ]},
+  { q:'1년 뒤, 사람들에게 나를 뭐라고 소개하고 싶어요?',
+    opts:[
+      {em:'⭐', t:'"콘텐츠로 사람 모으는 크리에이터예요"', s:{creator:3}},
+      {em:'🚀', t:'"나만의 서비스·앱 만드는 메이커예요"', s:{builder_basic:1,builder_adv:1,app:2}},
+      {em:'📈', t:'"실제로 파는 1인 사업가예요"', s:{sales:3}},
+      {em:'🤖', t:'"AI로 일을 자동화하는 사람이에요"', s:{agent:3}},
+      {em:'🧭', t:'"이제 막 내 길을 찾은 사람이에요"', s:{self:3}},
+    ]},
+];
+
+/* ===== 상태 ===== */
+let step = 0;               // 0..QUESTIONS.length-1
+const answers = [];
+const app = document.getElementById('app');
+const bar = document.getElementById('bar');
+const progWrap = document.getElementById('progWrap');
+
+function setBar(){ bar.style.width = (step / QUESTIONS.length * 100) + '%'; }
+
+/* 환영(온보딩) 화면 */
+function renderWelcome(){
+  progWrap.classList.add('hidden');
+  app.innerHTML = `<div class="fade">
+    <div class="eyebrow">Welcome to ASC</div>
+    <div class="welcome-em">👋</div>
+    <h1>ASC에 오신 것을<br/>진심으로 환영합니다.</h1>
+    <p class="lead">
+      합류를 축하드려요! 7개 트랙 중에서 <b style="color:var(--navy-900)">무엇부터 시작해야 할지</b> 막막하실 수 있어요.<br/>
+      간단한 5가지 질문으로, 지금 여러분에게 <b style="color:var(--navy-900)">가장 잘 맞는 트랙</b>을 찾아드릴게요.
+    </p>
+    <div class="note">
+      ⏱️ 1분이면 충분해요. 한 달에 하나씩, 1년이면 모든 트랙을 경험하게 되니 부담 갖지 않으셔도 돼요.
+    </div>
+    <button class="cta full" id="start">나에게 맞는 트랙 찾기 →</button>
+  </div>`;
+  document.getElementById('start').addEventListener('click',()=>{
+    step=0; answers.length=0; progWrap.classList.remove('hidden'); renderQuestion();
+  });
+}
+
+function renderQuestion(){
+  setBar();
+  const Q = QUESTIONS[step];
+  let html = `<div class="fade">
+    <div class="q-count">질문 ${step+1} / ${QUESTIONS.length}</div>
+    <h2 class="q">${Q.q}</h2>`;
+  Q.opts.forEach((o,i)=>{
+    html += `<button class="opt" data-i="${i}"><span class="em">${o.em}</span><span>${o.t}</span></button>`;
+  });
+  html += `<div class="btns">
+    <button class="ghost" id="back">← ${step===0?'처음으로':'이전'}</button>
+  </div></div>`;
+  app.innerHTML = html;
+  app.querySelectorAll('.opt').forEach(btn=>{
+    btn.addEventListener('click',()=>choose(parseInt(btn.dataset.i)));
+  });
+  document.getElementById('back').addEventListener('click',goBack);
+}
+
+function choose(i){
+  answers[step] = i;
+  step++;
+  if(step < QUESTIONS.length) renderQuestion();
+  else renderResult();
+}
+
+function goBack(){
+  if(step===0){ renderWelcome(); return; }
+  step--;
+  renderQuestion();
+}
+
+let topTwo = [];      // [1순위key, 2순위key]
+let primaryIdx = 0;   // 현재 크게 보고 있는 트랙 (0 or 1)
+let PCT = {};         // 트랙별 매칭률
+
+function computeScores(){
+  const total = {}, max = {};
+  Object.keys(TRACKS).forEach(k=>{ total[k]=0; max[k]=0; });
+  QUESTIONS.forEach((Q,qi)=>{
+    // 이 문항이 각 트랙에 줄 수 있는 최대 점수(가장 잘 맞는 답 기준)
+    const best = {};
+    Q.opts.forEach(o=>{ for(const k in o.s){ if(o.s[k] > (best[k]||0)) best[k]=o.s[k]; } });
+    for(const k in best) max[k]+=best[k];
+    // 실제 선택 점수
+    const ai = answers[qi]; if(ai==null) return;
+    const s = Q.opts[ai].s; for(const k in s) total[k]+=s[k];
+  });
+  return { total, max };
+}
+
+function renderResult(){
+  const { total, max } = computeScores();
+  const ranked = Object.keys(TRACKS).sort((a,b)=>total[b]-total[a]);
+  PCT = {};
+  ranked.forEach(k=>{ PCT[k]=Math.max(48, Math.min(99, Math.round(total[k]/(max[k]||1)*100))); });
+  topTwo = [ranked[0], ranked[1]];
+  primaryIdx = 0;
+  paintResult();
+}
+
+function paintResult(){
+  bar.style.width='100%';
+  const isTop = primaryIdx===0;
+  const pk = topTwo[primaryIdx], ok = topTwo[primaryIdx===0?1:0];
+  const primary = TRACKS[pk], other = TRACKS[ok];
+  const pct = PCT[pk], opct = PCT[ok];
+  app.innerHTML = `<div class="fade">
+    <div class="eyebrow">Your Track</div>
+    <h1 style="margin-bottom:20px">${isTop ? '당신에게 딱 맞는 트랙은' : '이 트랙도 잘 맞아요'}</h1>
+    <div class="result-card">
+      <div class="match">매칭률 <b>${pct}%</b><div class="match-bar"><i style="width:${pct}%"></i></div></div>
+      <div class="result-em">${primary.em}</div>
+      <span class="badge">${isTop?'추천 1순위':'추천 2순위'} · 4주 산출물 · ${primary.badge}</span>
+      <div class="typeline">당신은 &lsquo;${primary.type}&rsquo; 타입</div>
+      <h3>${primary.name}</h3>
+      <div class="tag">${primary.tag}</div>
+      <p class="why">${primary.why}</p>
+    </div>
+    <button class="sub-card" id="swap">
+      <span class="em">${other.em}</span>
+      <div style="flex:1"><div class="t">${isTop?`이 트랙도 잘 맞아요 · 매칭률 ${opct}%`:'추천 1순위 다시 보기'}</div><div class="n">${other.name} · ${other.tag}</div></div>
+      <span class="sub-cta">자세히 →</span>
+    </button>
+    <button class="cta full" id="apply">${primary.name} 신청하기 →</button>
+    <div class="btns" style="justify-content:center">
+      <button class="ghost" id="restart">↺ 다시 테스트하기</button>
+    </div>
+  </div>`;
+  document.getElementById('swap').addEventListener('click',()=>{
+    primaryIdx = primaryIdx===0?1:0; paintResult();
+  });
+  document.getElementById('restart').addEventListener('click',renderWelcome);
+  document.getElementById('apply').addEventListener('click',()=>{
+    /* 트랙 신청 폼으로 이동 (같은 탭). 상대경로라 vercel 프록시/오라클 직결 모두 동작.
+       /apply 히어로 → 트랙 찾기 → 신청 으로 이어지는 단일 탭 루프 유지. */
+    location.href='/apply';
+  });
+}
+
+renderWelcome();
+</script>
+</body>
+</html>

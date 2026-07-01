@@ -79,6 +79,12 @@ def serve_apply_page():
     return _no_cache_headers(send_from_directory(STATIC_DIR, 'track-apply.html'))
 
 
+@app.route('/track-finder')
+def serve_track_finder_page():
+    """트랙 파인더(온보딩 진단) 정적 HTML 서빙. 결과 CTA → /apply 로 연결."""
+    return _no_cache_headers(send_from_directory(STATIC_DIR, 'track-finder.html'))
+
+
 @app.route('/static/<path:filename>')
 def serve_static_assets(filename):
     return _no_cache_headers(send_from_directory(STATIC_DIR, filename))
