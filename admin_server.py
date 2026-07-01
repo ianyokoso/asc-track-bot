@@ -79,12 +79,6 @@ def serve_apply_page():
     return _no_cache_headers(send_from_directory(STATIC_DIR, 'track-apply.html'))
 
 
-@app.route('/track-finder')
-def serve_track_finder_page():
-    """트랙 파인더(온보딩 진단) 정적 HTML 서빙. 결과 CTA → /apply 로 연결."""
-    return _no_cache_headers(send_from_directory(STATIC_DIR, 'track-finder.html'))
-
-
 @app.route('/static/<path:filename>')
 def serve_static_assets(filename):
     return _no_cache_headers(send_from_directory(STATIC_DIR, filename))
@@ -2930,6 +2924,48 @@ def _discord_track_to_submission(prefix, suffix):
     return _SUBMISSION_TRACK_BY_DISCORD.get(prefix)
 
 
+# 기수 기간은 asc-bot-dashboard(=asc-discord-bot admin, 내부 :8000)와 연동한다.
+# 제출 날짜 정렬 기준(기수 시작일)이 그쪽이므로, 히트맵 주차 계산도 같은 값을 써야 일치.
+_COHORT_SETTINGS_CACHE = {'at': 0.0, 'data': None}
+_COHORT_SETTINGS_TTL = 120  # seconds
+
+
+def _get_synced_cohort_settings():
+    """asc-bot-dashboard 백엔드(:8000 /api/settings)에서 기수 기간 fetch. 실패 시 로컬 env 폴백."""
+    import time
+    now = time.time()
+    cached = _COHORT_SETTINGS_CACHE
+    if cached['data'] and now - cached['at'] < _COHORT_SETTINGS_TTL:
+        return cached['data']
+
+    data = None
+    for base in ('http://127.0.0.1:8000', 'http://168.107.16.76:8000'):
+        try:
+            r = requests.get(f'{base}/api/settings', timeout=5)
+            if r.status_code == 200:
+                j = r.json()
+                data = {
+                    'cohortName': str(j.get('cohortName') or '').strip(),
+                    'startDate': str(j.get('startDate') or '').strip(),
+                    'endDate': str(j.get('endDate') or '').strip(),
+                    'source': 'asc-bot-dashboard',
+                }
+                break
+        except Exception as e:
+            print(f"[WARN] cohort settings fetch failed ({base}): {e}")
+            continue
+    if not data:
+        data = {
+            'cohortName': str(os.getenv('CURRENT_COHORT', '')).strip(),
+            'startDate': str(os.getenv('COHORT_START_DATE', '')).strip(),
+            'endDate': str(os.getenv('COHORT_END_DATE', '')).strip(),
+            'source': 'env-fallback',
+        }
+    _COHORT_SETTINGS_CACHE['at'] = now
+    _COHORT_SETTINGS_CACHE['data'] = data
+    return data
+
+
 def _build_submission_heatmap(discord_user):
     """
     로그인 유저의 트랙별 과제 제출 현황(히트맵) 구성.
@@ -2939,15 +2975,28 @@ def _build_submission_heatmap(discord_user):
       - grids[].cadence='weekly' → cells:[{week, state}]
       - state: done | today | current | missed | upcoming
     """
+    settings = _get_synced_cohort_settings()
+    cohort_start_raw = settings.get('startDate') or ''
+    cohort_end_raw = settings.get('endDate') or ''
     result = {'onboarded': False, 'grids': [], 'currentWeek': None,
-              'cohortStart': None, 'weeks': _SUBMISSION_WEEKS}
+              'cohortStart': cohort_start_raw or None,
+              'cohortName': settings.get('cohortName') or None,
+              'settingsSource': settings.get('source'),
+              'weeks': _SUBMISSION_WEEKS}
 
-    cohort_start_raw = str(os.getenv('COHORT_START_DATE', '')).strip()
-    result['cohortStart'] = cohort_start_raw or None
     try:
         start = datetime.strptime(cohort_start_raw, '%Y-%m-%d').date()
     except ValueError:
         start = None
+    try:
+        end = datetime.strptime(cohort_end_raw, '%Y-%m-%d').date()
+    except ValueError:
+        end = None
+    # 기수 주차 수: end-start 로 산출(1~8 clamp), 없으면 기본 4주.
+    weeks = _SUBMISSION_WEEKS
+    if start and end and end >= start:
+        weeks = max(1, min(8, ((end - start).days // 7) + 1))
+    result['weeks'] = weeks
 
     dashboard = _load_dashboard_cache_data() or {}
     member = None
@@ -3001,12 +3050,14 @@ def _build_submission_heatmap(discord_user):
         if cadence == 'daily':
             done = daily_dates.get(display, set())
             rows, done_count = [], 0
-            for w in range(1, _SUBMISSION_WEEKS + 1):
+            for w in range(1, weeks + 1):
                 days = []
                 for wd in range(0, 5):  # 월~금
                     cell = week1_monday + timedelta(days=(w - 1) * 7 + wd)
                     if cell in done:
                         state = 'done'; done_count += 1
+                    elif cell < start:
+                        state = 'upcoming'   # 기수 시작 전 날짜 → 비활성(회색)
                     elif cell < today:
                         state = 'missed'
                     elif cell == today:
@@ -3016,12 +3067,12 @@ def _build_submission_heatmap(discord_user):
                     days.append({'wd': wd, 'state': state, 'date': cell.isoformat()})
                 rows.append({'week': w, 'days': days})
             grids.append({'track': ko, 'cadence': 'daily', 'rows': rows,
-                          'submitted': done_count, 'total': _SUBMISSION_WEEKS * 5})
+                          'submitted': done_count, 'total': weeks * 5})
         else:
             done = weekly_weeks.get(display, set())
             cells, done_count = [], 0
             cur = result['currentWeek']
-            for w in range(1, _SUBMISSION_WEEKS + 1):
+            for w in range(1, weeks + 1):
                 if w in done:
                     state = 'done'; done_count += 1
                 elif w < cur:
@@ -3032,7 +3083,7 @@ def _build_submission_heatmap(discord_user):
                     state = 'upcoming'
                 cells.append({'week': w, 'state': state})
             grids.append({'track': ko, 'cadence': 'weekly', 'cells': cells,
-                          'submitted': done_count, 'total': _SUBMISSION_WEEKS})
+                          'submitted': done_count, 'total': weeks})
 
     grids.sort(key=lambda g: g['track'])
     result['grids'] = grids
