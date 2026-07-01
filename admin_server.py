@@ -730,6 +730,102 @@ def _fetch_guild_nickname(user_id):
     return None
 
 
+# ── 디스코드 역할 기반 트랙 조회 (개인 대시보드용) ──────────────────
+# 봇(cogs/admin.py)이 만드는 트랙 역할 이름 규칙: "{prefix}-{cohort}기[-{suffix}]"
+#   예) 크리에이터-10기 / 크리에이터-10기-숏폼 / 빌더-기초-10기 / 크리에이터-10기-라이트-숏폼
+# prefix 목록은 cogs/admin.py _TRACK_DISCORD_PREFIX 의 값들과 일치해야 한다.
+_TRACK_ROLE_PREFIXES = ['크리에이터', '빌더-기초', '빌더-심화', '세일즈-실전', 'AI에이전트', '앱개발', '나탐구']
+_TRACK_ROLE_RE = re.compile(
+    r'^(?P<prefix>' + '|'.join(re.escape(p) for p in _TRACK_ROLE_PREFIXES) +
+    r')-(?P<cohort>\d+)기(?:-(?P<suffix>.+))?$'
+)
+_GUILD_ROLES_CACHE = {}      # { guild_id: {'at': ts, 'map': {role_id: name}} }
+_GUILD_ROLES_TTL = 60        # seconds
+
+
+def _get_track_role_guild_ids():
+    """트랙 역할이 존재하는 길드 후보. DISCORD_TARGET_GUILD_ID(1383 prod) 우선."""
+    ids = []
+    target = str(os.getenv('DISCORD_TARGET_GUILD_ID', '')).strip()
+    if target:
+        ids.append(target)
+    for gid in PROD_DISCORD_GUILD_BLACKLIST:
+        if str(gid) not in ids:
+            ids.append(str(gid))
+    admin_gid = _get_admin_guild_id()
+    if admin_gid and admin_gid not in ids:
+        ids.append(admin_gid)
+    return ids
+
+
+def _fetch_guild_roles_map(guild_id, bot_token):
+    """길드의 role_id -> role_name 맵 (60s 캐시)."""
+    import time
+    now = time.time()
+    cached = _GUILD_ROLES_CACHE.get(guild_id)
+    if cached and now - cached['at'] < _GUILD_ROLES_TTL:
+        return cached['map']
+    r = requests.get(
+        f'{DISCORD_API_BASE}/guilds/{guild_id}/roles',
+        headers={'Authorization': f'Bot {bot_token}'},
+        timeout=10,
+    )
+    r.raise_for_status()
+    roles = r.json() or []
+    role_map = {str(role.get('id')): (role.get('name') or '') for role in roles}
+    _GUILD_ROLES_CACHE[guild_id] = {'at': now, 'map': role_map}
+    return role_map
+
+
+def _fetch_user_track_roles(user_id):
+    """
+    로그인 유저의 디스코드 트랙 역할을 target/prod 길드에서 조회.
+    반환: [{roleName, prefix, cohort, suffix}, ...] (중복 역할명 제거).
+    봇 토큰/유저ID 없거나 어떤 길드에도 멤버 아니면 [].
+    """
+    user_id = str(user_id or '').strip()
+    bot_token = str(os.getenv('DISCORD_BOT_TOKEN', '')).strip()
+    if not user_id or not bot_token:
+        return []
+    seen = set()
+    results = []
+    for gid in _get_track_role_guild_ids():
+        try:
+            mr = requests.get(
+                f'{DISCORD_API_BASE}/guilds/{gid}/members/{user_id}',
+                headers={'Authorization': f'Bot {bot_token}'},
+                timeout=10,
+            )
+            if mr.status_code == 404:
+                continue
+            mr.raise_for_status()
+            role_ids = (mr.json() or {}).get('roles') or []
+            if not role_ids:
+                continue
+            roles_map = _fetch_guild_roles_map(gid, bot_token)
+            for rid in role_ids:
+                name = (roles_map.get(str(rid)) or '').strip()
+                match = _TRACK_ROLE_RE.match(name)
+                if not match or name in seen:
+                    continue
+                seen.add(name)
+                results.append({
+                    'roleName': name,
+                    'prefix': match.group('prefix'),
+                    'cohort': match.group('cohort'),
+                    'suffix': match.group('suffix') or '',
+                })
+        except requests.RequestException as e:
+            print(f"[WARN] _fetch_user_track_roles({user_id}, gid={gid}) network error: {e}")
+            continue
+        except Exception as e:
+            print(f"[WARN] _fetch_user_track_roles({user_id}, gid={gid}) error: {e}")
+            continue
+    # 기수 내림차순 → 이름순 정렬 (최신 기수 먼저)
+    results.sort(key=lambda t: (-int(t['cohort']), t['roleName']))
+    return results
+
+
 def _is_user_in_admin_guild(user_id):
     """
     봇 토큰으로 user_id 가 운영 길드 (env 별 prod / test) 의 멤버인지 확인.
@@ -2695,6 +2791,24 @@ def get_creator_assignments_for_user():
     return jsonify({
         "status": "success",
         "assignments": assignments,
+        "generatedAt": datetime.now().isoformat(),
+    })
+
+
+@app.route('/api/auth/discord-tracks', methods=['GET'])
+def get_authenticated_discord_tracks():
+    """로그인 유저의 디스코드 트랙 역할 기반 트랙 목록 (개인 대시보드용)."""
+    if not _is_test_personal_dashboard_enabled():
+        return jsonify({"status": "error", "message": "Disabled outside test environment."}), 403
+    discord_user = _get_authenticated_discord_user()
+    if not discord_user:
+        return jsonify({"status": "error", "message": "Authentication required."}), 401
+
+    tracks = _fetch_user_track_roles(discord_user['id'])
+    return jsonify({
+        "status": "success",
+        "tracks": tracks,
+        "creatorEligible": any(t.get('prefix') == '크리에이터' for t in tracks),
         "generatedAt": datetime.now().isoformat(),
     })
 

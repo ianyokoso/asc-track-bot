@@ -102,16 +102,15 @@
         </div>
       </div>
 
-      <!-- 멤버 마스터 미등록 안내 -->
-      <div id="card-no-member" class="hidden bg-[#FFF7ED] border border-warn/30 rounded-lg p-4 text-[13px] text-[#92400E]">
-        ⚠️ 아직 <b>멤버 마스터 DB</b>에 등록되지 않은 계정이에요. 트랙을 신청하면 일괄 반영 시 자동으로 등록됩니다.
-      </div>
-
-      <!-- 내 트랙 -->
+      <!-- 내 트랙 (디스코드 역할 기준) -->
       <div class="bg-canvas border border-border-hair rounded-lg p-5 shadow-sm">
-        <p class="text-[11px] eyebrow uppercase text-ink-soft mb-3">내 트랙</p>
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-[11px] eyebrow uppercase text-ink-soft">내 트랙</p>
+          <span class="text-[10px] eyebrow uppercase text-ink-soft bg-surface-2 px-1.5 py-0.5 rounded-xs">Discord 역할 기준</span>
+        </div>
         <div id="p-tracks" class="flex flex-wrap gap-2">
-          <span class="text-[13px] text-ink-soft">—</span>
+          <span class="skeleton inline-block h-7 w-24 rounded-full"></span>
+          <span class="skeleton inline-block h-7 w-20 rounded-full"></span>
         </div>
       </div>
 
@@ -186,19 +185,8 @@
       $('p-id').textContent = `Discord ID ${user.id || '—'}`;
       if (data.isAdmin) $('p-admin').classList.remove('hidden');
 
-      // 멤버 마스터 등록 여부
-      $('card-no-member').classList.toggle('hidden', !!data.member);
-
-      // 트랙
-      const tracks = summary.tracks || [];
-      const tracksEl = $('p-tracks');
-      if (tracks.length) {
-        tracksEl.innerHTML = tracks.map(t =>
-          `<span class="text-[13px] px-3 py-1 rounded-full bg-navy-soft text-navy-strong font-medium">${escapeHtml(t)}</span>`
-        ).join('');
-      } else {
-        tracksEl.innerHTML = `<span class="text-[13px] text-ink-soft">신청한 트랙이 없어요.</span>`;
-      }
+      // 트랙 — 디스코드 역할 기준 (비동기 로드)
+      loadDiscordTracks();
 
       // 신청 현황
       const subs = data.submissions || [];
@@ -221,11 +209,38 @@
         $('p-no-submissions').classList.remove('hidden');
       }
 
-      // 크리에이터 과제 (자격 있을 때만 fetch)
-      if (summary.creatorTrackEligible) loadAssignments();
-
       $('btn-logout').classList.remove('hidden');
       show('state-dashboard');
+    }
+
+    // 디스코드 트랙 역할 이름을 사람이 읽기 좋은 라벨로 (prefix/suffix 대시 → 공백)
+    function trackLabel(t) {
+      const main = String(t.prefix || '').replace(/-/g, ' ');
+      const sub = t.suffix ? ' · ' + String(t.suffix).replace(/-/g, ' ') : '';
+      return main + sub;
+    }
+
+    async function loadDiscordTracks() {
+      const el = $('p-tracks');
+      try {
+        const res = await fetch('/api/auth/discord-tracks', { credentials: 'include' });
+        const data = await res.json();
+        const tracks = (data.tracks || []);
+        if (tracks.length) {
+          el.innerHTML = tracks.map(t =>
+            `<span class="inline-flex items-center gap-1.5 text-[13px] pl-3 pr-2 py-1 rounded-full bg-navy-soft text-navy-strong font-medium">
+               ${escapeHtml(trackLabel(t))}
+               <span class="text-[10px] text-navy bg-canvas px-1.5 py-0.5 rounded-full">${escapeHtml(t.cohort)}기</span>
+             </span>`
+          ).join('');
+        } else {
+          el.innerHTML = `<span class="text-[13px] text-ink-soft">디스코드에 부여된 트랙 역할이 없어요.</span>`;
+        }
+        // 크리에이터 역할 있으면 과제 카드 로드
+        if (data.creatorEligible) loadAssignments();
+      } catch (e) {
+        el.innerHTML = `<span class="text-[13px] text-bad">트랙 역할을 불러오지 못했어요.</span>`;
+      }
     }
 
     async function loadAssignments() {
