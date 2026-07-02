@@ -2102,26 +2102,36 @@
         <p class="mt-5 text-base md:text-lg text-ink-muted leading-relaxed max-w-2xl">
           본인에게 맞는 트랙을 미리 둘러보고, 신청 시 빠르게 선택하실 수 있도록 정리했습니다.
         </p>
-        <!-- 10기 정책: 상단 '신청하러 가기' CTA (경험자용 — 커리큘럼 안 봐도 바로 신청). -->
-        <div class="mt-7">
-          <button type="button" class="btn-navy h-11 px-7 text-[14px]" data-back-from-tracks>
-            신청하러 가기 →
-          </button>
-        </div>
-
-        <!-- 온보딩 안내 카드: 처음 온 10기가 track-finder(진단)로 자연스럽게 향하도록 시각 무게를 준 콜아웃.
-             경험자는 위 기본 CTA로 바로 신청, 초심자는 이 카드로 유도 (자기선택). -->
-        <div class="mt-6 rounded-lg border border-border-hair bg-surface p-5 flex flex-col sm:flex-row sm:items-center gap-4">
-          <div class="flex items-start gap-3.5 flex-1">
-            <span class="shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-md bg-navy-soft text-[20px] leading-none">🧭</span>
-            <div>
-              <p class="text-[15px] font-semibold text-ink">ASC가 처음이신가요?</p>
-              <p class="mt-1 text-[13px] text-ink-muted leading-relaxed">간단한 질문 몇 개로 지금 나에게 딱 맞는 트랙을 찾아드려요.</p>
+        <!-- 두 갈래 진입 섹션: (위) 처음 온 10기 → 온보딩 진단 / (아래) 트랙을 이미 아는 사람 → 바로 신청.
+             신규자에게 가이드가 더 필요하므로 온보딩 섹션을 위로 배치. 두 섹션 동일 카드 구조. -->
+        <div class="mt-8 space-y-3">
+          <!-- ① 처음이신가요 — 온보딩 진단 (위) -->
+          <div class="rounded-lg border border-border-hair bg-surface p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div class="flex items-start gap-3.5 flex-1">
+              <span class="shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-md bg-navy-soft text-[20px] leading-none">🧭</span>
+              <div>
+                <p class="text-[15px] font-semibold text-ink">ASC가 처음이신가요?</p>
+                <p class="mt-1 text-[13px] text-ink-muted leading-relaxed">간단한 질문 몇 개로 지금 나에게 딱 맞는 트랙을 찾아드려요.</p>
+              </div>
             </div>
+            <a href="/track-finder" class="btn-navy h-11 px-6 text-[14px] no-underline whitespace-nowrap shrink-0 self-start sm:self-auto">
+              나에게 맞는 트랙 찾기 →
+            </a>
           </div>
-          <a href="/track-finder" class="btn-navy h-11 px-6 text-[14px] no-underline whitespace-nowrap shrink-0 self-start sm:self-auto">
-            나에게 맞는 트랙 찾기 →
-          </a>
+
+          <!-- ② 이미 트랙을 아는 사람 — 바로 신청 (아래) -->
+          <div class="rounded-lg border border-border-hair bg-surface p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div class="flex items-start gap-3.5 flex-1">
+              <span class="shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-md bg-navy-soft text-[20px] leading-none">📋</span>
+              <div>
+                <p class="text-[15px] font-semibold text-ink">이미 원하는 트랙이 있으신가요?</p>
+                <p class="mt-1 text-[13px] text-ink-muted leading-relaxed">트랙을 잘 알고 계시면 바로 신청 폼으로 이동하세요.</p>
+              </div>
+            </div>
+            <button type="button" class="btn-navy h-11 px-6 text-[14px] whitespace-nowrap shrink-0 self-start sm:self-auto" data-back-from-tracks>
+              신청하러 가기 →
+            </button>
+          </div>
         </div>
       </div>
     </div>
