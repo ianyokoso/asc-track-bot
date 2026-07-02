@@ -102,11 +102,11 @@
         </div>
       </div>
 
-      <!-- 내 트랙 (디스코드 역할 기준) -->
+      <!-- 내 트랙 (노션 멤버 트랙 기준) -->
       <div class="bg-canvas border border-border-hair rounded-lg p-5 shadow-sm">
         <div class="flex items-center justify-between mb-3">
           <p class="text-[11px] eyebrow uppercase text-ink-soft">내 트랙</p>
-          <span class="text-[10px] eyebrow uppercase text-ink-soft bg-surface-2 px-1.5 py-0.5 rounded-xs">Discord 역할 기준</span>
+          <span class="text-[10px] eyebrow uppercase text-ink-soft bg-surface-2 px-1.5 py-0.5 rounded-xs">내 배정 트랙</span>
         </div>
         <div id="p-tracks" class="flex flex-wrap gap-2">
           <span class="skeleton inline-block h-7 w-24 rounded-full"></span>
@@ -195,7 +195,7 @@
       $('p-id').textContent = `Discord ID ${user.id || '—'}`;
       if (data.isAdmin) $('p-admin').classList.remove('hidden');
 
-      // 트랙 — 디스코드 역할 기준 (비동기 로드)
+      // 트랙 — 노션 멤버 트랙 기준 (비동기 로드)
       loadDiscordTracks();
       // 과제 제출 현황 히트맵 (비동기 로드)
       loadSubmissions();
@@ -262,13 +262,6 @@
       }
     }
 
-    // 디스코드 트랙 역할 이름을 사람이 읽기 좋은 라벨로 (prefix/suffix 대시 → 공백)
-    function trackLabel(t) {
-      const main = String(t.prefix || '').replace(/-/g, ' ');
-      const sub = t.suffix ? ' · ' + String(t.suffix).replace(/-/g, ' ') : '';
-      return main + sub;
-    }
-
     async function loadDiscordTracks() {
       const el = $('p-tracks');
       try {
@@ -276,14 +269,16 @@
         const data = await res.json();
         const tracks = (data.tracks || []);
         if (tracks.length) {
-          el.innerHTML = tracks.map(t =>
-            `<span class="inline-flex items-center gap-1.5 text-[13px] pl-3 pr-2 py-1 rounded-full bg-navy-soft text-navy-strong font-medium">
-               ${escapeHtml(trackLabel(t))}
-               <span class="text-[10px] text-navy bg-canvas px-1.5 py-0.5 rounded-full">${escapeHtml(t.cohort)}기</span>
-             </span>`
-          ).join('');
+          el.innerHTML = tracks.map(t => {
+            const cohort = String(t.cohort || '');
+            const cohortLabel = cohort ? (/기$/.test(cohort) ? cohort : cohort + '기') : '';
+            return `<span class="inline-flex items-center gap-1.5 text-[13px] pl-3 pr-2 py-1 rounded-full bg-navy-soft text-navy-strong font-medium">
+               ${escapeHtml(t.label || t.roleName || '트랙')}
+               ${cohortLabel ? `<span class="text-[10px] text-navy bg-canvas px-1.5 py-0.5 rounded-full">${escapeHtml(cohortLabel)}</span>` : ''}
+             </span>`;
+          }).join('');
         } else {
-          el.innerHTML = `<span class="text-[13px] text-ink-soft">디스코드에 부여된 트랙 역할이 없어요.</span>`;
+          el.innerHTML = `<span class="text-[13px] text-ink-soft">등록된 트랙이 없어요.</span>`;
         }
         renderSpaces(data.spaces || []);
       } catch (e) {

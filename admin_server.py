@@ -2883,16 +2883,104 @@ def get_creator_assignments_for_user():
     })
 
 
+# 노션 멤버 트랙(displayName) → (한글 칩 라벨, runtime 채널 버킷 트랙명). 숏/롱폼은 크리에이터 버킷 공유.
+_MEMBER_TRACK_INFO = {
+    'Shortform': ('크리에이터 숏폼', '크리에이터 트랙'),
+    'Longform': ('크리에이터 롱폼', '크리에이터 트랙'),
+    'Builder Basic': ('빌더 기초', '빌더 기초 트랙'),
+    'Builder Advanced': ('빌더 심화', '빌더 심화 트랙'),
+    'Sales': ('세일즈 실전', '세일즈 실전 트랙'),
+    'AI Agent': ('AI 에이전트', 'AI 에이전트 트랙'),
+    'App Development Track': ('앱 개발', '앱 개발 트랙'),
+    'Self Inquiry Track': ('나 탐구', '나 탐구 트랙'),
+}
+
+
+def _find_member_by_discord(discord_id):
+    dash = _load_dashboard_cache_data() or {}
+    for m in (dash.get('members') or []):
+        if str(m.get('discordId', '')).strip() == str(discord_id).strip():
+            return m
+    return None
+
+
+def _current_cohort_runtime_bucket():
+    """현재 기수(asc-bot-dashboard 연동)의 runtime resource cohort bucket → (bucket, key)."""
+    runtime = _load_discord_runtime_resources()
+    cnum = ''.join(c for c in str(_get_synced_cohort_settings().get('cohortName', '')) if c.isdigit())
+    if cnum and f'{cnum}기' in runtime:
+        return runtime[f'{cnum}기'], f'{cnum}기'
+    for key, b in (runtime or {}).items():
+        if cnum and cnum == ''.join(c for c in key if c.isdigit()):
+            return b, key
+    return None, None
+
+
+def _build_member_track_view(discord_user):
+    """멤버(노션) 트랙 기준 트랙 칩 + 트랙 공간(채널 바로가기). 디스코드 역할과 무관."""
+    result = {'tracks': [], 'spaces': [], 'creatorEligible': False}
+    member = _find_member_by_discord(discord_user['id'])
+    if not member:
+        return result
+    member_tracks = list(member.get('tracks') or [])
+    if not member_tracks and member.get('track'):
+        member_tracks = [member['track']]
+
+    cohort_label = _get_synced_cohort_settings().get('cohortName') or ''
+    cohort_bucket, _ = _current_cohort_runtime_bucket()
+    guild_id = str((cohort_bucket or {}).get('guildId') or os.getenv('DISCORD_TARGET_GUILD_ID', ''))
+
+    tracks_out, seen_labels = [], set()
+    spaces_by_bucket = {}
+    creator = False
+    for tr in member_tracks:
+        info = _MEMBER_TRACK_INFO.get(tr)
+        if not info:
+            continue
+        ko_label, bucket_name = info
+        if tr in ('Shortform', 'Longform'):
+            creator = True
+        if ko_label not in seen_labels:
+            seen_labels.add(ko_label)
+            tracks_out.append({'label': ko_label, 'cohort': cohort_label})
+        if bucket_name in spaces_by_bucket:
+            continue
+        tb = ((cohort_bucket or {}).get('tracks') or {}).get(bucket_name)
+        if not tb:
+            continue
+        chb = tb.get('channels') or {}
+        channels = []
+        for kind, label, emoji in _TRACK_CHANNEL_KINDS:
+            ch = chb.get(kind)
+            if isinstance(ch, dict) and ch.get('id'):
+                channels.append({
+                    'kind': kind, 'label': label, 'emoji': emoji,
+                    'name': ch.get('name') or '', 'id': str(ch['id']),
+                    'url': f'https://discord.com/channels/{guild_id}/{ch["id"]}',
+                })
+        if channels:
+            spaces_by_bucket[bucket_name] = {
+                'trackName': bucket_name,
+                'trackKey': tb.get('trackKey') or '',
+                'cohort': cohort_label,
+                'channels': channels,
+            }
+    result['tracks'] = tracks_out
+    result['spaces'] = list(spaces_by_bucket.values())
+    result['creatorEligible'] = creator
+    return result
+
+
 @app.route('/api/auth/discord-tracks', methods=['GET'])
 def get_authenticated_discord_tracks():
-    """로그인 유저의 디스코드 트랙 역할 기반 트랙 목록 (개인 대시보드용)."""
+    """로그인 유저의 트랙 칩 + 트랙 공간 (노션 멤버 트랙 기준)."""
     if not _is_test_personal_dashboard_enabled():
         return jsonify({"status": "error", "message": "Disabled outside test environment."}), 403
     discord_user = _get_authenticated_discord_user()
     if not discord_user:
         return jsonify({"status": "error", "message": "Authentication required."}), 401
 
-    data = _fetch_user_track_data(discord_user['id'])
+    data = _build_member_track_view(discord_user)
     return jsonify({
         "status": "success",
         "tracks": data['tracks'],
@@ -2969,7 +3057,7 @@ def _get_channel_recent_msg_times(channel_id):
 
 def _user_channel_ids(discord_user):
     """유저의 텍스트 채널 id 집합 (권한 검증용 + 활동 계산 대상)."""
-    data = _fetch_user_track_data(discord_user['id'])
+    data = _build_member_track_view(discord_user)
     ids = set()
     for sp in data.get('spaces', []):
         for ch in sp.get('channels', []):
