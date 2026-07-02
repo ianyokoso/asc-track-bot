@@ -44,8 +44,9 @@
   }
   .opt:hover{border-color:var(--navy);background:var(--navy-soft)}
   .opt .em{font-size:22px;line-height:1.1}
-  .opt .ot{font-size:15.5px;font-weight:700;color:var(--ink);margin-bottom:2px}
-  .opt .od{font-size:13px;font-weight:500;color:var(--ink-muted);line-height:1.5}
+  .opt > span:last-child{flex:1}
+  .opt .ot{display:block;font-size:15.5px;font-weight:700;color:var(--ink);margin-bottom:3px}
+  .opt .od{display:block;font-size:13px;font-weight:500;color:var(--ink-muted);line-height:1.5}
 
   /* 리커트 문항 */
   .item{padding:16px 0;border-bottom:1px dashed var(--hair)}
