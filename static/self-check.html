@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<title>ASC 자기 진단 — 지금 나의 상태</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<style>
+  /* track-apply.html 톤: 화이트 canvas · 네이비 액센트 · hairline 보더 · Pretendard */
+  :root{
+    --ink:#141E3C; --ink-muted:#4B5563; --ink-soft:#9CA3AF;
+    --navy:#1E2A4A; --navy-strong:#141E3C; --navy-soft:#EEF0F6;
+    --canvas:#FFFFFF; --surface:#F4F6F8; --surface-2:#EDEFF2;
+    --hair:#E5E7EB; --strong:#D1D5DB;
+    --shadow-card:0 1px 2px 0 rgba(20,30,60,.05);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Pretendard Variable','Pretendard','Apple SD Gothic Neo',system-ui,-apple-system,sans-serif;
+    background:var(--canvas); color:var(--ink-muted);
+    min-height:100vh; display:flex; justify-content:center;
+    padding:40px 22px 80px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{width:100%;max-width:600px}
+  .eyebrow{font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--ink-soft);text-transform:uppercase;margin-bottom:14px}
+  .progress{height:6px;background:var(--surface-2);border-radius:99px;overflow:hidden;margin-bottom:32px}
+  .progress.hidden{visibility:hidden}
+  .progress > i{display:block;height:100%;width:0;background:var(--navy);border-radius:99px;transition:width .4s ease}
+  h1{font-size:32px;font-weight:700;letter-spacing:-.02em;line-height:1.16;color:var(--ink);margin-bottom:16px}
+  h2.sec{font-size:23px;font-weight:700;letter-spacing:-.02em;line-height:1.35;color:var(--ink);margin-bottom:6px}
+  .sec-desc{font-size:14px;color:var(--ink-muted);margin-bottom:8px}
+  .legend{font-size:12px;font-weight:600;color:var(--ink-soft);margin-bottom:22px}
+  .lead{color:var(--ink-muted);font-size:16px;line-height:1.75;margin-bottom:14px}
+  .note{background:var(--surface);border:1px solid var(--hair);border-radius:8px;padding:14px 16px;
+    font-size:13px;color:var(--ink-muted);line-height:1.65;margin-bottom:28px}
+  .q-count{font-size:12px;font-weight:600;letter-spacing:.02em;color:var(--ink-soft);margin-bottom:12px}
+
+  /* 상황 유형 선택 카드 */
+  .opt{
+    display:flex;align-items:flex-start;gap:13px;width:100%;text-align:left;cursor:pointer;
+    background:var(--canvas);border:1px solid var(--hair);border-radius:10px;box-shadow:var(--shadow-card);
+    padding:16px 18px;margin-bottom:10px;color:var(--ink);transition:border-color .15s, background .15s;
+  }
+  .opt:hover{border-color:var(--navy);background:var(--navy-soft)}
+  .opt .em{font-size:22px;line-height:1.1}
+  .opt .ot{font-size:15.5px;font-weight:700;color:var(--ink);margin-bottom:2px}
+  .opt .od{font-size:13px;font-weight:500;color:var(--ink-muted);line-height:1.5}
+
+  /* 리커트 문항 */
+  .item{padding:16px 0;border-bottom:1px dashed var(--hair)}
+  .item:last-of-type{border-bottom:0}
+  .stmt{font-size:15px;font-weight:600;color:var(--ink);margin-bottom:12px}
+  .scale{display:flex;gap:8px}
+  .pt{
+    flex:1;height:44px;border:1px solid var(--hair);background:var(--canvas);border-radius:8px;
+    font-family:inherit;font-size:15px;font-weight:700;color:var(--ink-soft);cursor:pointer;
+    transition:all .12s;
+  }
+  .pt:hover{border-color:var(--strong);color:var(--ink)}
+  .pt.sel{background:var(--navy);border-color:var(--navy);color:#fff}
+  .scale-ends{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-soft);margin-top:6px}
+
+  .btns{display:flex;justify-content:space-between;align-items:center;margin-top:28px;gap:12px}
+  .ghost{background:none;border:none;color:var(--ink-muted);font-size:13px;font-weight:600;cursor:pointer;padding:8px 4px}
+  .ghost:hover{color:var(--ink)}
+  .cta{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--navy);color:#fff;font-weight:600;font-size:15px;
+    padding:0 24px;height:48px;border-radius:8px;text-decoration:none;border:none;cursor:pointer;transition:background .15s;
+  }
+  .cta:hover{background:var(--navy-strong)}
+  .cta:disabled{background:var(--strong);cursor:not-allowed}
+  .cta.full{width:100%}
+
+  /* 결과 */
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+  .chip{display:inline-block;font-size:12px;font-weight:600;color:var(--navy);background:var(--navy-soft);
+    border:1px solid var(--hair);padding:6px 12px;border-radius:99px}
+  .card{background:var(--canvas);border:1px solid var(--hair);border-radius:12px;padding:24px;margin-bottom:14px;box-shadow:var(--shadow-card)}
+  .bar-row{margin-bottom:16px}
+  .bar-row:last-child{margin-bottom:0}
+  .bar-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+  .bar-name{font-size:14px;font-weight:700;color:var(--ink)}
+  .bar-val{font-size:13px;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums}
+  .bar-track{height:8px;background:var(--surface-2);border-radius:99px;overflow:hidden}
+  .bar-fill{height:100%;background:var(--navy);border-radius:99px;transition:width .7s ease}
+  .interp{font-size:13px;color:var(--ink-muted);line-height:1.6;margin-top:6px}
+  .rec-em{font-size:34px;line-height:1;margin-bottom:10px}
+  .rec-label{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px}
+  .rec-name{font-size:22px;font-weight:700;color:var(--ink);margin-bottom:6px;letter-spacing:-.01em}
+  .rec-why{font-size:14px;color:var(--ink-muted);line-height:1.7;margin-bottom:18px}
+
+  .fade{animation:fade .4s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .foot{margin-top:36px;font-size:11px;font-weight:600;color:var(--ink-soft);text-align:center;letter-spacing:.04em}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="progress hidden" id="progWrap"><i id="bar"></i></div>
+  <div id="app"></div>
+  <div class="foot">ASC · 자기 진단 (프로토타입 v1)</div>
+</div>
+
+<script>
+/* ===== 트랙 정의 (곁다리 추천용) ===== */
+const TRACKS = {
+  creator:{em:'🎬', name:'크리에이터 트랙', why:'콘텐츠로 사람을 모으는 게 강점이에요. 숏폼·글로 팬을 만드는 데 집중하면 지금 강점이 매출로 이어져요.'},
+  builder_basic:{em:'🛠️', name:'빌더 기초 트랙', why:'만들고 싶은 게 있는데 코딩은 부담스러운 상태예요. 노코드로 첫 제품을 출시하는 경험이 딱 맞아요.'},
+  builder_adv:{em:'⚙️', name:'빌더 심화 트랙', why:'기술이 이미 익숙하신 편이에요. 운영 가능한 풀스택 MVP까지 밀어붙이는 트랙이 어울려요.'},
+  app:{em:'📱', name:'앱 개발 트랙', why:'앱에 대한 관심·역량이 높게 나왔어요. 마켓 등록까지 직접 해보는 트랙이 맞아요.'},
+  sales:{em:'💰', name:'세일즈 트랙', why:'이미 팔 수 있는 게 있고 파는 감각도 있어요. 퍼널·광고로 실제 매출을 만드는 데 집중하세요.'},
+  agent:{em:'🤖', name:'AI 에이전트 트랙', why:'자동화 지향이 강해요. 반복 업무를 대신하는 나만의 AI 시스템을 만드는 트랙이 맞아요.'},
+  self:{em:'🧭', name:'나 탐구 트랙', why:'아직 방향이 흐릿한 게 자연스러운 상태예요. 나다움부터 정리하고 아이템으로 연결하는 트랙이 먼저예요.'},
+};
+
+/* ===== ① 상황 유형 ===== */
+const SITUATIONS = [
+  {k:'A', em:'🧑‍💻', t:'직장인 준비형', d:'회사 다니며 독립·부업·이직을 준비 중'},
+  {k:'B', em:'🚀', t:'초기 사업가', d:'이미 내 사업·프리랜스를 굴리는 중'},
+  {k:'C', em:'🩺', t:'전문직·기존사업 활력형', d:'의사·세무사·강사 등 이미 내 일이 있고, 세일즈·브랜딩으로 활력을 넣고 싶음'},
+  {k:'D', em:'🌫️', t:'탐색형', d:'아직 뭘 할지 모름 — 방향부터 잡고 싶음'},
+];
+const SIT_LABEL = {A:'직장인 준비형', B:'초기 사업가', C:'전문직·활력형', D:'탐색형'};
+
+/* ===== ②~⑥ 진단 문항 =====
+   g: 채점 그룹 / sub: 동기 하위(auto/ctrl) / rev: 역문항 / dom: 역량 도메인 */
+const SECTIONS = [
+  { key:'mind', title:'동기 & 방향', desc:'지금 하는(하려는) 일에 대해 얼마나 그런가요?',
+    ends:['전혀 아니다','매우 그렇다'],
+    items:[
+      {t:'이 일 자체가 재미있고 의미 있어서 한다', g:'mot', sub:'auto'},
+      {t:'내가 중요하게 여기는 가치와 맞아서 한다', g:'mot', sub:'auto'},
+      {t:'안 하면 뒤처질 것 같아 불안해서 한다', g:'mot', sub:'ctrl'},
+      {t:'남들이 하니까, 또는 인정받고 싶어서 한다', g:'mot', sub:'ctrl'},
+      {t:'내가 뭘 이루고 싶은지 분명하다', g:'dir'},
+      {t:'지금 목표를 위해 무엇을 해야 하는지 안다', g:'dir'},
+      {t:'이 목표에 진심으로 몰입하고 있다', g:'dir'},
+      {t:'목표가 자주 흔들리거나 막막하다', g:'dir', rev:true},
+    ]},
+  { key:'eff', title:'지금의 자신감', desc:'다음을 해낼 자신이 얼마나 있나요?',
+    ends:['전혀 자신 없다','매우 자신 있다'],
+    items:[
+      {t:'새로운 제품·서비스 아이디어를 떠올린다', g:'eff'},
+      {t:'시장의 기회를 알아본다', g:'eff'},
+      {t:'고객이 원하는 걸 파악한다', g:'eff'},
+      {t:'목표를 세우고 계획을 짠다', g:'eff'},
+      {t:'필요한 사람·자원을 끌어모은다', g:'eff'},
+      {t:'내 아이디어를 남에게 설득한다', g:'eff'},
+      {t:'함께 일할 사람을 이끈다', g:'eff'},
+      {t:'관계를 맺고 네트워크를 활용한다', g:'eff'},
+      {t:'돈 관리를 한다', g:'eff'},
+      {t:'수익 낼 방법을 만든다', g:'eff'},
+    ]},
+  { key:'grit', title:'끈기', desc:'평소 나에 대해 얼마나 그런가요?',
+    ends:['전혀 아니다','매우 그렇다'],
+    items:[
+      {t:'한번 시작한 일은 끝까지 해낸다', g:'grit'},
+      {t:'어려움이 있어도 포기하지 않고 계속한다', g:'grit'},
+      {t:'몇 달, 몇 년 걸리는 목표도 꾸준히 밀어붙인다', g:'grit'},
+      {t:'좌절해도 금방 다시 일어나 계속한다', g:'grit'},
+    ]},
+  { key:'weapon', title:'내 무기', desc:'각 분야에서 나는 얼마나 강한가요?',
+    ends:['전혀 아니다','매우 그렇다'],
+    items:[
+      {t:'글·영상 등 콘텐츠로 사람을 모으는 데 강하다', g:'comp', dom:'creator'},
+      {t:'노코드나 코드로 제품·서비스를 만드는 데 강하다', g:'comp', dom:'builder_basic'},
+      {t:'앱을 기획하고 만드는 데 관심과 역량이 있다', g:'comp', dom:'app'},
+      {t:'물건·서비스를 파는(마케팅·영업) 데 강하다', g:'comp', dom:'sales'},
+      {t:'AI·자동화로 일이 굴러가게 만드는 데 강하다', g:'comp', dom:'agent'},
+      {t:'개발·터미널·깃허브 같은 게 익숙하다', g:'comp', dom:'builder_adv'},
+      {t:'아직 내 무기가 뭔지 잘 모르겠다', g:'signal', dom:'self'},
+    ]},
+  { key:'res', title:'가진 자원', desc:'지금 내 상황이 얼마나 그런가요?',
+    ends:['전혀 아니다','매우 그렇다'],
+    items:[
+      {t:'지금 이 일에 쓸 수 있는 시간이 충분하다', g:'res'},
+      {t:'당분간 버틸 수 있는 여유 자금이 있다', g:'res'},
+      {t:'도움을 청할 수 있는 사람·인맥이 있다', g:'res'},
+      {t:'이미 팔 수 있는 것(제품·지식·청중)이 있다', g:'res'},
+      {t:'실패해도 재정적으로 크게 타격받지 않는다', g:'res'},
+    ]},
+];
+
+/* ===== 상태 ===== */
+let page = 0;                 // 0 welcome / 1 situation / 2..(2+S-1) sections / last result
+let situation = null;
+const resp = SECTIONS.map(s => new Array(s.items.length).fill(null));
+const TOTAL_PAGES = 2 + SECTIONS.length + 1;   // welcome + situation + sections + result
+
+const app = document.getElementById('app');
+const bar = document.getElementById('bar');
+const progWrap = document.getElementById('progWrap');
+
+function setBar(){ bar.style.width = (page / (TOTAL_PAGES - 1) * 100) + '%'; }
+
+/* ---------- Welcome ---------- */
+function renderWelcome(){
+  progWrap.classList.add('hidden');
+  app.innerHTML = `<div class="fade">
+    <div class="eyebrow">ASC Self-Check</div>
+    <h1>지금 나의 상태를<br/>진단해 볼까요?</h1>
+    <p class="lead">
+      직장인이든, 이미 사업을 하든, 전문직이든 상관없어요.<br/>
+      <b style="color:var(--ink)">지금 내가 어디에 서 있는지</b>를 6가지 관점으로 비춰보고,
+      곁들여 <b style="color:var(--ink)">어울리는 트랙</b>도 알려드려요.
+    </p>
+    <div class="note">⏱️ 약 35문항 · 3~5분. 정답은 없어요. 지금 나에게 솔직하게만 답하면 됩니다.</div>
+    <button class="cta full" id="start">진단 시작하기 →</button>
+  </div>`;
+  document.getElementById('start').onclick = ()=>{ page=1; progWrap.classList.remove('hidden'); render(); };
+}
+
+/* ---------- ① 상황 유형 ---------- */
+function renderSituation(){
+  setBar();
+  let html = `<div class="fade">
+    <div class="q-count">시작 · 나의 상황</div>
+    <h2 class="sec">지금 나에게 가장 가까운 상황은?</h2>
+    <p class="sec-desc" style="margin-bottom:20px">하나만 골라주세요. 이걸 기준으로 결과를 맞춤 해석해요.</p>`;
+  SITUATIONS.forEach(s=>{
+    const sel = situation===s.k ? ' style="border-color:var(--navy);background:var(--navy-soft)"' : '';
+    html += `<button class="opt" data-k="${s.k}"${sel}>
+      <span class="em">${s.em}</span>
+      <span><span class="ot">${s.t}</span><span class="od">${s.d}</span></span>
+    </button>`;
+  });
+  html += `<div class="btns"><button class="ghost" id="back">← 처음으로</button></div></div>`;
+  app.innerHTML = html;
+  app.querySelectorAll('.opt').forEach(b=>{
+    b.onclick = ()=>{ situation = b.dataset.k; page=2; render(); };
+  });
+  document.getElementById('back').onclick = ()=>{ page=0; render(); };
+}
+
+/* ---------- ②~⑥ 리커트 섹션 ---------- */
+function renderSection(si){
+  setBar();
+  const S = SECTIONS[si];
+  const ans = resp[si];
+  let html = `<div class="fade">
+    <div class="q-count">${si+1} / ${SECTIONS.length} 묶음</div>
+    <h2 class="sec">${S.title}</h2>
+    <p class="sec-desc">${S.desc}</p>
+    <p class="legend">1 = ${S.ends[0]} · 5 = ${S.ends[1]}</p>`;
+  S.items.forEach((it,i)=>{
+    let pts='';
+    for(let v=1; v<=5; v++){
+      pts += `<button class="pt${ans[i]===v?' sel':''}" data-i="${i}" data-v="${v}">${v}</button>`;
+    }
+    html += `<div class="item">
+      <div class="stmt">${it.t}</div>
+      <div class="scale">${pts}</div>
+    </div>`;
+  });
+  html += `<div class="btns">
+    <button class="ghost" id="back">← 이전</button>
+    <button class="cta" id="next" disabled>다음 →</button>
+  </div></div>`;
+  app.innerHTML = html;
+
+  const next = document.getElementById('next');
+  const refresh = ()=>{ next.disabled = ans.some(v=>v===null); };
+  refresh();
+
+  app.querySelectorAll('.pt').forEach(b=>{
+    b.onclick = ()=>{
+      const i = +b.dataset.i, v = +b.dataset.v;
+      ans[i] = v;
+      // 같은 문항의 버튼 셀렉션 갱신
+      app.querySelectorAll(`.pt[data-i="${i}"]`).forEach(x=>x.classList.toggle('sel', +x.dataset.v===v));
+      refresh();
+    };
+  });
+  document.getElementById('back').onclick = ()=>{ page--; render(); };
+  next.onclick = ()=>{ page++; render(); };
+}
+
+/* ---------- 채점 ---------- */
+function scale100(mean){ return Math.round((mean-1)/4*100); }
+function meanOf(arr){ return arr.reduce((a,b)=>a+b,0)/arr.length; }
+
+function score(){
+  const get = (secKey)=> { const si=SECTIONS.findIndex(s=>s.key===secKey); return {S:SECTIONS[si], a:resp[si]}; };
+
+  // 동기 & 방향
+  const mind = get('mind');
+  const dirVals=[], autoVals=[], ctrlVals=[];
+  mind.S.items.forEach((it,i)=>{
+    const v = mind.a[i];
+    if(it.g==='dir') dirVals.push(it.rev? (6-v) : v);
+    else if(it.sub==='auto') autoVals.push(v);
+    else if(it.sub==='ctrl') ctrlVals.push(v);
+  });
+  const direction = scale100(meanOf(dirVals));
+  const motiveType = meanOf(autoVals) >= meanOf(ctrlVals) ? '내적 동기형' : '외적 동기형';
+
+  // 자신감
+  const eff = get('eff'); const efficacy = scale100(meanOf(eff.a));
+  // 끈기
+  const gr = get('grit'); const grit = scale100(meanOf(gr.a));
+  // 자원
+  const rs = get('res'); const resources = scale100(meanOf(rs.a));
+
+  // 내 무기
+  const wp = get('weapon'); const domains={}; let selfSignal=1; let compVals=[];
+  wp.S.items.forEach((it,i)=>{
+    const v = wp.a[i];
+    if(it.g==='signal'){ selfSignal=v; }
+    else { domains[it.dom]=v; compVals.push(v); }
+  });
+  const competency = scale100(meanOf(compVals));
+
+  return { direction, motiveType, efficacy, grit, resources, competency, domains, selfSignal };
+}
+
+/* 트랙 추천 (곁다리) */
+function recommend(sc){
+  // 방향 흐림/무기 모름 → 나 탐구
+  if(situation==='D' || (sc.selfSignal>=4 && sc.direction<40)) return 'self';
+  // 전문직·활력형 → 세일즈/크리에이터 중 강한 쪽
+  if(situation==='C'){
+    return (sc.domains.creator||0) > (sc.domains.sales||0) ? 'creator' : 'sales';
+  }
+  // 그 외: 무기 최고 도메인
+  const map = { creator:'creator', builder_basic:'builder_basic', app:'app', sales:'sales', agent:'agent', builder_adv:'builder_adv' };
+  let best=null, bv=-1;
+  for(const d in map){ const v=sc.domains[d]||0; if(v>bv){bv=v; best=d;} }
+  if(bv<=2) return 'self';         // 다 약하면 방향부터
+  return map[best];
+}
+
+/* 축 해석 (상황 맞춤 약간) */
+function interp(name, v){
+  const strong = v>=67, weak = v<=40;
+  const base = {
+    '방향 명확성': strong?'뭘 원하는지 선명해요. 실행에 바로 붙이면 돼요.':(weak?'방향이 아직 흐릿해요. 목표를 좁히는 게 먼저예요.':'방향은 잡혀가는 중이에요.'),
+    '자신감': strong?'전반적으로 자신감이 높아요.':(weak?'자신감이 낮게 나왔어요 — 작은 성공 경험부터 쌓으면 올라와요.':'할 수 있는 영역과 아닌 영역이 갈려요.'),
+    '끈기': strong?'한번 잡으면 끝까지 가는 힘이 강해요.':(weak?'중간에 힘이 빠지기 쉬워요 — 짧은 목표로 쪼개보세요.':'상황에 따라 지속력이 달라져요.'),
+    '내 무기': strong?'분명한 강점 무기가 있어요. 이걸 축으로 가세요.':(weak?'아직 뾰족한 무기가 약해요 — 하나를 정해 집중해보세요.':'쓸 만한 무기가 몇 개 보여요.'),
+    '자원': strong?'시간·돈·인맥 여유가 있는 편이에요.':(weak?'자원이 빠듯해요 — 작고 빠른 사이클로 움직이는 게 현실적이에요.':'자원이 아주 넉넉하진 않아요.'),
+  };
+  return base[name];
+}
+
+/* ---------- 결과 ---------- */
+function renderResult(){
+  setBar();
+  const sc = score();
+  const axes = [
+    {n:'방향 명확성', v:sc.direction},
+    {n:'자신감', v:sc.efficacy},
+    {n:'끈기', v:sc.grit},
+    {n:'내 무기', v:sc.competency},
+    {n:'자원', v:sc.resources},
+  ];
+  const top = axes.reduce((a,b)=>b.v>a.v?b:a);
+  const low = axes.reduce((a,b)=>b.v<a.v?b:a);
+  const rk = recommend(sc);
+  const rec = TRACKS[rk];
+
+  let bars = axes.map(a=>`
+    <div class="bar-row">
+      <div class="bar-top"><span class="bar-name">${a.n}</span><span class="bar-val">${a.v}</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:0" data-w="${a.v}"></div></div>
+      <div class="interp">${interp(a.n, a.v)}</div>
+    </div>`).join('');
+
+  app.innerHTML = `<div class="fade">
+    <div class="eyebrow">진단 결과</div>
+    <div class="chips">
+      <span class="chip">${SIT_LABEL[situation]}</span>
+      <span class="chip">${sc.motiveType}</span>
+    </div>
+    <h1 style="margin-bottom:20px">『${SIT_LABEL[situation]}』인 당신,<br/>지금 강점은 <span style="color:var(--navy)">${top.n}</span>이에요</h1>
+    <div class="card">${bars}</div>
+    <div class="card">
+      <div class="rec-label">곁다리 · 어울리는 트랙</div>
+      <div class="rec-em">${rec.em}</div>
+      <div class="rec-name">${rec.name}</div>
+      <div class="rec-why">${rec.why}</div>
+      <a class="cta full" href="/apply">이 트랙 신청하러 가기 →</a>
+    </div>
+    <div class="btns" style="justify-content:center">
+      <button class="ghost" id="restart">↺ 다시 진단하기</button>
+    </div>
+  </div>`;
+
+  // 바 애니메이션
+  requestAnimationFrame(()=>{ app.querySelectorAll('.bar-fill').forEach(f=>{ f.style.width=f.dataset.w+'%'; }); });
+  document.getElementById('restart').onclick = ()=>{
+    page=0; situation=null; resp.forEach(a=>a.fill(null)); render();
+  };
+}
+
+/* ---------- 라우터 ---------- */
+function render(){
+  window.scrollTo(0,0);
+  if(page===0) return renderWelcome();
+  if(page===1) return renderSituation();
+  if(page>=2 && page < 2+SECTIONS.length) return renderSection(page-2);
+  return renderResult();
+}
+render();
+</script>
+</body>
+</html>
