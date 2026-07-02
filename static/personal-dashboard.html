@@ -299,17 +299,58 @@
         const head = `${escapeHtml((sp.trackKey || sp.trackName).replace(/-/g, ' '))}${sp.cohort ? ' · ' + escapeHtml(sp.cohort) + (String(sp.cohort).match(/기$/) ? '' : '기') : ''}`;
         const btns = (sp.channels || []).map(c =>
           `<a href="${escapeAttr(c.url)}" target="_blank" rel="noopener"
+              ${c.id ? `data-ch="${escapeAttr(c.id)}"` : ''}
               title="${escapeAttr(c.name)}"
-              class="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border-strong text-[13px] text-ink hover:bg-surface-2 transition">
+              class="ch-link relative inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border-strong text-[13px] text-ink hover:bg-surface-2 transition">
              <span>${c.emoji}</span><span>${escapeHtml(c.label)}</span>
+             ${c.id ? `<span class="ch-badge hidden absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-bad text-white text-[10px] font-bold leading-[18px] text-center"></span>` : ''}
            </a>`
         ).join('');
         return `<div>
           <p class="text-[13px] font-semibold text-ink mb-2">${head}</p>
-          <div class="flex flex-wrap gap-2">${btns}</div>
+          <div class="flex flex-wrap gap-3">${btns}</div>
         </div>`;
       }).join('');
       card.classList.remove('hidden');
+      wireChannelBadges();
+      loadChannelActivity();
+    }
+
+    // 클릭 시 last-seen 갱신 + 뱃지 즉시 제거 (디스코드 unread 방식)
+    function wireChannelBadges() {
+      $('p-spaces').querySelectorAll('a.ch-link[data-ch]').forEach(a => {
+        a.addEventListener('click', () => {
+          const badge = a.querySelector('.ch-badge');
+          if (badge) badge.classList.add('hidden');
+          const cid = a.getAttribute('data-ch');
+          try {
+            fetch('/api/auth/channel-seen', {
+              method: 'POST', credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ channelId: cid }),
+              keepalive: true,
+            });
+          } catch (e) {}
+        });
+      });
+    }
+
+    async function loadChannelActivity() {
+      try {
+        const res = await fetch('/api/auth/channel-activity', { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const act = data.activity || {};
+        $('p-spaces').querySelectorAll('a.ch-link[data-ch]').forEach(a => {
+          const cid = a.getAttribute('data-ch');
+          const n = act[cid] || 0;
+          const badge = a.querySelector('.ch-badge');
+          if (badge && n > 0) {
+            badge.textContent = n > 99 ? '99+' : String(n);
+            badge.classList.remove('hidden');
+          }
+        });
+      } catch (e) { /* 조용히 무시 */ }
     }
 
     function escapeHtml(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }

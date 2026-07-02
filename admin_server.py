@@ -888,6 +888,7 @@ def _fetch_user_track_data(user_id):
                                 'label': label,
                                 'emoji': emoji,
                                 'name': ch.get('name') or '',
+                                'id': str(ch['id']),
                                 'url': f'https://discord.com/channels/{bucket_guild or gid}/{ch["id"]}',
                             })
                     if channels:
@@ -2899,6 +2900,137 @@ def get_authenticated_discord_tracks():
         "creatorEligible": data['creatorEligible'],
         "generatedAt": datetime.now().isoformat(),
     })
+
+
+# ── 채널 "새 글 N" 뱃지 (마지막 확인 이후 새 메시지 수) ─────────────
+# asc-track-bot 봇이 만든 채널이라 자기 봇 토큰으로 메시지 읽기 가능(단 UA 필요).
+# last-seen 은 채널 클릭 시 갱신(디스코드 unread 방식). 텍스트 채널만 대상.
+_DISCORD_UA = 'DiscordBot (https://asc-track-bot.vercel.app, 1.0)'
+_DISCORD_EPOCH_MS = 1420070400000
+_CHANNEL_MSG_CACHE = {}     # channel_id -> {'at': ts, 'times_ms': [..]}
+_CHANNEL_MSG_TTL = 60       # seconds
+_ACTIVITY_TEXT_KINDS = {'announcement', 'assignment', 'mentoring', 'networking'}
+PERSONAL_DASHBOARD_SEEN_FILE = os.path.join(
+    BASE_DIR, f"personal_dashboard_seen_{TRACK_APPLICATION_CACHE_ENV}.json")
+
+
+def _load_seen_state():
+    try:
+        with open(PERSONAL_DASHBOARD_SEEN_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _save_seen_state(state):
+    try:
+        with open(PERSONAL_DASHBOARD_SEEN_FILE, 'w', encoding='utf-8') as f:
+            json.dump(state, f)
+    except Exception as e:
+        print(f"[WARN] save seen state failed: {e}")
+
+
+def _iso_to_ms(iso):
+    try:
+        s = str(iso).replace('Z', '+00:00')
+        return int(datetime.fromisoformat(s).timestamp() * 1000)
+    except Exception:
+        return 0
+
+
+def _get_channel_recent_msg_times(channel_id):
+    """채널 최근 메시지(최대 100건) 타임스탬프(ms) 리스트. 60초 캐시(유저 공통)."""
+    import time
+    now = time.time()
+    cached = _CHANNEL_MSG_CACHE.get(channel_id)
+    if cached and now - cached['at'] < _CHANNEL_MSG_TTL:
+        return cached['times_ms']
+    bot_token = str(os.getenv('DISCORD_BOT_TOKEN', '')).strip()
+    times = []
+    if bot_token:
+        try:
+            r = requests.get(
+                f'{DISCORD_API_BASE}/channels/{channel_id}/messages?limit=100',
+                headers={'Authorization': f'Bot {bot_token}', 'User-Agent': _DISCORD_UA},
+                timeout=10,
+            )
+            if r.status_code == 200:
+                for m in (r.json() or []):
+                    ts = m.get('timestamp')
+                    if ts:
+                        times.append(_iso_to_ms(ts))
+            else:
+                print(f"[WARN] channel msgs {channel_id}: HTTP {r.status_code}")
+        except Exception as e:
+            print(f"[WARN] channel msgs {channel_id}: {e}")
+    _CHANNEL_MSG_CACHE[channel_id] = {'at': now, 'times_ms': times}
+    return times
+
+
+def _user_channel_ids(discord_user):
+    """유저의 텍스트 채널 id 집합 (권한 검증용 + 활동 계산 대상)."""
+    data = _fetch_user_track_data(discord_user['id'])
+    ids = set()
+    for sp in data.get('spaces', []):
+        for ch in sp.get('channels', []):
+            if ch.get('kind') in _ACTIVITY_TEXT_KINDS and ch.get('id'):
+                ids.add(str(ch['id']))
+    return ids
+
+
+@app.route('/api/auth/channel-activity', methods=['GET'])
+def get_channel_activity():
+    """유저의 각 채널에 대해 '마지막 확인 이후 새 글 수' 반환 {channelId: count}."""
+    if not _is_test_personal_dashboard_enabled():
+        return jsonify({"status": "error", "message": "Disabled outside test environment."}), 403
+    discord_user = _get_authenticated_discord_user()
+    if not discord_user:
+        return jsonify({"status": "error", "message": "Authentication required."}), 401
+
+    uid = str(discord_user['id'])
+    state = _load_seen_state()
+    user_state = state.get(uid, {})
+    # 첫 방문이면 baseline=now 로 고정 → 과거 글 폭탄 방지(이후부터 누적).
+    baseline = user_state.get('_baseline')
+    if not baseline:
+        baseline = datetime.now(timezone.utc).isoformat()
+        user_state['_baseline'] = baseline
+        state[uid] = user_state
+        _save_seen_state(state)
+    baseline_ms = _iso_to_ms(baseline)
+
+    activity = {}
+    for cid in _user_channel_ids(discord_user):
+        since_ms = _iso_to_ms(user_state.get(cid)) if user_state.get(cid) else baseline_ms
+        count = sum(1 for t in _get_channel_recent_msg_times(cid) if t > since_ms)
+        activity[cid] = count
+    return jsonify({"status": "success", "activity": activity})
+
+
+@app.route('/api/auth/channel-seen', methods=['POST'])
+def mark_channel_seen():
+    """채널 클릭 시 last-seen 갱신 → 뱃지 클리어."""
+    if not _is_test_personal_dashboard_enabled():
+        return jsonify({"status": "error", "message": "Disabled outside test environment."}), 403
+    discord_user = _get_authenticated_discord_user()
+    if not discord_user:
+        return jsonify({"status": "error", "message": "Authentication required."}), 401
+
+    body = request.get_json(silent=True) or {}
+    channel_id = str(body.get('channelId', '')).strip()
+    if not channel_id.isdigit():
+        return jsonify({"status": "error", "message": "Invalid channelId."}), 400
+    # 본인 채널만 허용
+    if channel_id not in _user_channel_ids(discord_user):
+        return jsonify({"status": "error", "message": "Not your channel."}), 403
+
+    uid = str(discord_user['id'])
+    state = _load_seen_state()
+    us = state.get(uid, {})
+    us[channel_id] = datetime.now(timezone.utc).isoformat()
+    state[uid] = us
+    _save_seen_state(state)
+    return jsonify({"status": "success"})
 
 
 # 과제 제출 히트맵 ────────────────────────────────────────────────
