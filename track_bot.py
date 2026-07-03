@@ -104,8 +104,8 @@ async def on_message(message):
 
 
 async def load_extensions():
-    """오직 ipc + admin 만 로드. background scheduler / announcement / notion_sync 차단."""
-    for ext in ('cogs.ipc', 'cogs.admin'):
+    """ipc + admin + voice_tracker 로드. background scheduler / announcement / notion_sync 차단."""
+    for ext in ('cogs.ipc', 'cogs.admin', 'cogs.voice_tracker'):
         try:
             await bot.load_extension(ext)
             logger.info(f"  ✓ Loaded: {ext}")
