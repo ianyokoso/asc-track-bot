@@ -85,12 +85,29 @@
   .bar-val{font-size:13px;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums}
   .bar-track{height:8px;background:var(--surface-2);border-radius:99px;overflow:hidden}
   .bar-fill{height:100%;background:var(--navy);border-radius:99px;transition:width .7s ease}
-  .interp{font-size:13px;color:var(--ink-muted);line-height:1.6;margin-top:6px}
-  .ax-row{padding:14px 0;border-bottom:1px dashed var(--hair)}
-  .ax-row:first-of-type{padding-top:8px}
+  .synth{font-size:14.5px;color:var(--ink-muted);line-height:1.78;margin-bottom:22px}
+  .synth b{color:var(--ink);font-weight:700}
+  .axlist{margin-top:8px}
+  .ax-row{padding:18px 0;border-bottom:1px dashed var(--hair)}
+  .ax-row:first-of-type{padding-top:10px}
   .ax-row:last-of-type{border-bottom:0;padding-bottom:2px}
-  .src{font-size:11px;font-weight:600;color:var(--ink-soft);margin-top:6px;letter-spacing:.01em}
-  .disclaimer{font-size:11px;color:var(--ink-soft);line-height:1.55;margin-top:16px;padding-top:14px;border-top:1px solid var(--hair)}
+  .ax-head{display:flex;align-items:center;gap:8px}
+  .ax-name{font-size:15.5px;font-weight:700;color:var(--ink)}
+  .ax-val{margin-left:auto;font-size:16px;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums}
+  .band{font-size:10.5px;font-weight:700;padding:2px 9px;border-radius:99px;letter-spacing:.02em;white-space:nowrap}
+  .b-hi{background:var(--navy);color:#fff}
+  .b-mid{background:var(--surface-2);color:var(--ink-muted)}
+  .b-lo{background:#FDF3E7;color:#B45309;border:1px solid #F6E0C4}
+  .mini{height:7px;background:var(--surface-2);border-radius:99px;overflow:hidden;margin:11px 0 12px}
+  .mini-fill{height:100%;border-radius:99px;transition:width .8s cubic-bezier(.22,1,.36,1)}
+  .m-hi{background:var(--navy)}
+  .m-mid{background:#94A3B8}
+  .m-lo{background:#E0A75E}
+  .interp{font-size:13.5px;color:var(--ink-muted);line-height:1.68}
+  .note{display:block;margin-top:9px;font-size:12.5px;font-weight:600;color:var(--navy);
+    background:var(--navy-soft);border-radius:8px;padding:9px 12px;line-height:1.55}
+  .src{font-size:11px;font-weight:600;color:var(--ink-soft);margin-top:9px;letter-spacing:.01em}
+  .disclaimer{font-size:11px;color:var(--ink-soft);line-height:1.55;margin-top:18px;padding-top:14px;border-top:1px solid var(--hair)}
   .rec-em{font-size:34px;line-height:1;margin-bottom:10px}
   .rec-label{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px}
   .rec-name{font-size:22px;font-weight:700;color:var(--ink);margin-bottom:6px;letter-spacing:-.01em}
@@ -341,18 +358,78 @@ function recommend(sc){
   return map[best];
 }
 
-/* 축 해석 (상황 맞춤 약간) */
-function interp(name, v){
-  const strong = v>=67, weak = v<=40;
-  const base = {
-    '동기(자기주도)': strong?'스스로 원해서 움직이는 힘이 강해요.':(weak?'외부 압박에 끌려가는 편이에요 — 내가 진짜 원하는 걸 찾으면 힘이 붙어요.':'내적·외적 동기가 섞여 있어요.'),
-    '방향 명확성': strong?'뭘 원하는지 선명해요. 실행에 바로 붙이면 돼요.':(weak?'방향이 아직 흐릿해요. 목표를 좁히는 게 먼저예요.':'방향은 잡혀가는 중이에요.'),
-    '자신감': strong?'전반적으로 자신감이 높아요.':(weak?'자신감이 낮게 나왔어요 — 작은 성공 경험부터 쌓으면 올라와요.':'할 수 있는 영역과 아닌 영역이 갈려요.'),
-    '끈기': strong?'한번 잡으면 끝까지 가는 힘이 강해요.':(weak?'중간에 힘이 빠지기 쉬워요 — 짧은 목표로 쪼개보세요.':'상황에 따라 지속력이 달라져요.'),
-    '내 무기': strong?'분명한 강점 무기가 있어요. 이걸 축으로 가세요.':(weak?'아직 뾰족한 무기가 약해요 — 하나를 정해 집중해보세요.':'쓸 만한 무기가 몇 개 보여요.'),
-    '자원': strong?'시간·돈·인맥 여유가 있는 편이에요.':(weak?'자원이 빠듯해요 — 작고 빠른 사이클로 움직이는 게 현실적이에요.':'자원이 아주 넉넉하진 않아요.'),
-  };
-  return base[name];
+/* 한국어 서술격 조사(이에요/예요) — 받침 유무로 결정 */
+function ida(word){
+  const c = word.charCodeAt(word.length-1);
+  if(c<0xAC00 || c>0xD7A3) return '예요';
+  return (c-0xAC00)%28===0 ? '예요' : '이에요';
+}
+
+/* 축별 상세 해석: band(강/보통/성장) + 의미·함의·처방 2~3문장 */
+const INTERP = {
+  '동기': {
+    hi:'스스로 원해서 움직이는 힘이 강해요. 남이 떠밀지 않아도 굴러가는 타입이라, 방향만 잡히면 추진력이 오래 이어집니다.',
+    mid:'내적 동기와 외적 동기가 섞여 있어요. 성과·인정도 원동력이 되지만, 지칠 때를 대비해 「내가 진짜 원하는 이유」 하나를 분명히 해두면 훨씬 멀리 갑니다.',
+    lo:'지금은 외부 압박(뒤처짐·인정)이 주 원동력이에요. 초반 힘은 세지만 쉽게 소진되니, 나를 진짜 끄는 게 뭔지 먼저 찾는 걸 권해요.',
+  },
+  '방향': {
+    hi:'뭘 원하는지 선명해요. 목표가 또렷하니 남은 건 실행에 바로 붙이는 것뿐이에요.',
+    mid:'방향이 잡혀가는 중이에요. 큰 그림은 있지만 「무엇부터」가 아직 흐릿하니, 목표를 한 문장으로 좁혀보면 실행이 붙어요.',
+    lo:'방향이 아직 흐릿해요. 이것저것 벌이기 전에, 3개월 안에 이룰 목표 하나를 정하는 게 먼저예요.',
+  },
+  '자신감': {
+    hi:'전반적으로 「해낼 수 있다」는 믿음이 높아요. 이 자신감이 실행 속도를 끌어올려 줍니다.',
+    mid:'할 수 있는 영역과 아닌 영역이 갈려요. 자신 없는 한두 가지(예: 돈 관리·설득)를 콕 집어 작게 연습하면 금세 올라와요.',
+    lo:'아직 자신감이 낮게 나왔어요. 큰 목표보다 「작게 이겨보는」 경험을 쌓는 게 가장 빠른 처방이에요.',
+  },
+  '끈기': {
+    hi:'한번 잡으면 끝까지 가는 힘이 강해요. 긴 호흡의 목표도 밀어붙일 수 있는 사람이에요.',
+    mid:'상황에 따라 지속력이 달라져요. 의지에 기대기보다 「매주 같은 시간」처럼 루틴으로 고정하면 흔들림이 줄어요.',
+    lo:'중간에 힘이 빠지기 쉬운 편이에요. 큰 목표를 잘게 쪼개 작은 완성을 자주 만드는 게 끈기를 지켜줍니다.',
+  },
+  '무기': {
+    hi:'뚜렷한 강점 무기가 있어요. 여러 개 벌이기보다 이 무기를 축으로 깊게 파는 게 유리해요.',
+    mid:'쓸 만한 무기가 몇 개 보여요. 그중 가장 손에 익은 하나를 골라 먼저 결과를 내보는 걸 추천해요.',
+    lo:'아직 뾰족한 무기가 약해요. 지금은 「하나를 정해 집중」하는 것만으로도 큰 차이가 납니다.',
+  },
+  '자원': {
+    hi:'시간·자금·인맥에 여유가 있는 편이에요. 이 여유를 「실험 횟수」를 늘리는 데 쓰면 성장이 빨라져요.',
+    mid:'자원이 아주 넉넉하진 않아요. 크게 베팅하기보다 작고 빠른 실험으로 검증부터 하는 게 현실적이에요.',
+    lo:'자원이 빠듯해요. 리스크 큰 선택은 미루고, 지금 가진 것으로 할 수 있는 가장 작은 버전부터 시작하세요.',
+  },
+};
+
+/* 상황 유형별 추가 팁 (해당 축에만) */
+const SIT_NOTE = {
+  '자원': {
+    A:'직장과 병행하니 여유가 빠듯한 건 자연스러워요 — 짧고 빠른 사이클로 움직이면 돼요.',
+    B:'사업을 키우는 단계라, 시간·자금 확보가 곧 속도로 이어져요.',
+    C:'기존 일과 병행이니 새 시도엔 시간을 따로 떼어두는 게 관건이에요.',
+    D:'탐색 단계라 큰 자원이 필요친 않아요 — 작게 여러 개 찔러보세요.',
+  },
+  '방향': {
+    D:'방향이 흐린 건 탐색형에겐 당연해요. 그걸 좁혀가는 게 지금의 과제예요.',
+    C:'이미 내 일이 있으니, 「거기에 무엇을 더할지」로 방향을 좁히면 빨라져요.',
+  },
+};
+
+function describe(short, v, situation){
+  const band = v>=65 ? 'hi' : (v<45 ? 'lo' : 'mid');
+  const label = band==='hi' ? '강점' : (band==='lo' ? '성장 포인트' : '보통');
+  const note = (SIT_NOTE[short]||{})[situation];
+  return { band, label, body: INTERP[short][band], note };
+}
+
+/* 종합 해설 문단 (조사 오류 회피 위해 「」·점·쪽 버퍼 사용) */
+function synthText(sc, sorted, situation){
+  const t = sorted[0], l = sorted[sorted.length-1];
+  const clean = s => s.replace(/\s*\(.*?\)/,'');
+  let s = `6가지 중 「${clean(t.n)}」 ${t.v}점이 가장 높고, 「${clean(l.n)}」 ${l.v}점이 가장 낮게 나왔어요. `;
+  s += `강점인 「${clean(t.n)}」 쪽을 축으로 삼고, 「${clean(l.n)}」 쪽을 조금씩 채우면 전체 균형이 잡혀요. `;
+  s += sc.motiveType==='내적 동기형'
+    ? '스스로 원해서 움직이는 편이라, 방향만 서면 추진력이 오래 갑니다.'
+    : '성과·인정이 주된 원동력이라 초반 힘은 좋지만, 지치지 않게 「내가 진짜 원하는 이유」를 하나 붙여두면 오래 가요.';
+  return s;
 }
 
 /* 6각형 레이더 차트 (SVG) */
@@ -366,18 +443,19 @@ function buildRadar(axes){
   [0.25,0.5,0.75,1].forEach(l=>{ grid+=`<polygon points="${poly(R*l)}" fill="none" stroke="#E5E7EB" stroke-width="1"/>`; });
   let spokes='';
   axes.forEach((_,i)=>{ const [x,y]=pt(i,R); spokes+=`<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#E5E7EB" stroke-width="1"/>`; });
+  const defs = `<defs><radialGradient id="rg" cx="50%" cy="50%" r="62%"><stop offset="0%" stop-color="rgba(30,42,74,0.26)"/><stop offset="100%" stop-color="rgba(30,42,74,0.05)"/></radialGradient></defs>`;
   const dpts = axes.map((a,i)=>pt(i, R*Math.max(a.v,4)/100).map(x=>x.toFixed(1)).join(',')).join(' ');
-  const data = `<polygon points="${dpts}" fill="rgba(30,42,74,0.13)" stroke="#1E2A4A" stroke-width="2" stroke-linejoin="round"/>`;
+  const data = `<polygon points="${dpts}" fill="url(#rg)" stroke="#1E2A4A" stroke-width="2.5" stroke-linejoin="round"/>`;
   let dots='', labels='';
   axes.forEach((a,i)=>{
     const [dx,dy]=pt(i, R*Math.max(a.v,4)/100);
-    dots += `<circle cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="3" fill="#1E2A4A"/>`;
+    dots += `<circle cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="3.5" fill="#1E2A4A" stroke="#fff" stroke-width="1.5"/>`;
     const [lx,ly]=pt(i, R+22);
     const anchor = lx<cx-6?'end':(lx>cx+6?'start':'middle');
     labels += `<text x="${lx.toFixed(1)}" y="${(ly-4).toFixed(1)}" text-anchor="${anchor}" dominant-baseline="middle" font-size="12" font-weight="700" fill="#141E3C">${a.short}</text>`;
     labels += `<text x="${lx.toFixed(1)}" y="${(ly+11).toFixed(1)}" text-anchor="${anchor}" dominant-baseline="middle" font-size="10.5" font-weight="700" fill="#1E2A4A">${a.v}</text>`;
   });
-  return `<svg viewBox="0 0 300 300" width="100%" style="max-width:340px;display:block;margin:2px auto 4px">${grid}${spokes}${data}${dots}${labels}</svg>`;
+  return `<svg viewBox="0 0 300 300" width="100%" style="max-width:340px;display:block;margin:2px auto 4px">${defs}${grid}${spokes}${data}${dots}${labels}</svg>`;
 }
 
 /* ---------- 결과 ---------- */
@@ -392,16 +470,26 @@ function renderResult(){
     {n:'내 무기',       short:'무기',   v:sc.competency,  src:'EntreComp(EU) · ASC 트랙 재구성'},
     {n:'자원',          short:'자원',   v:sc.resources,   src:'자원기반관점(RBV) · 지각된 자원 슬랙'},
   ];
-  const top = axes.reduce((a,b)=>b.v>a.v?b:a);
+  const sorted = [...axes].sort((a,b)=>b.v-a.v);
+  const top = sorted[0], low = sorted[sorted.length-1];
   const rk = recommend(sc);
   const rec = TRACKS[rk];
 
-  const list = axes.map(a=>`
+  const list = sorted.map(a=>{
+    const d = describe(a.short, a.v, situation);
+    return `
     <div class="ax-row">
-      <div class="bar-top"><span class="bar-name">${a.n}</span><span class="bar-val">${a.v}</span></div>
-      <div class="interp">${interp(a.n, a.v)}</div>
+      <div class="ax-head">
+        <span class="ax-name">${a.n}</span>
+        <span class="band b-${d.band}">${d.label}</span>
+        <span class="ax-val">${a.v}</span>
+      </div>
+      <div class="mini"><div class="mini-fill m-${d.band}" style="width:0" data-w="${Math.max(a.v,4)}"></div></div>
+      <div class="interp">${d.body}</div>
+      ${d.note ? `<div class="note">💡 ${d.note}</div>` : ''}
       <div class="src">📚 ${a.src}</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   app.innerHTML = `<div class="fade">
     <div class="eyebrow">진단 결과</div>
@@ -409,10 +497,11 @@ function renderResult(){
       <span class="chip">${SIT_LABEL[situation]}</span>
       <span class="chip">${sc.motiveType}</span>
     </div>
-    <h1 style="margin-bottom:20px">『${SIT_LABEL[situation]}』인 당신,<br/>지금 강점은 <span style="color:var(--navy)">${top.short}</span>예요</h1>
+    <h1 style="margin-bottom:14px">『${SIT_LABEL[situation]}』인 당신,<br/>강점은 <span style="color:var(--navy)">${top.short}</span>, 키울 곳은 <span style="color:var(--navy)">${low.short}</span>${ida(low.short)}</h1>
+    <p class="synth">${synthText(sc, sorted, situation)}</p>
     <div class="card">
       ${buildRadar(axes)}
-      ${list}
+      <div class="axlist">${list}</div>
       <div class="disclaimer">검증된 학술 척도를 ASC 맥락으로 번안·구성했어요. (번안본 자체 신뢰도 검증은 파일럿 예정)</div>
     </div>
     <div class="card">
@@ -427,6 +516,7 @@ function renderResult(){
     </div>
   </div>`;
 
+  requestAnimationFrame(()=>{ app.querySelectorAll('.mini-fill').forEach(f=>{ f.style.width=f.dataset.w+'%'; }); });
   document.getElementById('restart').onclick = ()=>{
     page=0; situation=null; resp.forEach(a=>a.fill(null)); render();
   };
