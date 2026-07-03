@@ -86,6 +86,11 @@
   .bar-track{height:8px;background:var(--surface-2);border-radius:99px;overflow:hidden}
   .bar-fill{height:100%;background:var(--navy);border-radius:99px;transition:width .7s ease}
   .interp{font-size:13px;color:var(--ink-muted);line-height:1.6;margin-top:6px}
+  .ax-row{padding:14px 0;border-bottom:1px dashed var(--hair)}
+  .ax-row:first-of-type{padding-top:8px}
+  .ax-row:last-of-type{border-bottom:0;padding-bottom:2px}
+  .src{font-size:11px;font-weight:600;color:var(--ink-soft);margin-top:6px;letter-spacing:.01em}
+  .disclaimer{font-size:11px;color:var(--ink-soft);line-height:1.55;margin-top:16px;padding-top:14px;border-top:1px solid var(--hair)}
   .rec-em{font-size:34px;line-height:1;margin-bottom:10px}
   .rec-label{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px}
   .rec-name{font-size:22px;font-weight:700;color:var(--ink);margin-bottom:6px;letter-spacing:-.01em}
@@ -298,6 +303,7 @@ function score(){
     else if(it.sub==='ctrl') ctrlVals.push(v);
   });
   const direction = scale100(meanOf(dirVals));
+  const autonomy = scale100(meanOf(autoVals));   // 동기 자기주도 축 (자율 동기)
   const motiveType = meanOf(autoVals) >= meanOf(ctrlVals) ? '내적 동기형' : '외적 동기형';
 
   // 자신감
@@ -316,7 +322,7 @@ function score(){
   });
   const competency = scale100(meanOf(compVals));
 
-  return { direction, motiveType, efficacy, grit, resources, competency, domains, selfSignal };
+  return { direction, autonomy, motiveType, efficacy, grit, resources, competency, domains, selfSignal };
 }
 
 /* 트랙 추천 (곁다리) */
@@ -339,6 +345,7 @@ function recommend(sc){
 function interp(name, v){
   const strong = v>=67, weak = v<=40;
   const base = {
+    '동기(자기주도)': strong?'스스로 원해서 움직이는 힘이 강해요.':(weak?'외부 압박에 끌려가는 편이에요 — 내가 진짜 원하는 걸 찾으면 힘이 붙어요.':'내적·외적 동기가 섞여 있어요.'),
     '방향 명확성': strong?'뭘 원하는지 선명해요. 실행에 바로 붙이면 돼요.':(weak?'방향이 아직 흐릿해요. 목표를 좁히는 게 먼저예요.':'방향은 잡혀가는 중이에요.'),
     '자신감': strong?'전반적으로 자신감이 높아요.':(weak?'자신감이 낮게 나왔어요 — 작은 성공 경험부터 쌓으면 올라와요.':'할 수 있는 영역과 아닌 영역이 갈려요.'),
     '끈기': strong?'한번 잡으면 끝까지 가는 힘이 강해요.':(weak?'중간에 힘이 빠지기 쉬워요 — 짧은 목표로 쪼개보세요.':'상황에 따라 지속력이 달라져요.'),
@@ -348,27 +355,52 @@ function interp(name, v){
   return base[name];
 }
 
+/* 6각형 레이더 차트 (SVG) */
+function buildRadar(axes){
+  const cx=150, cy=150, R=90, n=axes.length;
+  const ang=(i)=> (-90 + i*(360/n)) * Math.PI/180;
+  const pt=(i,rr)=> [cx+rr*Math.cos(ang(i)), cy+rr*Math.sin(ang(i))];
+  const poly=(rr)=> axes.map((_,i)=>pt(i,rr).map(x=>x.toFixed(1)).join(',')).join(' ');
+
+  let grid='';
+  [0.25,0.5,0.75,1].forEach(l=>{ grid+=`<polygon points="${poly(R*l)}" fill="none" stroke="#E5E7EB" stroke-width="1"/>`; });
+  let spokes='';
+  axes.forEach((_,i)=>{ const [x,y]=pt(i,R); spokes+=`<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#E5E7EB" stroke-width="1"/>`; });
+  const dpts = axes.map((a,i)=>pt(i, R*Math.max(a.v,4)/100).map(x=>x.toFixed(1)).join(',')).join(' ');
+  const data = `<polygon points="${dpts}" fill="rgba(30,42,74,0.13)" stroke="#1E2A4A" stroke-width="2" stroke-linejoin="round"/>`;
+  let dots='', labels='';
+  axes.forEach((a,i)=>{
+    const [dx,dy]=pt(i, R*Math.max(a.v,4)/100);
+    dots += `<circle cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="3" fill="#1E2A4A"/>`;
+    const [lx,ly]=pt(i, R+22);
+    const anchor = lx<cx-6?'end':(lx>cx+6?'start':'middle');
+    labels += `<text x="${lx.toFixed(1)}" y="${(ly-4).toFixed(1)}" text-anchor="${anchor}" dominant-baseline="middle" font-size="12" font-weight="700" fill="#141E3C">${a.short}</text>`;
+    labels += `<text x="${lx.toFixed(1)}" y="${(ly+11).toFixed(1)}" text-anchor="${anchor}" dominant-baseline="middle" font-size="10.5" font-weight="700" fill="#1E2A4A">${a.v}</text>`;
+  });
+  return `<svg viewBox="0 0 300 300" width="100%" style="max-width:340px;display:block;margin:2px auto 4px">${grid}${spokes}${data}${dots}${labels}</svg>`;
+}
+
 /* ---------- 결과 ---------- */
 function renderResult(){
   setBar();
   const sc = score();
   const axes = [
-    {n:'방향 명확성', v:sc.direction},
-    {n:'자신감', v:sc.efficacy},
-    {n:'끈기', v:sc.grit},
-    {n:'내 무기', v:sc.competency},
-    {n:'자원', v:sc.resources},
+    {n:'동기(자기주도)', short:'동기',   v:sc.autonomy,    src:'자기결정이론(SDT) · Deci & Ryan / Gagné 2015'},
+    {n:'방향 명확성',    short:'방향',   v:sc.direction,   src:'목표설정이론 · Hollenbeck 1989'},
+    {n:'자신감',        short:'자신감', v:sc.efficacy,    src:'창업 자기효능감(ESE) · McGee et al. 2009'},
+    {n:'끈기',          short:'끈기',   v:sc.grit,        src:'Short Grit Scale · Duckworth & Quinn 2009'},
+    {n:'내 무기',       short:'무기',   v:sc.competency,  src:'EntreComp(EU) · ASC 트랙 재구성'},
+    {n:'자원',          short:'자원',   v:sc.resources,   src:'자원기반관점(RBV) · 지각된 자원 슬랙'},
   ];
   const top = axes.reduce((a,b)=>b.v>a.v?b:a);
-  const low = axes.reduce((a,b)=>b.v<a.v?b:a);
   const rk = recommend(sc);
   const rec = TRACKS[rk];
 
-  let bars = axes.map(a=>`
-    <div class="bar-row">
+  const list = axes.map(a=>`
+    <div class="ax-row">
       <div class="bar-top"><span class="bar-name">${a.n}</span><span class="bar-val">${a.v}</span></div>
-      <div class="bar-track"><div class="bar-fill" style="width:0" data-w="${a.v}"></div></div>
       <div class="interp">${interp(a.n, a.v)}</div>
+      <div class="src">📚 ${a.src}</div>
     </div>`).join('');
 
   app.innerHTML = `<div class="fade">
@@ -377,8 +409,12 @@ function renderResult(){
       <span class="chip">${SIT_LABEL[situation]}</span>
       <span class="chip">${sc.motiveType}</span>
     </div>
-    <h1 style="margin-bottom:20px">『${SIT_LABEL[situation]}』인 당신,<br/>지금 강점은 <span style="color:var(--navy)">${top.n}</span>이에요</h1>
-    <div class="card">${bars}</div>
+    <h1 style="margin-bottom:20px">『${SIT_LABEL[situation]}』인 당신,<br/>지금 강점은 <span style="color:var(--navy)">${top.short}</span>예요</h1>
+    <div class="card">
+      ${buildRadar(axes)}
+      ${list}
+      <div class="disclaimer">검증된 학술 척도를 ASC 맥락으로 번안·구성했어요. (번안본 자체 신뢰도 검증은 파일럿 예정)</div>
+    </div>
     <div class="card">
       <div class="rec-label">곁다리 · 어울리는 트랙</div>
       <div class="rec-em">${rec.em}</div>
@@ -391,8 +427,6 @@ function renderResult(){
     </div>
   </div>`;
 
-  // 바 애니메이션
-  requestAnimationFrame(()=>{ app.querySelectorAll('.bar-fill').forEach(f=>{ f.style.width=f.dataset.w+'%'; }); });
   document.getElementById('restart').onclick = ()=>{
     page=0; situation=null; resp.forEach(a=>a.fill(null)); render();
   };
