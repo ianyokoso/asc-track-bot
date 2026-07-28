@@ -297,6 +297,17 @@
       color: #141E3C;
       cursor: pointer;
     }
+    /* 트랙명 옆 상태 배지 (예: 빌더 트랙 '베타테스트'). 11기 개편.
+       .track-option-header 직속 — <label> 안에 넣으면 label.textContent 로 트랙명을
+       읽는 getSelectedWeekdayTrack 이 배지 문구까지 같이 집어간다. */
+    .track-option-header > .track-badge {
+      margin-left: -4px;
+      font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
+      color: #6B7280;
+      background: #F3F4F6;
+      border: 1px solid #E5E7EB;
+      padding: 2px 6px; border-radius: 3px;
+    }
 
     /* ── 조장 지원 (Leader Apply) ─ 정규 트랙 아래 별도 섹션 ──────────
        사이트 톤매너 (white + navy + grey) 에 맞춰 미니멀 카드.
@@ -1316,8 +1327,11 @@
                 <div class="track-option-header">
                   <label class="track-radio-label">
                     <input type="radio" name="mon" id="mon-builder"> 빌더 트랙
-                    <span class="sched-participation">베타테스트</span>
                   </label>
+                  <!-- ⚠️ 배지는 <label> 밖에 둔다 — getSelectedWeekdayTrack 이
+                       label.textContent 로 트랙명을 뽑기 때문 (안에 넣으면 요약에
+                       '빌더 트랙 베타테스트' 로 새어나감). -->
+                  <span class="track-badge">베타테스트</span>
                 </div>
                 <div class="track-schedule" data-track="builder">
                   <!-- NOTION_SCHEDULE:builder -->
@@ -1452,19 +1466,19 @@
         <div class="text-eyebrow mb-2" style="letter-spacing:0.1em;">공통 일정</div>
         <ul class="space-y-1.5 js-common-schedule">
           <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span class="text-ink font-medium tabular-nums shrink-0">6/28 (일)</span>
+            <span class="text-ink font-medium tabular-nums shrink-0">8/2 (일)</span>
             <span class="text-ink-soft shrink-0">오후 8:00–10:00</span>
             <span class="text-ink-soft">·</span>
             <span class="text-ink">온라인 OT</span>
           </li>
           <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span class="text-ink font-medium tabular-nums shrink-0">7/12 (일)</span>
+            <span class="text-ink font-medium tabular-nums shrink-0">8/16 (일)</span>
             <span class="text-ink-soft shrink-0">오후 2:00–5:00</span>
             <span class="text-ink-soft">·</span>
             <span class="text-ink">오프라인 네트워킹</span>
           </li>
           <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span class="text-ink font-medium tabular-nums shrink-0">7/25 (토)</span>
+            <span class="text-ink font-medium tabular-nums shrink-0">8/29 (토)</span>
             <span class="text-ink-soft shrink-0">오후 2:00–6:00</span>
             <span class="text-ink-soft">·</span>
             <span class="text-ink">ASC 2.0 기념 오프라인 행사</span>
@@ -2159,19 +2173,19 @@
         <div class="text-eyebrow mb-2">공통 일정</div>
         <ul class="space-y-1.5 js-common-schedule">
           <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span class="text-ink font-medium tabular-nums shrink-0">6/28 (일)</span>
+            <span class="text-ink font-medium tabular-nums shrink-0">8/2 (일)</span>
             <span class="text-ink-soft shrink-0">오후 8:00–10:00</span>
             <span class="mx-1 text-ink-soft">·</span>
             <span class="text-ink">온라인 OT</span>
           </li>
           <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span class="text-ink font-medium tabular-nums shrink-0">7/12 (일)</span>
+            <span class="text-ink font-medium tabular-nums shrink-0">8/16 (일)</span>
             <span class="text-ink-soft shrink-0">오후 2:00–5:00</span>
             <span class="mx-1 text-ink-soft">·</span>
             <span class="text-ink">오프라인 네트워킹</span>
           </li>
           <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span class="text-ink font-medium tabular-nums shrink-0">7/25 (토)</span>
+            <span class="text-ink font-medium tabular-nums shrink-0">8/29 (토)</span>
             <span class="text-ink-soft shrink-0">오후 2:00–6:00</span>
             <span class="mx-1 text-ink-soft">·</span>
             <span class="text-ink">ASC 2.0 기념 오프라인 행사</span>
@@ -3440,8 +3454,9 @@
     //
     // 트랙 id → 요일 라디오 input name + value(트랙 id) 매핑.
     // 라디오 value="creator" 같이 사용 (track-schedule data-track 과 동일).
-    // 9기 개편: 빌더 정규 (심화/기초) 트랙은 7월 개편 오픈 예정으로 보류. 조장 지원도 비활성.
-    const LEADER_TRACK_IDS = ['sales_real', 'self_inquiry', 'ai_agent', 'creator', 'app_dev'];
+    // 11기 개편: 빌더 트랙(단일)이 월요일 정규 트랙으로 복귀 — 조장 지원 대상에도 포함.
+    // 구 빌더 심화/기초는 11기 미운영이라 계속 제외.
+    const LEADER_TRACK_IDS = ['sales_real', 'self_inquiry', 'builder', 'ai_agent', 'creator', 'app_dev'];
 
     /** 현재 사용자가 정규 트랙 중 어떤 id 들을 라디오로 선택했는지 set 으로 반환. */
     function getSelectedWeekdayTrackIds() {
@@ -3947,12 +3962,13 @@
       );
       if (!confirmed) return;
 
-      // 9기 개편: 빌더 정규는 7월 오픈 예정이라 랜덤 채우기 풀에서 제외.
-      // ai_agent: 수→화, self_inquiry: 월→수 이동.
-      const WEEKDAY_IDS = ['creator', 'sales_real', 'ai_agent', 'app_dev', 'self_inquiry'];
+      // 11기 개편: self_inquiry 수→월, builder(단일 빌더 트랙) 월요일 신설.
+      // 구 빌더 심화/기초는 11기 미운영이라 랜덤 채우기 풀에서 계속 제외.
+      const WEEKDAY_IDS = ['creator', 'sales_real', 'ai_agent', 'app_dev', 'self_inquiry', 'builder'];
       const WEEKDAY_TO_DAY = {
         creator: 'wed',
-        sales_real: 'mon', ai_agent: 'tue', app_dev: 'thu', self_inquiry: 'wed',
+        sales_real: 'mon', ai_agent: 'tue', app_dev: 'thu',
+        self_inquiry: 'mon', builder: 'mon',
       };
       const CREATOR_LIGHT_IDS = ['creator_light_short', 'creator_light_long'];
       const BUILDER_LIGHT_IDS = ['builder_light_basic', 'builder_light_adv'];
@@ -5868,6 +5884,26 @@
         ],
       },
       {
+        id: 'self_inquiry', label: '나 탐구 트랙', weekday: '월요일',
+        tagline: '나 탐구 → 퍼스널 브랜딩 → 실제 강연까지, 4주 만에 무대 위로',
+        target: '본인의 정체성·메시지를 정리하고 싶은 분, 강연·콘텐츠 시작이 막막한 분',
+        weeks: [
+          { week: 'OT', date: '5/24 (일)', time: '8:00-10:00PM', title: '오리엔테이션 라이브', detail: '4주간 일정 및 내용 리뷰' },
+          { week: '1주차', date: '5/25 (월)', time: '8:00-9:30PM', title: '발견 - 나 탐구 (온라인 라이브)', detail: '진단 결과 리뷰 및 가치 단어 정리 · 이키가이 분석' },
+          { week: '2주차', date: '6/1 (월)', time: '8:00-9:00PM', title: '실행 - 브랜딩과 콘텐츠 설계 (온라인 라이브)', detail: '퍼스널 브랜딩 작성법 · 콘텐츠 기획서 작성법' },
+          { week: '3주차', date: '6/8 (월)', time: '8:00-11:00PM', title: '기록 - 강연 발표 및 피드백 (오프라인, 논현역 인근)', detail: '강연 자료 실제 발표 · 체크리스트 기반 피드백' },
+          { week: '4주차', date: '6/15 (월)', time: '7:30-10:30PM', title: '공명 - 최종 오프라인 발표와 회고', detail: '최종 강연 발표 (외부 강연장) 및 회고' },
+        ],
+      },
+      {
+        id: 'builder', label: '빌더 트랙', weekday: '월요일',
+        comingSoon: true,
+        comingSoonNote: '베타테스트',
+        tagline: '이번 기수 빌더 트랙은 베타테스트로 진행합니다. 주차별 상세 커리큘럼은 공지사항에서 안내 예정입니다.',
+        target: '아이디어를 직접 제품으로 만들어보고 싶은 분',
+        weeks: [],
+      },
+      {
         id: 'ai_agent', label: 'AI 에이전트 트랙', weekday: '화요일',
         tagline: 'Claude Code의 스킬·MCP·서브에이전트로 만드는 100% 자동화 시스템',
         target: '반복 업무를 AI로 자동화하고 싶은 분, 멀티 에이전트 시스템 입문',
@@ -5886,18 +5922,6 @@
           { week: '4주차', date: '6/16 (화)', time: '9:30-11:00PM', title: '조별 모임 / 피드백 세션' },
           { week: '4주차', date: '6/19 (금)', time: '7:00-10:00PM', title: '외부 연사 오프라인 특강 (북토크님)', optional: true },
           { week: '4주차', date: '6/21 (일)', time: '당일까지', title: '최종 과제 제출 데드라인' },
-        ],
-      },
-      {
-        id: 'self_inquiry', label: '나 탐구 트랙', weekday: '수요일',
-        tagline: '나 탐구 → 퍼스널 브랜딩 → 실제 강연까지, 4주 만에 무대 위로',
-        target: '본인의 정체성·메시지를 정리하고 싶은 분, 강연·콘텐츠 시작이 막막한 분',
-        weeks: [
-          { week: 'OT', date: '5/24 (일)', time: '8:00-10:00PM', title: '오리엔테이션 라이브', detail: '4주간 일정 및 내용 리뷰' },
-          { week: '1주차', date: '5/27 (수)', time: '8:00-9:30PM', title: '발견 - 나 탐구 (온라인 라이브)', detail: '진단 결과 리뷰 및 가치 단어 정리 · 이키가이 분석' },
-          { week: '2주차', date: '6/5 (금)', time: '8:00-9:00PM', title: '실행 - 브랜딩과 콘텐츠 설계 (온라인 라이브)', detail: '퍼스널 브랜딩 작성법 · 콘텐츠 기획서 작성법' },
-          { week: '3주차', date: '6/10 (수)', time: '8:00-11:00PM', title: '기록 - 강연 발표 및 피드백 (오프라인, 논현역 인근)', detail: '강연 자료 실제 발표 · 체크리스트 기반 피드백' },
-          { week: '4주차', date: '6/17 (수)', time: '7:30-10:30PM', title: '공명 - 최종 오프라인 발표와 회고', detail: '최종 강연 발표 (외부 강연장) 및 회고' },
         ],
       },
       {
@@ -5939,14 +5963,6 @@
           { week: '4주차', date: '6/19 (금)', time: '7:00-10:00PM', title: '외부 연사 오프라인 특강 (북토크님)', optional: true },
           { week: '4주차', date: '6/24 (수)', time: '당일까지', title: '최종 과제 제출 데드라인' },
         ],
-      },
-      {
-        id: 'builder_advanced', label: '빌더 트랙', weekday: '베타테스트 진행예정',
-        comingSoon: true,
-        comingSoonNote: '베타테스트 진행예정',
-        tagline: '빌더 트랙은 이번 기수에 베타테스트 형식으로 진행합니다. 자세한 내용은 공지사항에서 확인해주세요.',
-        target: '',
-        weeks: [],
       },
     ];
 
@@ -6256,6 +6272,7 @@
     /** 트랙 탭 정의 (정규 7개 + 라이트 2개 그룹) */
     const GP_TABS = [
       { id: 'creator',          label: '크리에이터',        kind: 'weekday' },
+      { id: 'builder',          label: '빌더',              kind: 'weekday' },
       { id: 'builder_basic',    label: '빌더 기초',         kind: 'weekday' },
       { id: 'builder_advanced', label: '빌더 심화',         kind: 'weekday' },
       { id: 'sales_real',       label: '세일즈 실전',       kind: 'weekday' },
@@ -6691,6 +6708,7 @@
     const GP_GROUP_DB_NAME_MAP = {
       sales_real: '세일즈 실전 트랙',
       self_inquiry: '나 탐구 트랙',
+      builder: '빌더 트랙',
       builder_advanced: '빌더 심화 트랙',
       builder_basic: '빌더 기초 트랙',
       ai_agent: 'AI 에이전트 트랙',
@@ -6718,6 +6736,8 @@
             names.push('세일즈 실전 트랙');
           } else if (track.id === 'self_inquiry') {
             names.push('나 탐구 트랙');
+          } else if (track.id === 'builder') {
+            names.push('빌더 트랙');
           } else if (track.id === 'builder_advanced') {
             names.push('빌더 심화 트랙');
           } else if (track.id === 'builder_basic') {
