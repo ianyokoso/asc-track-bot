@@ -3392,6 +3392,21 @@ def _pick_db_property(properties, expected_type, preferred_names):
     return None
 
 
+def _pick_db_property_strict(properties, expected_type, preferred_names):
+    """
+    _pick_db_property 의 strict 버전 — 이름이 정확히 맞을 때만 반환하고,
+    '타입만 같으면 아무거나' fallback 을 쓰지 않는다.
+
+    필요한 이유: 멤버 마스터 DB 에는 select 타입 컬럼이 '기수' 말고 '역할'
+    (학생/강사/스탭/운영) 도 있다. fallback 이 걸리면 기수 값을 '역할' 컬럼에
+    덮어쓰는 사고가 난다. 파괴적 write 대상 컬럼은 이름 매칭만 허용.
+    """
+    for name in preferred_names:
+        if name in properties and properties[name].get('type') == expected_type:
+            return name
+    return None
+
+
 def _resolve_member_db_fields(db_obj):
     properties = db_obj.get('properties', {})
     return {
@@ -3402,6 +3417,9 @@ def _resolve_member_db_fields(db_obj):
         'group': _pick_db_property(properties, 'rich_text', ['소속 조', '그룹', 'Group']),
         'notes': _pick_db_property(properties, 'rich_text', ['기타사항', '메모', 'Notes']),
         'avatar': _pick_db_property(properties, 'url', ['프로필 이미지', 'Avatar']),
+        # 기수 — 트랙 신청 사이트의 기수 설정 (cohort_config_*.json) 값을 그대로 기록.
+        # strict 매칭 필수 ('역할' 도 select 라 fallback 이 걸리면 덮어쓴다).
+        'cohort': _pick_db_property_strict(properties, 'select', ['기수', 'Cohort']),
     }
 
 
@@ -3482,7 +3500,8 @@ def _find_existing_member_page(notion_api, member_db_id, fields, member):
     return None
 
 
-def _build_member_properties(fields, member, group_labels, update_only_tracks_and_group=False):
+def _build_member_properties(fields, member, group_labels, update_only_tracks_and_group=False,
+                             cohort_label=None):
     """
     멤버 마스터 DB 의 row 에 set 할 properties.
 
@@ -3494,6 +3513,10 @@ def _build_member_properties(fields, member, group_labels, update_only_tracks_an
 
     update_only_tracks_and_group=False (신규 row 생성 케이스 — fallback):
       - 매칭 실패해도 어쩔 수 없이 row 만들어야 할 때 (예: legacy 호환). title 등 전체 set.
+
+    cohort_label (2026-07-28 추가):
+      - 트랙 신청 사이트의 기수 설정값 (예 '11기') 을 '기수' select 에 기록.
+      - 트랙·조와 동일하게 '현재 기수 참여 정보' 로 취급 → 두 케이스 모두 set.
     """
     properties = {}
     member_id = str(member.get('userId') or member.get('id') or '').strip()
@@ -3501,8 +3524,9 @@ def _build_member_properties(fields, member, group_labels, update_only_tracks_an
     handle = str(member.get('handle', '')).strip()
     track_names = [name for name in member.get('trackNames', []) if name]
     group_text = ', '.join(group_labels)
+    cohort_text = str(cohort_label or '').strip()
 
-    # 트랙 + 조는 두 케이스 모두 set (새 기수 정보로 교체).
+    # 트랙 + 조 + 기수는 두 케이스 모두 set (새 기수 정보로 교체).
     if fields.get('track'):
         properties[fields['track']] = {
             "multi_select": [{"name": name[:100]} for name in track_names[:100]]
@@ -3513,6 +3537,8 @@ def _build_member_properties(fields, member, group_labels, update_only_tracks_an
             if group_text
             else {"rich_text": []}
         )
+    if fields.get('cohort') and cohort_text:
+        properties[fields['cohort']] = {"select": {"name": cohort_text[:100]}}
 
     if update_only_tracks_and_group:
         # 기존 row 보존 모드 — title / user_id / handle / notes 건드리지 않음.
@@ -3548,19 +3574,38 @@ def _ensure_member_track_options(notion_api, member_db_id, track_property_name, 
         notion_api.add_multi_select_option(member_db_id, track_property_name, track_name)
 
 
+def _ensure_member_cohort_option(notion_api, member_db_id, cohort_property_name, cohort_label):
+    """
+    '기수' select 에 현재 기수 옵션이 없으면 미리 추가.
+
+    노션은 페이지 쓰기 시 없는 select 옵션을 자동 생성해주지만, 스키마를 먼저
+    맞춰두면 첫 신청자에게서 실패할 여지가 사라지고 노션 UI 필터에도 바로 뜬다.
+    (_ensure_member_track_options 와 같은 패턴)
+    """
+    cohort_text = str(cohort_label or '').strip()
+    if not cohort_property_name or not cohort_text:
+        return
+    notion_api.add_select_option(member_db_id, cohort_property_name, cohort_text)
+
+
 def _clear_non_participant_tracks_and_groups(notion_api, member_db_id, fields, touched_page_ids):
     """
     Option C 구현 (2026-05-08):
-      현재 기수 sync 대상 (touched_page_ids) 에 포함 안 된 master DB 멤버의 트랙·조
-      컬럼을 비움. 결과: master DB 트랙·조 = '현재 기수 참여자만' 반영.
+      현재 기수 sync 대상 (touched_page_ids) 에 포함 안 된 master DB 멤버의 트랙·조·기수
+      컬럼을 비움. 결과: master DB 트랙·조·기수 = '현재 기수 참여자만' 반영.
 
       이전 기수 history 는 트랙 신청서 DB + (archive 안 된) 옛 inline DB 에 보존됨.
+
+      기수 포함 (2026-07-28): '기수' 를 '현재 참여 기수' 로 쓰기로 결정 → 트랙·조와
+      같은 수명주기를 가진다. 미참여자에게 옛 기수가 남으면 '트랙은 비었는데 기수는
+      11기' 같은 모순 상태가 된다.
 
     반환: 비워진 멤버 수 (cleared count).
     """
     track_field = fields.get('track')
     group_field = fields.get('group')
-    if not track_field and not group_field:
+    cohort_field = fields.get('cohort')
+    if not track_field and not group_field and not cohort_field:
         return 0
 
     try:
@@ -3592,6 +3637,10 @@ def _clear_non_participant_tracks_and_groups(notion_api, member_db_id, fields, t
             )
             if has_text:
                 clear_props[group_field] = {"rich_text": []}
+        if cohort_field:
+            current_cohort_opt = (props.get(cohort_field, {}) or {}).get('select')
+            if current_cohort_opt:
+                clear_props[cohort_field] = {"select": None}
 
         if not clear_props:
             continue
@@ -3604,7 +3653,8 @@ def _clear_non_participant_tracks_and_groups(notion_api, member_db_id, fields, t
     return cleared
 
 
-def _upsert_group_preview_members(notion_api, member_db_id, members, member_group_labels, auto_create_missing=False):
+def _upsert_group_preview_members(notion_api, member_db_id, members, member_group_labels,
+                                  auto_create_missing=False, cohort_label=None):
     """
     멤버 마스터 DB 갱신.
 
@@ -3633,6 +3683,7 @@ def _upsert_group_preview_members(notion_api, member_db_id, members, member_grou
         raise RuntimeError('Member test DB is missing a title property.')
 
     _ensure_member_track_options(notion_api, member_db_id, fields.get('track'), members)
+    _ensure_member_cohort_option(notion_api, member_db_id, fields.get('cohort'), cohort_label)
 
     member_page_ids = {}
     summary = {'created': 0, 'updated': 0, 'missing': [], 'cleared': 0}
@@ -3650,12 +3701,13 @@ def _upsert_group_preview_members(notion_api, member_db_id, members, member_grou
               f"name={name_dbg!r} -> {'FOUND ' + existing.get('id', '') if existing else 'MISS'}")
 
         if existing:
-            # 트랙·조만 패치 (기존 페이지 다른 정보 보존).
+            # 트랙·조·기수만 패치 (기존 페이지 다른 정보 보존).
             properties = _build_member_properties(
                 fields,
                 member,
                 member_group_labels.get(member_id, []),
                 update_only_tracks_and_group=True,
+                cohort_label=cohort_label,
             )
             if not notion_api.update_page_properties(existing['id'], properties):
                 raise RuntimeError(f'Failed to update member row: {member_id}')
@@ -3668,6 +3720,7 @@ def _upsert_group_preview_members(notion_api, member_db_id, members, member_grou
                 member,
                 member_group_labels.get(member_id, []),
                 update_only_tracks_and_group=False,
+                cohort_label=cohort_label,
             )
             new_page_id = notion_api.add_row_to_database(member_db_id, properties)
             if not new_page_id:
@@ -4171,7 +4224,13 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
     if member_db_id != allowed_member_db_id or group_db_id != allowed_group_db_id:
         raise ValueError('This route is locked to the configured test Notion DB IDs only.')
 
-    cohort_label = str(payload.get('cohortLabel') or '9기').strip()
+    # 기수 라벨은 프론트가 보내주지만, 누락 시 하드코딩('9기') 으로 떨어지면 노션에
+    # 엉뚱한 기수가 박힌다. 트랙 신청 사이트의 기수 설정을 fallback 으로 쓴다.
+    cohort_label = str(
+        payload.get('cohortLabel') or _read_cohort_config().get('cohortLabel') or ''
+    ).strip()
+    if not cohort_label:
+        raise ValueError('cohortLabel 을 결정할 수 없습니다 (payload/기수 설정 모두 비어있음).')
     members = payload.get('members') or []
     tracks = payload.get('tracks') or []
     # 🔧 운영자가 success modal 의 '🔧 마스터 DB 자동 추가' 버튼 클릭 시 활성화.
@@ -4224,6 +4283,7 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
         members,
         member_group_labels,
         auto_create_missing=auto_create_missing,
+        cohort_label=cohort_label,
     )
 
     # ─────────────────────────────────────────────────────────────────────

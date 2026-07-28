@@ -1524,6 +1524,54 @@ def add_multi_select_option(db_id, property_name, option_name):
         print(f"[Exception] add_multi_select_option: {e}")
         return False
 
+
+def add_select_option(db_id, property_name, option_name):
+    """
+    select 속성에 새로운 옵션을 추가합니다.
+    이미 존재하면 스킵합니다. (add_multi_select_option 의 select 판)
+    """
+    url = f"https://api.notion.com/v1/databases/{db_id}"
+    try:
+        resp = SESSION.get(url, headers=get_headers(), timeout=TIMEOUT)
+        if resp.status_code != 200:
+            print(f"[Error] Failed to read DB schema: {resp.text}")
+            return False
+
+        db = resp.json()
+        prop = db.get('properties', {}).get(property_name)
+        if not prop or prop.get('type') != 'select':
+            print(f"[Error] Property '{property_name}' is not select")
+            return False
+
+        existing_options = prop.get('select', {}).get('options', [])
+        if any(opt['name'] == option_name for opt in existing_options):
+            print(f"[Info] Option '{option_name}' already exists in '{property_name}'")
+            return True
+
+        # 기존 옵션은 name/color 만 넘겨 그대로 보존 (id 는 노션이 유지).
+        payload_options = [
+            {"name": opt["name"], "color": opt.get("color", "default")}
+            for opt in existing_options
+        ]
+        payload_options.append({"name": option_name})
+        payload = {
+            "properties": {
+                property_name: {
+                    "select": {"options": payload_options}
+                }
+            }
+        }
+        resp = SESSION.patch(url, headers=get_headers(), json=payload, timeout=TIMEOUT)
+        if resp.status_code == 200:
+            print(f"[Success] Added option '{option_name}' to '{property_name}'")
+            return True
+        else:
+            print(f"[Error] Failed to add option: {resp.text}")
+            return False
+    except Exception as e:
+        print(f"[Exception] add_select_option: {e}")
+        return False
+
 def create_track_page_in_group_db(group_db_id, track_name):
     """
     트랙/조 DB에 새 트랙 페이지를 생성합니다.
