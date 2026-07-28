@@ -244,43 +244,6 @@
       color: #141E3C;
     }
 
-    /* ── 빌더 트랙 리뉴얼 안내 섹션 (정규/라이트 사이) ─────────────
-       라디오 없음, 정보 전달용. 라이트 트랙으로 자연 유도. */
-    .builder-renewal-section { /* layout 만 */ }
-    .builder-renewal-card {
-      background: #F4F6F8;
-      border-radius: 12px;
-      padding: 28px 24px;
-      text-align: center;
-    }
-    .builder-renewal-badge {
-      display: inline-block;
-      background: #EEF0F6;
-      color: #1E2A4A;
-      font-size: 11px;
-      font-weight: 700;
-      padding: 3px 10px;
-      border-radius: 999px;
-      letter-spacing: 0;
-      margin-bottom: 14px;
-    }
-    .builder-renewal-title {
-      font-size: 24px;
-      font-weight: 700;
-      color: #141E3C;
-      letter-spacing: -0.01em;
-      margin-bottom: 12px;
-    }
-    .builder-renewal-desc {
-      font-size: 13.5px;
-      color: #4B5563;
-      line-height: 1.7;
-      margin: 0;
-      max-width: 540px;
-      margin-left: auto;
-      margin-right: auto;
-    }
-
     /* ── 트랙 옵션 헤더: 라디오 + 라벨 한 줄 ───── */
     .track-option-header {
       display: flex;
@@ -296,17 +259,6 @@
       font-weight: 600;
       color: #141E3C;
       cursor: pointer;
-    }
-    /* 트랙명 옆 상태 배지 (예: 빌더 트랙 '베타테스트'). 11기 개편.
-       .track-option-header 직속 — <label> 안에 넣으면 label.textContent 로 트랙명을
-       읽는 getSelectedWeekdayTrack 이 배지 문구까지 같이 집어간다. */
-    .track-option-header > .track-badge {
-      margin-left: -4px;
-      font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
-      color: #6B7280;
-      background: #F3F4F6;
-      border: 1px solid #E5E7EB;
-      padding: 2px 6px; border-radius: 3px;
     }
 
     /* ── 조장 지원 (Leader Apply) ─ 정규 트랙 아래 별도 섹션 ──────────
@@ -1328,10 +1280,6 @@
                   <label class="track-radio-label">
                     <input type="radio" name="mon" id="mon-builder"> 빌더 트랙
                   </label>
-                  <!-- ⚠️ 배지는 <label> 밖에 둔다 — getSelectedWeekdayTrack 이
-                       label.textContent 로 트랙명을 뽑기 때문 (안에 넣으면 요약에
-                       '빌더 트랙 베타테스트' 로 새어나감). -->
-                  <span class="track-badge">베타테스트</span>
                 </div>
                 <div class="track-schedule" data-track="builder">
                   <!-- NOTION_SCHEDULE:builder -->
@@ -1590,9 +1538,9 @@
         </p>
       </section>
 
-      <!-- 11기 개편 (2026-07-28): 빌더 트랙이 월요일 정규 트랙으로 복귀 —
-           별도 '베타테스트 안내' 섹션 제거. 안내는 월요일 슬롯의 track-option
-           배지 + 일정표 문구로 대체. (.builder-renewal-* CSS 는 재사용 대비 보존) -->
+      <!-- 11기 개편 (2026-07-28): 빌더 트랙이 월요일 정규 트랙으로 복귀.
+           이전 기수의 '빌더 트랙 안내' 카드 섹션(.builder-renewal-*)은 CSS 까지 제거됨 —
+           빌더는 이제 월요일 슬롯의 일반 track-option 으로 신청받는다. -->
 
       <!-- 카테고리 구분선 -->
       <div class="track-category-divider"></div>
@@ -4484,6 +4432,9 @@
     }
 
     /** 특정 트랙의 라디오 라벨 텍스트를 뽑아낸다. "세일즈 실전 트랙" 등 */
+    /** 해당 요일에 선택된 트랙명. <label> 의 textContent 를 그대로 트랙명으로 쓴다.
+     *  ⚠️ 그래서 라벨 안에 배지·부가 문구를 넣으면 안 된다 — 신청 요약에 같이 새어나감.
+     *     (예: '빌더 트랙' 옆 상태 배지는 <label> 밖 .track-option-header 직속에 둘 것) */
     function getSelectedWeekdayTrack(name) {
       const radio = document.querySelector(`input[type="radio"][name="${name}"]:checked`);
       if (!radio) return null;
@@ -5980,8 +5931,8 @@
     const PREOPEN_LIGHT_TRACKS = [
       { parent: '크리에이터', label: '크리에이터 라이트 (숏폼)', note: '숏폼 글쓰기에 집중한 가벼운 코스' },
       { parent: '크리에이터', label: '크리에이터 라이트 (롱폼)', note: '롱폼 글쓰기 중심의 라이트 코스' },
-      // 빌더 라이트 트랙은 10기 정책으로 신청 불가 (UI 노출 제거). 정규 빌더 트랙은
-      // 베타테스트로 진행 → 라이트 트랙도 함께 보류. JS 식별자/legacy 데이터는 보존.
+      // 빌더 라이트 트랙은 계속 신청 불가 (UI 노출 제거). 11기에 정규 빌더 트랙은
+      // 재오픈했지만 라이트 코스는 별도 결정 전까지 보류. JS 식별자/legacy 데이터는 보존.
     ];
 
     function escHtml(s) {
