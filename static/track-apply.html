@@ -1565,10 +1565,13 @@
 
         <!-- 크리에이터 라이트 그룹 -->
         <div>
-          <div class="flex items-baseline justify-between mb-3">
+          <div class="flex items-baseline justify-between mb-2">
             <p class="text-eyebrow">크리에이터 라이트</p>
             <span class="text-[11px] text-ink-soft">1개만 선택</span>
           </div>
+          <p class="text-[12px] text-ink-muted leading-relaxed mb-3">
+            ※ <strong class="text-ink">크리에이터 정규 트랙을 이수한 분만</strong> 신청할 수 있습니다.
+          </p>
           <div class="light-tracks-grid"
                data-light-group-container
                data-light-group="creator">
@@ -1594,10 +1597,13 @@
         </div>
       </section>
 
-      <!-- Notes — ASC 9기 활동 기대점 (자유 기술) -->
+      <!-- Notes — ASC 활동 기대점 (자유 기술). 11기부터 필수 항목.
+           기수 라벨은 applyCohortLabels() 가 #notes-cohort-label 에 주입 (하드코딩 X). -->
       <div class="mb-10">
-        <p class="text-eyebrow mb-2">ASC 9기 활동에서 기대하는 점 <span class="ml-2 text-ink-soft normal-case tracking-normal">(선택)</span></p>
-        <textarea placeholder="지금 솔로프리너로서 겪고 계신 고민이나, ASC 활동을 통해 채우고 싶은 부분이 있다면 편하게 적어주세요. 작은 이야기도 좋습니다!"></textarea>
+        <p class="text-eyebrow mb-2">
+          <span class="leader-section-eyebrow">필수</span>ASC <span id="notes-cohort-label">11기</span> 활동에서 기대하는 점
+        </p>
+        <textarea id="notes-textarea" required placeholder="지금 솔로프리너로서 겪고 계신 고민이나, ASC 활동을 통해 채우고 싶은 부분이 있다면 편하게 적어주세요. 작은 이야기도 좋습니다!"></textarea>
       </div>
 
       <div class="flex items-center gap-2 pt-6 border-t border-border-hair">
@@ -2337,6 +2343,7 @@
       setText('tracks-preview-nav-title', TRACK_PREVIEW_TITLE);
       setText('tracks-preview-eyebrow', `Cohort ${COHORT_LABEL}`);
       setText('tracks-preview-hero-cohort', COHORT_LABEL);
+      setText('notes-cohort-label', COHORT_LABEL);
     }
 
     function getViewerInitial() {
@@ -4565,6 +4572,11 @@
       if (!leaderChecked) {
         return '조장 지원 여부를 선택해주세요. (지원하지 않을 경우 "지원에 희망하지 않습니다"를 선택)';
       }
+      // 11기 정책: '활동에서 기대하는 점' 은 선택 → 필수. 공백만 입력한 것도 미입력 처리
+      // (data.notes 는 getNotes() 가 이미 trim 한 값).
+      if (!data.notes) {
+        return `ASC ${COHORT_LABEL} 활동에서 기대하는 점을 입력해주세요.`;
+      }
       return null;
     }
 
@@ -4776,6 +4788,12 @@
       const err = validate(data);
       if (err) {
         showValidationMsg(err);
+        // 기대하는 점 미입력이면 해당 textarea 로 포커스 — 버튼 옆 에러만 보고
+        // 어디를 채워야 할지 모르는 상황 방지.
+        if (!data.notes) {
+          const ta = document.getElementById('notes-textarea');
+          if (ta) { ta.focus({ preventScroll: true }); ta.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        }
         return;
       }
       hideValidationMsg();
