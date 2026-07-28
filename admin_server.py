@@ -1183,8 +1183,30 @@ def _default_cohort_config():
         # 🆕 OT 일자 (YYYY-MM-DD) — frontend 가 baseline OT (2026-05-24) 와의 차이로
         #    모든 트랙 일정 텍스트를 shift. null 이면 shift 없음 (HTML 정적 일정 그대로 사용).
         'otDate': None,
+        # 🆕 공통 일정 (OT·네트워킹·기념행사 등) — 기수마다 운영자가 직접 편집.
+        #    [{date:'YYYY-MM-DD', time:'오후 8:00–10:00', label:'온라인 OT'}]
+        #    빈 배열이면 frontend 가 HTML 정적 공통일정을 그대로 사용(하위호환).
+        'commonSchedule': [],
         'updatedAt': None,
     }
+
+
+def _sanitize_common_schedule(value):
+    """공통 일정 payload 정규화. list[dict{date,time,label}] 만 통과. 최대 20행."""
+    if not isinstance(value, list):
+        return None
+    cleaned = []
+    for item in value[:20]:
+        if not isinstance(item, dict):
+            continue
+        date = _validate_iso_date(item.get('date')) or ''
+        time = str(item.get('time') or '').strip()[:60]
+        label = str(item.get('label') or '').strip()[:120]
+        # 완전히 빈 행은 skip. 최소한 내용(label)은 있어야 함.
+        if not label and not date:
+            continue
+        cleaned.append({'date': date, 'time': time, 'label': label})
+    return cleaned
 
 
 def _normalize_cohort_label(value):
@@ -1442,12 +1464,21 @@ def put_cohort_config_route():
         if not ot_date:
             return jsonify({'status': 'error', 'message': 'invalid otDate (YYYY-MM-DD or null)'}), 400
 
+    # 🆕 commonSchedule — 미포함이면 기존 값 유지. 포함이면 정규화(list 여야 함).
+    if 'commonSchedule' in body:
+        common_schedule = _sanitize_common_schedule(body.get('commonSchedule'))
+        if common_schedule is None:
+            return jsonify({'status': 'error', 'message': 'invalid commonSchedule (must be a list)'}), 400
+    else:
+        common_schedule = current.get('commonSchedule', [])
+
     saved = _write_cohort_config({
         'cohortLabel': new_label,
         'applicationStartDate': new_start,
         'applicationEndDate': new_end,
         'todayOverride': today_override,
         'otDate': ot_date,
+        'commonSchedule': common_schedule,
     })
     if not saved:
         return jsonify({'status': 'error', 'message': 'persist failed'}), 500
