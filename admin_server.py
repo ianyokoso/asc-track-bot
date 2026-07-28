@@ -740,7 +740,9 @@ def _fetch_guild_nickname(user_id):
 # 봇(cogs/admin.py)이 만드는 트랙 역할 이름 규칙: "{prefix}-{cohort}기[-{suffix}]"
 #   예) 크리에이터-10기 / 크리에이터-10기-숏폼 / 빌더-기초-10기 / 크리에이터-10기-라이트-숏폼
 # prefix 목록은 cogs/admin.py _TRACK_DISCORD_PREFIX 의 값들과 일치해야 한다.
-_TRACK_ROLE_PREFIXES = ['크리에이터', '빌더-기초', '빌더-심화', '세일즈-실전', 'AI에이전트', '앱개발', '나탐구']
+# ⚠️ '빌더' 는 '빌더-기초'/'빌더-심화' 의 접두사이기도 하므로 반드시 더 긴 것들 뒤에 둔다
+#    (정규식 alternation 이 앞에서부터 매칭 시도).
+_TRACK_ROLE_PREFIXES = ['크리에이터', '빌더-기초', '빌더-심화', '빌더', '세일즈-실전', 'AI에이전트', '앱개발', '나탐구']
 _TRACK_ROLE_RE = re.compile(
     r'^(?P<prefix>' + '|'.join(re.escape(p) for p in _TRACK_ROLE_PREFIXES) +
     r')-(?P<cohort>\d+)기(?:-(?P<suffix>.+))?$'
@@ -1822,15 +1824,18 @@ def _build_track_application_member_list(cohort_label):
 
 
 TRACK_APPLICATION_WEEKDAY_TRACK_MAP = {
-    # 9기 개편 (2026-05-18): self_inquiry 월→수 이동, ai_agent 수→화 이동.
+    # 11기 개편 (2026-07-28): self_inquiry 수→월 이동, builder(단일 빌더 트랙) 월요일 신설.
+    #   월 = 세일즈 / 나 탐구 / 빌더, 화 = AI 에이전트, 수 = 크리에이터, 목 = 앱 개발.
     # 노션 트랙신청 DB 의 요일별 select property 에 어떤 요일 슬롯으로 값 넣을지 결정.
+    # ⚠️ 월요일 슬롯은 select 1개라 세일즈/나탐구/빌더 중 하나만 들어간다 — 폼도 라디오라 동일 제약.
     'sales_real': ('monday', '세일즈 실전 트랙'),
+    'self_inquiry': ('monday', '나 탐구 트랙'),
+    'builder': ('monday', '빌더 트랙'),
     'ai_agent': ('tuesday', 'AI 에이전트 트랙'),
-    'self_inquiry': ('wednesday', '나 탐구 트랙'),
     'creator': ('wednesday', '크리에이터 트랙'),
     'app_dev': ('thursday', '앱 개발 트랙'),
-    # 빌더 정규 (advanced/basic) — 9기 폼에선 선택 불가. legacy 데이터 (이전 기수 신청자) 호환을
-    # 위해 매핑은 유지 (화요일 슬롯). 7월 재오픈 시 그대로 재활용 가능.
+    # 구 빌더 심화/기초 — 11기 폼에선 선택 불가. legacy 데이터 (이전 기수 신청자) 호환을
+    # 위해 매핑은 유지 (화요일 슬롯).
     'builder_advanced': ('tuesday', '빌더 심화 트랙'),
     'builder_basic': ('tuesday', '빌더 기초 트랙'),
 }
@@ -1845,6 +1850,7 @@ TRACK_APPLICATION_LIGHT_TRACK_MAP = {
 TRACK_APPLICATION_LEADER_LABELS = {
     '세일즈 실전 트랙',
     '나 탐구 트랙',
+    '빌더 트랙',
     '빌더 심화 트랙',
     '빌더 기초 트랙',
     # 🔧 '크리에이터 트랙' 은 Notion 트랙 신청서 DB 옵션에서 제거됨 (2026-05-08).
@@ -5398,8 +5404,9 @@ def create_track_infra():
       }
 
     트랙명은 _TRACK_DISCORD_PREFIX 의 키와 정확히 일치해야 함:
-      - 크리에이터 트랙 / 빌더 기초 트랙 / 빌더 심화 트랙 /
-        세일즈 실전 트랙 / AI 에이전트 트랙 / 앱 개발 트랙 / 나 탐구 트랙
+      - 크리에이터 트랙 / 빌더 트랙 / 세일즈 실전 트랙 /
+        AI 에이전트 트랙 / 앱 개발 트랙 / 나 탐구 트랙
+      - (legacy) 빌더 기초 트랙 / 빌더 심화 트랙 — 11기 미운영, 이전 기수 정리용
     """
     if not _is_admin_session():
         return jsonify({"status": "error", "message": "운영진 권한이 필요합니다."}), 403
@@ -5659,6 +5666,7 @@ def commit_group_preview_mockup():
 # 한 prefix → 여러 트랙명 매핑이 있을 경우 첫 번째 (대표) 트랙명만 회수.
 _DISCORD_PREFIX_TO_TRACK = {
     '크리에이터': '크리에이터 트랙',
+    '빌더': '빌더 트랙',
     '빌더-기초': '빌더 기초 트랙',
     '빌더-심화': '빌더 심화 트랙',
     '세일즈-실전': '세일즈 실전 트랙',

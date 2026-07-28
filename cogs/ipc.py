@@ -247,6 +247,7 @@ class IPCCog(commands.Cog):
             # 트랙 prefix → 트랙명 역매핑. cogs/admin.py 의 _TRACK_DISCORD_PREFIX 와 sync.
             prefix_to_track = {
                 '크리에이터': '크리에이터 트랙',
+                '빌더': '빌더 트랙',            # 11기 단일 빌더 트랙
                 '빌더-기초': '빌더 기초 트랙',
                 '빌더-심화': '빌더 심화 트랙',
                 '세일즈-실전': '세일즈 실전 트랙',
@@ -388,6 +389,7 @@ class IPCCog(commands.Cog):
             # 트랙명 → prefix 매핑 (admin.py 와 동일).
             prefix_map = {
                 '크리에이터 트랙':        '크리에이터',
+                '빌더 트랙':              '빌더',
                 '빌더 기초 트랙':         '빌더-기초',
                 '빌더 심화 트랙':         '빌더-심화',
                 '세일즈 실전 트랙':       '세일즈-실전',

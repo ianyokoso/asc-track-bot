@@ -20,6 +20,9 @@ _TRACK_DISCORD_PREFIX = {
     "크리에이터 롱폼 트랙":          "크리에이터",
     "크리에이터 라이트 트랙 (숏폼)": "크리에이터",
     "크리에이터 라이트 트랙 (롱폼)": "크리에이터",
+    # 11기 개편 (2026-07-28): 빌더 트랙이 단일 트랙(월요일)으로 복귀.
+    # 구 심화/기초는 이전 기수 역할/채널 정리를 위해 매핑 유지.
+    "빌더 트랙":                     "빌더",
     "빌더 기초 트랙":                "빌더-기초",
     "빌더 라이트 트랙 (기초)":       "빌더-기초",
     "빌더 심화 트랙":                "빌더-심화",
@@ -31,6 +34,8 @@ _TRACK_DISCORD_PREFIX = {
 }
 
 _TRACK_ASSIGNMENT_CHANNEL_KEYS = {
+    # "빌더 트랙" — 11기 단일 빌더 (키는 이 블록 스타일에 맞춰 \u 이스케이프로 표기)
+    "\ube4c\ub354 \ud2b8\ub799": ["BUILDER_ID"],
     "\ube4c\ub354 \uae30\ucd08 \ud2b8\ub799": ["BUILDER_BASIC_ID"],
     "\ube4c\ub354 \ub77c\uc774\ud2b8 \ud2b8\ub799 (\uae30\ucd08)": ["BUILDER_BASIC_ID"],
     "\ube4c\ub354 \uc2ec\ud654 \ud2b8\ub799": ["BUILDER_ADVANCED_ID"],

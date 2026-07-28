@@ -81,6 +81,7 @@
     "discord_channels": {
         "CREATOR_SHORT_CHANNEL": null,
         "CREATOR_LONG_CHANNEL": null,
+        "BUILDER_ID": null,
         "BUILDER_BASIC_ID": "1501457489898766347",
         "BUILDER_ADVANCED_ID": "1501457511994363965",
         "SALES_PRACTICAL_ID": "1501457528125653032",
