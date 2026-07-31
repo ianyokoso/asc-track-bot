@@ -678,6 +678,28 @@
       color: #9CA3AF;
     }
 
+    /* ── '활동에서 기대하는 점' 셀 ──────────────────────────────────────
+       자유 서술이라 길이가 제각각. 기본 2줄로 접고 클릭하면 전체를 펼친다
+       (Tailwind line-clamp 유틸 대신 직접 정의 — CDN 버전에 의존하지 않도록). */
+    .admin-notes-cell {
+      font-size: 12px;
+      line-height: 1.6;
+      color: #4B5563;
+      cursor: pointer;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      white-space: pre-wrap;   /* 줄바꿈 보존 */
+      word-break: break-word;  /* 긴 URL·단어가 열 밖으로 삐져나오지 않게 */
+    }
+    .admin-notes-cell.is-expanded {
+      -webkit-line-clamp: unset;
+      display: block;
+    }
+    .admin-notes-cell:hover { color: #141E3C; }
+    .admin-notes-empty { color: #9CA3AF; }
+
     /* ── 테이블 행 편집 버튼 ────────────────────────────────────────── */
     .admin-row-edit-btn {
       background: transparent;
@@ -1752,6 +1774,10 @@
           <tr class="border-b border-border-hair">
             <th class="text-eyebrow text-left py-2 pr-4 font-semibold">이름</th>
             <th class="text-eyebrow text-left py-2 pr-4 font-semibold">트랙</th>
+            <!-- 기수 라벨은 하드코딩하지 않고 applyCohortLabels() 가 주입 (신청 폼의 #notes-cohort-label 과 동일 규칙) -->
+            <th class="text-eyebrow text-left py-2 pr-4 font-semibold w-[30%]">
+              ASC <span id="admin-notes-cohort-label">11기</span> 활동에서 기대하는 점
+            </th>
             <th class="text-eyebrow text-center py-2 pr-4 font-semibold w-16">조장</th>
             <th class="text-eyebrow text-center py-2 pr-4 font-semibold w-16">수정</th>
             <th class="text-eyebrow text-right py-2 pr-4 font-semibold w-28">제출</th>
@@ -2354,6 +2380,7 @@
       setText('tracks-preview-eyebrow', `Cohort ${COHORT_LABEL}`);
       setText('tracks-preview-hero-cohort', COHORT_LABEL);
       setText('notes-cohort-label', COHORT_LABEL);
+      setText('admin-notes-cohort-label', COHORT_LABEL);
     }
 
     function getViewerInitial() {
@@ -5488,7 +5515,7 @@
       const body = document.getElementById('admin-applicants-body');
       const members = getTrackMembers(trackId);
       if (members.length === 0) {
-        body.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-[12px] text-ink-soft">해당 트랙 신청자가 없습니다.</td></tr>';
+        body.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-[12px] text-ink-soft">해당 트랙 신청자가 없습니다.</td></tr>';
         return;
       }
       body.innerHTML = members.map((m, idx) => {
@@ -5506,6 +5533,13 @@
         const submittedCell = m.submitted
           ? `<span class="tabular-nums text-ink-muted">${m.submitted}</span>`
           : '<span class="text-ink-soft">—</span>';
+        // '활동에서 기대하는 점' — 신청 폼의 필수 서술 항목 (member.notes).
+        // 서버가 목록 API 에서 그대로 내려주므로 별도 요청 없이 표시만 하면 된다.
+        // 길이가 제각각이라 2줄로 접고, 클릭하면 펼친다 (title 로 전체 텍스트도 제공).
+        const notesText = String(m.notes || '').trim();
+        const notesCell = notesText
+          ? `<div class="admin-notes-cell" data-notes-toggle title="${escapeAttr(notesText)}">${escapeHtml(notesText)}</div>`
+          : '<span class="admin-notes-empty">—</span>';
         const rosterAvatarHtml = m.avatarUrl
           ? `<div class="w-8 h-8 rounded-full overflow-hidden bg-surface-2"><img src="${escapeAttr(m.avatarUrl)}" alt="" class="w-full h-full object-cover" referrerpolicy="no-referrer"></div>`
           : `<div class="w-8 h-8 rounded-full ${bg} text-[11px] font-semibold flex items-center justify-center">${m.initials}</div>`;
@@ -5521,6 +5555,7 @@
               </div>
             </td>
             <td class="py-3 pr-4 text-ink">${trackText}</td>
+            <td class="py-3 pr-4 align-top">${notesCell}</td>
             <td class="py-3 pr-4 text-center">${leaderCell}</td>
             <td class="py-3 pr-4 text-center">${editsCell}</td>
             <td class="py-3 pr-4 text-right">${submittedCell}</td>
@@ -5533,6 +5568,11 @@
       // 편집 버튼 이벤트 위임
       body.querySelectorAll('[data-edit-member]').forEach(btn => {
         btn.addEventListener('click', () => openEditModal(btn.dataset.editMember));
+      });
+
+      // '기대하는 점' 셀 클릭 → 접기/펼치기 토글
+      body.querySelectorAll('[data-notes-toggle]').forEach(cell => {
+        cell.addEventListener('click', () => cell.classList.toggle('is-expanded'));
       });
     }
 
