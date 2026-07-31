@@ -1341,15 +1341,22 @@
           </div>
         </div>
 
-        <!-- Wednesday -->
-        <div class="border-t border-border-hair py-5">
+        <!-- Wednesday
+             11기 정책 (2026-07-31): 크리에이터 정규 트랙 신청 마감 — 폼에서 숨김.
+             수요일 정규 트랙이 크리에이터 하나뿐이라 요일 줄 전체를 hidden-view 로 내린다.
+             ⚠️ DOM 은 남겨둔다. wed-creator / creator-sub / data-track="creator" 를 참조하는
+                핸들러(조장 동기화·요약 렌더·검증)가 여럿이라 삭제하면 null 참조로 깨진다.
+                라디오에 disabled 를 같이 걸어 CSS 를 우회해도 제출되지 않게 막았다.
+             ▶ 재오픈 시: 아래 div 의 hidden-view 제거 + #wed-creator 의 disabled 제거.
+                (크리에이터 '라이트' 트랙은 이 블록과 무관하게 계속 신청받는다 — #light-tracks-block) -->
+        <div class="border-t border-border-hair py-5 hidden-view">
           <div class="flex flex-col md:flex-row md:items-start gap-4">
             <p class="text-eyebrow w-20 pt-1 flex-shrink-0">수요일</p>
             <div class="flex-1 space-y-2.5">
               <div class="track-option">
                 <div class="track-option-header">
                   <label class="track-radio-label">
-                    <input type="radio" name="wed" id="wed-creator"> 크리에이터 트랙
+                    <input type="radio" name="wed" id="wed-creator" disabled> 크리에이터 트랙
                   </label>
                 </div>
                 <div class="track-schedule" data-track="creator">
@@ -1519,7 +1526,10 @@
             <span class="leader-option-key">D</span>
             <span class="leader-option-label">[AI 에이전트 트랙] 조장에 지원하겠습니다.</span>
           </label>
-          <label class="leader-option is-disabled" data-leader-track="creator">
+          <!-- 11기: 크리에이터 정규 트랙 신청 마감 → 조장 지원 대상에서도 제외.
+               조장 섹션 자체가 hidden-view 라 지금은 안 보이지만, 섹션을 복원할 때
+               같이 살아나지 않도록 이 옵션에도 hidden-view 를 걸어둔다. -->
+          <label class="leader-option is-disabled hidden-view" data-leader-track="creator">
             <input type="radio" name="leader-apply" value="creator" disabled>
             <span class="leader-option-key">E</span>
             <span class="leader-option-label">[크리에이터 트랙] 조장에 지원하겠습니다.</span>
