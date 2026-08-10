@@ -7,8 +7,8 @@ class ValidateTrackSchedulesTests(unittest.TestCase):
     def test_applies_defaults_and_normalizes_optional_values(self):
         schedules, error = _validate_track_schedules([
             {
-                "trackId": " web-mon ",
-                "trackName": " 웹 개발 ",
+                "trackId": " app_dev ",
+                "trackName": " 앱 개발 트랙 ",
                 "weekday": "MON",
                 "sessionTime": "20:00",
                 "firstSessionDate": "",
@@ -21,8 +21,8 @@ class ValidateTrackSchedulesTests(unittest.TestCase):
 
         self.assertIsNone(error)
         self.assertEqual(schedules, [{
-            "trackId": "web-mon",
-            "trackName": "웹 개발",
+            "trackId": "app_dev",
+            "trackName": "앱 개발 트랙",
             "weekday": "MON",
             "sessionTime": "20:00",
             "firstSessionDate": None,
@@ -37,8 +37,8 @@ class ValidateTrackSchedulesTests(unittest.TestCase):
 
     def test_accepts_contract_boundaries(self):
         schedules, error = _validate_track_schedules([{
-            "trackId": "light",
-            "trackName": "라이트",
+            "trackId": "builder",
+            "trackName": "빌더 트랙",
             "weekday": "SUN",
             "sessionTime": "00:00",
             "firstSessionDate": "2026-08-02",
@@ -55,9 +55,9 @@ class ValidateTrackSchedulesTests(unittest.TestCase):
         invalid_values = [
             ({}, "trackSchedules must be a list"),
             ([{"trackId": "", "trackName": "A", "weekday": "MON", "sessionTime": "20:00"}], "trackId"),
-            ([{"trackId": "a", "trackName": "", "weekday": "MON", "sessionTime": "20:00"}], "trackName"),
-            ([{"trackId": "a", "trackName": "A", "weekday": "FUNDAY", "sessionTime": "20:00"}], "weekday"),
-            ([{"trackId": "a", "trackName": "A", "weekday": "MON", "sessionTime": "24:00"}], "sessionTime"),
+            ([{"trackId": "builder", "trackName": "", "weekday": "MON", "sessionTime": "20:00"}], "trackName"),
+            ([{"trackId": "builder", "trackName": "빌더 트랙", "weekday": "FUNDAY", "sessionTime": "20:00"}], "weekday"),
+            ([{"trackId": "builder", "trackName": "빌더 트랙", "weekday": "MON", "sessionTime": "24:00"}], "sessionTime"),
         ]
         for value, message in invalid_values:
             with self.subTest(value=value):
@@ -66,7 +66,7 @@ class ValidateTrackSchedulesTests(unittest.TestCase):
                 self.assertIn(message, error)
 
     def test_rejects_invalid_ranges_dates_and_exception_shape(self):
-        base = {"trackId": "a", "trackName": "A", "weekday": "TUE", "sessionTime": "20:00"}
+        base = {"trackId": "builder", "trackName": "빌더 트랙", "weekday": "TUE", "sessionTime": "20:00"}
         mutations = [
             ({"sessionCount": 0}, "sessionCount"),
             ({"sessionCount": True}, "sessionCount"),
@@ -87,10 +87,22 @@ class ValidateTrackSchedulesTests(unittest.TestCase):
                 self.assertIn(message, error)
 
     def test_rejects_duplicate_track_ids(self):
-        base = {"trackId": "builder", "trackName": "빌더", "weekday": "MON", "sessionTime": "20:00"}
+        base = {"trackId": "builder", "trackName": "빌더 트랙", "weekday": "MON", "sessionTime": "20:00"}
         schedules, error = _validate_track_schedules([base, {**base, "trackName": "빌더 복제"}])
         self.assertIsNone(schedules)
-        self.assertIn("must be unique", error)
+        self.assertIn('must be unique', error or '')
+
+    def test_rejects_unknown_or_mismatched_track_identity(self):
+        base = {"trackId": "builder", "trackName": "빌더 트랙", "weekday": "MON", "sessionTime": "20:00"}
+        schedules, error = _validate_track_schedules([
+            {**base, 'trackId': 'x' * 81},
+        ])
+        self.assertIsNone(schedules)
+        self.assertIn('at most 80', error or '')
+
+        schedules, error = _validate_track_schedules([{**base, 'trackName': '빌더'}])
+        self.assertIsNone(schedules)
+        self.assertIn('must be 빌더 트랙', error or '')
 
 
 if __name__ == "__main__":

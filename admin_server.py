@@ -1499,6 +1499,12 @@ def put_cohort_config_route():
     else:
         announcement_schedule_enabled = current.get('announcementScheduleEnabled', False)
 
+    if announcement_schedule_enabled and not track_schedules:
+        return jsonify({
+            'status': 'error',
+            'message': 'trackSchedules is required when announcementScheduleEnabled is true',
+        }), 400
+
     saved = _write_cohort_config({
         'cohortLabel': new_label,
         'applicationStartDate': new_start,

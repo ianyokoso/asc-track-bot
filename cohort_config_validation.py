@@ -6,6 +6,16 @@ import re
 _DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
 _TIME_RE = re.compile(r'^(?:[01]\d|2[0-3]):[0-5]\d$')
 _WEEKDAYS = {'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'}
+CANONICAL_TRACK_NAMES = {
+    'sales_real': '세일즈 실전 트랙',
+    'self_inquiry': '나 탐구 트랙',
+    'builder': '빌더 트랙',
+    'ai_agent': 'AI 에이전트 트랙',
+    'creator': '크리에이터 트랙',
+    'app_dev': '앱 개발 트랙',
+    'builder_advanced': '빌더 심화 트랙',
+    'builder_basic': '빌더 기초 트랙',
+}
 
 
 def _iso_date(value):
@@ -44,11 +54,18 @@ def validate_track_schedules(value):
         session_time = str(item.get('sessionTime') or '').strip()
         if not track_id:
             return fail(index, 'trackId', 'is required')
+        if len(track_id) > 80:
+            return fail(index, 'trackId', 'must be at most 80 characters')
         if track_id in seen_track_ids:
             return fail(index, 'trackId', 'must be unique')
         seen_track_ids.add(track_id)
         if not track_name:
             return fail(index, 'trackName', 'is required')
+        canonical_name = CANONICAL_TRACK_NAMES.get(track_id)
+        if canonical_name is None:
+            return fail(index, 'trackId', 'must be a supported application track ID')
+        if track_name != canonical_name:
+            return fail(index, 'trackName', f'must be {canonical_name}')
         if weekday not in _WEEKDAYS:
             return fail(index, 'weekday', 'must be MON..SUN')
         if not _TIME_RE.match(session_time):
@@ -102,8 +119,8 @@ def validate_track_schedules(value):
             exceptions.append({'week': week, 'date': date, 'sessionTime': exception_time})
 
         cleaned.append({
-            'trackId': track_id[:120],
-            'trackName': track_name[:120],
+            'trackId': track_id,
+            'trackName': track_name,
             'weekday': weekday,
             'sessionTime': session_time,
             'firstSessionDate': first_session_date,
