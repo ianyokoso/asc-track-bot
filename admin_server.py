@@ -13,6 +13,7 @@ import time
 import uuid
 from urllib.parse import urlencode
 
+from cohort_config_validation import validate_track_schedules as _validate_track_schedules
 from env_utils import (
     PROD_DISCORD_GUILD_BLACKLIST,
     get_bot_command_queue_file,
@@ -1189,6 +1190,9 @@ def _default_cohort_config():
         #    [{date:'YYYY-MM-DD', time:'오후 8:00–10:00', label:'온라인 OT'}]
         #    빈 배열이면 frontend 가 HTML 정적 공통일정을 그대로 사용(하위호환).
         'commonSchedule': [],
+        # 트랙별 정기 세션 및 공지 규칙. 빈 배열이면 기존 정적 일정만 사용.
+        'trackSchedules': [],
+        'announcementScheduleEnabled': False,
         'updatedAt': None,
     }
 
@@ -1241,6 +1245,13 @@ def _read_cohort_config():
             base = _default_cohort_config()
             base.update({k: v for k, v in data.items() if k in base})
             base['cohortLabel'] = _normalize_cohort_label(base.get('cohortLabel'))
+            schedules, schedule_error = _validate_track_schedules(base.get('trackSchedules'))
+            if schedule_error:
+                print(f"[WARN] Invalid persisted trackSchedules ignored: {schedule_error}")
+                schedules = []
+            base['trackSchedules'] = schedules
+            if not isinstance(base.get('announcementScheduleEnabled'), bool):
+                base['announcementScheduleEnabled'] = False
             return base
         except Exception as e:
             print(f"[WARN] Failed to read cohort config: {e}")
@@ -1474,6 +1485,20 @@ def put_cohort_config_route():
     else:
         common_schedule = current.get('commonSchedule', [])
 
+    if 'trackSchedules' in body:
+        track_schedules, schedule_error = _validate_track_schedules(body.get('trackSchedules'))
+        if schedule_error:
+            return jsonify({'status': 'error', 'message': schedule_error}), 400
+    else:
+        track_schedules = current.get('trackSchedules', [])
+
+    if 'announcementScheduleEnabled' in body:
+        announcement_schedule_enabled = body.get('announcementScheduleEnabled')
+        if not isinstance(announcement_schedule_enabled, bool):
+            return jsonify({'status': 'error', 'message': 'announcementScheduleEnabled must be a boolean'}), 400
+    else:
+        announcement_schedule_enabled = current.get('announcementScheduleEnabled', False)
+
     saved = _write_cohort_config({
         'cohortLabel': new_label,
         'applicationStartDate': new_start,
@@ -1481,6 +1506,8 @@ def put_cohort_config_route():
         'todayOverride': today_override,
         'otDate': ot_date,
         'commonSchedule': common_schedule,
+        'trackSchedules': track_schedules,
+        'announcementScheduleEnabled': announcement_schedule_enabled,
     })
     if not saved:
         return jsonify({'status': 'error', 'message': 'persist failed'}), 500
