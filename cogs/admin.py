@@ -31,6 +31,8 @@ _TRACK_DISCORD_PREFIX = {
     "AI 에이전트 트랙":              "AI에이전트",
     "앱 개발 트랙":                  "앱개발",
     "나 탐구 트랙":                  "나탐구",
+    # 12기 신설 트랙
+    "디자인 트랙":                   "디자인",
 }
 
 _TRACK_ASSIGNMENT_CHANNEL_KEYS = {

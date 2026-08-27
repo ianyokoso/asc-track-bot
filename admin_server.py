@@ -1861,10 +1861,14 @@ TRACK_APPLICATION_WEEKDAY_TRACK_MAP = {
     #   월 = 세일즈 / 나 탐구 / 빌더, 화 = AI 에이전트, 수 = 크리에이터, 목 = 앱 개발.
     # 노션 트랙신청 DB 의 요일별 select property 에 어떤 요일 슬롯으로 값 넣을지 결정.
     # ⚠️ 월요일 슬롯은 select 1개라 세일즈/나탐구/빌더 중 하나만 들어간다 — 폼도 라디오라 동일 제약.
+    # 12기 개편 (2026-07-28): builder 월→수 이동, design(디자인 트랙) 목요일 신설(앱 개발 대체).
+    #   월 = 세일즈 / 나 탐구, 화 = AI 에이전트, 수 = 빌더, 목 = 디자인.
     'sales_real': ('monday', '세일즈 실전 트랙'),
     'self_inquiry': ('monday', '나 탐구 트랙'),
-    'builder': ('monday', '빌더 트랙'),
+    'builder': ('wednesday', '빌더 트랙'),
     'ai_agent': ('tuesday', 'AI 에이전트 트랙'),
+    'design': ('thursday', '디자인 트랙'),
+    # 구 크리에이터/앱 개발 — 12기 폼 미개설. legacy 데이터(이전 기수) 호환 매핑 유지.
     'creator': ('wednesday', '크리에이터 트랙'),
     'app_dev': ('thursday', '앱 개발 트랙'),
     # 구 빌더 심화/기초 — 11기 폼에선 선택 불가. legacy 데이터 (이전 기수 신청자) 호환을

@@ -255,6 +255,7 @@ class IPCCog(commands.Cog):
                 'AI에이전트-실전': 'AI 에이전트 트랙',   # 구 prefix 호환
                 '앱개발': '앱 개발 트랙',
                 '나탐구': '나 탐구 트랙',
+                '디자인': '디자인 트랙',            # 12기 신설
             }
             sorted_prefixes = sorted(prefix_to_track.keys(), key=len, reverse=True)
 
