@@ -11,6 +11,7 @@
 | [`Code.gs`](Code.gs) | 본 시스템. Apps Script 에 붙여넣어 실행 |
 | [`asc_schedule.py`](asc_schedule.py) | 노션 표기 → 이벤트 정규화 (로컬 검증·재사용용) |
 | [`build_ics.py`](build_ics.py) | `.ics` 생성. 구글 설정 없이 즉시 가져오기 |
+| [`appsscript.json`](appsscript.json) | Apps Script 매니페스트 (Calendar 고급 서비스·스코프) |
 
 ## 데이터 원본
 
@@ -68,7 +69,10 @@
 
 1. [script.google.com](https://script.google.com) 에서 새 프로젝트 생성
 2. [`Code.gs`](Code.gs) 내용을 통째로 붙여넣기
-3. 왼쪽 **서비스 +** → **Google Calendar API** 추가 (식별자 `Calendar`) — **이거 안 하면 동작 안 함**
+3. **Calendar 고급 서비스 활성화** — 둘 중 하나. **이거 안 하면 동작 안 함**
+   - 왼쪽 **서비스 +** → **Google Calendar API** 추가 (식별자 `Calendar`), 또는
+   - **⚙ 프로젝트 설정 → "appsscript.json 매니페스트 파일 표시" 체크** 후
+     [`appsscript.json`](appsscript.json) 내용을 그대로 덮어쓰기 (시간대·스코프까지 같이 잡힌다)
 4. 노션 페이지 `구글 캘린더용 DB` 를 인테그레이션에 공유
    (페이지 우상단 `⋯` → **연결** → `ASC_BOT_TEST`). 인라인 DB 는 부모 페이지 공유를 물려받는다
 5. `setSecrets_()` 의 주석을 풀고 `NOTION_TOKEN` 을 넣어 **1회 실행** → 다시 주석 처리하고 저장
