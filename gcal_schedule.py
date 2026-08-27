@@ -168,29 +168,37 @@ def load_token(env_path: str = ".env.test") -> str:
     raise RuntimeError("NOTION_TOKEN 을 찾을 수 없음 (환경변수 또는 .env.test)")
 
 
-def merge_with_common(track: list[dict], common: list[dict]) -> list[dict]:
-    """공통 일정을 트랙 일정에 합친다.
+def exclude_common(track: list[dict], common: list[dict]) -> list[dict]:
+    """공통 캘린더가 이미 들고 있는 일정을 트랙 목록에서 뺀다.
 
-    오리엔테이션은 트랙 DB 와 공통 DB 양쪽에 적혀 있어 그대로 합치면 두 번 뜬다.
-    시작·종료가 똑같을 때만 같은 일정으로 보고 공통 쪽을 버린다.
-    단순히 시간이 겹친다고 버리면 안 된다 — 9/30 외부연사특강(19–21시)과
+    오리엔테이션처럼 트랙 DB 와 공통 DB 양쪽에 적힌 건 시작·종료가 똑같다.
+    트랙 캘린더와 공통 캘린더를 같이 구독하면 두 번 보이므로 공통 쪽만 남긴다.
+
+    시간이 겹친다고 빼면 안 된다 — 9/30 외부연사특강(19–21시)과
     빌더 4주차 강의(20–22시)처럼 겹치기만 하는 별개 일정이 실제로 있다.
     """
-    extras = [
-        dict(c, summary=f"[공통] {c['summary']}")
-        for c in common
-        if not any(t["start"] == c["start"] and t["end"] == c["end"] for t in track)
+    return [
+        event
+        for event in track
+        if not any(
+            c["start"] == event["start"] and c["end"] == event["end"] for c in common
+        )
     ]
-    return sorted(track + extras, key=lambda e: e["start"])
 
 
 def build_track_calendars(token: str, year: int) -> dict[str, dict]:
-    """트랙 key → {label, events}. 각 트랙에 공통 일정이 병합돼 있다."""
+    """캘린더 key → {label, events}.
+
+    공통 일정은 트랙마다 복제하지 않고 **공통 캘린더 하나**로 낸다.
+    멤버는 '자기 트랙 + 공통' 두 개를 구독한다. 트랙별로 복제하면 여러 트랙을
+    켜둔 사람 화면에 같은 일정이 트랙 수만큼 겹쳐 보인다.
+    """
     by_key = build_events(token, year)
     common = by_key[COMMON_KEY]
-    out = {}
+
+    out = {COMMON_KEY: {"label": "공통 일정", "events": common}}
     for key, label, _ in SOURCES:
         if key == COMMON_KEY:
             continue
-        out[key] = {"label": label, "events": merge_with_common(by_key[key], common)}
+        out[key] = {"label": label, "events": exclude_common(by_key[key], common)}
     return out

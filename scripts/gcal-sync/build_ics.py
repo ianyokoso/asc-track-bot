@@ -8,18 +8,13 @@ Apps Script(Code.gs)가 본 시스템이고, 이건 같은 데이터로 만드�
 from __future__ import annotations
 
 import datetime
+import os
 import pathlib
 import sys
 
-from gcal_schedule import (
-    COMMON_KEY,
-    SOURCES,
-    build_events,
-    load_token,
-    merge_with_common,
-)
+from gcal_schedule import build_track_calendars, load_token
 
-COHORT_LABEL = "ASC 11기"
+COHORT_LABEL = os.environ.get("GCAL_COHORT_LABEL", "ASC 12기")
 UID_DOMAIN = "asc-track-bot"
 
 
@@ -92,13 +87,12 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.datetime.now(datetime.timezone.utc)
 
-    by_key = build_events(load_token(), year=2026)
-    common = by_key[COMMON_KEY]
+    calendars = build_track_calendars(load_token(), year=2026)
 
-    for key, label, _ in SOURCES:
-        events = common if key == COMMON_KEY else merge_with_common(by_key[key], common)
+    for key, calendar in calendars.items():
+        events, label = calendar["events"], calendar["label"]
         name = f"{COHORT_LABEL} · {label}"
-        path = out_dir / f"asc11-{key}.ics"
+        path = out_dir / f"asc-{key}.ics"
         path.write_text(build_ics(name, events, stamp), encoding="utf-8")
         print(f"{path.name:24} {len(events):>2}건   {name}")
 
