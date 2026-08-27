@@ -6702,6 +6702,103 @@ def member_detail_page(user_id):
             return f.read()
     return "Page not found", 404
 
+# ─────────────────────────────────────────────────────────────
+# 구글 캘린더 동기화 — Slack 에이전트(헤르메스)용 엔드포인트
+#
+# 대시보드 API 는 Discord 세션 인증을 쓰지만 에이전트는 사람 세션이 없다.
+# 견적서 연동과 같은 방식으로 공유 시크릿(Bearer)을 쓴다.
+# ─────────────────────────────────────────────────────────────
+
+def _gcal_sync_auth_error():
+    """인증 실패 사유를 돌려준다. 통과하면 None."""
+    expected = os.getenv('GCAL_SYNC_TOKEN')
+    if not expected:
+        return 'GCAL_SYNC_TOKEN 미설정 — 서버 .env 에 지정할 것'
+    header = request.headers.get('Authorization', '') or ''
+    if not header.startswith('Bearer '):
+        return 'Authorization: Bearer <token> 헤더가 필요합니다'
+    if not secrets.compare_digest(header[len('Bearer '):].strip(), expected):
+        return '토큰이 일치하지 않습니다'
+    return None
+
+
+def _gcal_summary_lines(report):
+    """Slack 에 그대로 붙일 수 있는 요약."""
+    head = f"{report['cohort']} · {report['year']}년 · " + ('미리보기' if report['dry_run'] else '반영 완료')
+    lines = [head]
+    for track in report['tracks'].values():
+        changed = track['created'] or track['updated'] or track['deleted']
+        detail = (
+            f"추가 {track['created']} / 수정 {track['updated']} / 삭제 {track['deleted']}"
+            if changed else f"변경 없음 ({track['kept']}건 유지)"
+        )
+        lines.append(f"• {track['label']}: {detail}")
+    return lines
+
+
+@app.route('/api/gcal/sync', methods=['POST'])
+def post_gcal_sync_route():
+    """노션 '구글 캘린더용 DB' → 구글 캘린더 동기화.
+
+    body: {"dryRun": bool, "cohort": 12, "year": 2026}  (전부 선택)
+    """
+    auth_error = _gcal_sync_auth_error()
+    if auth_error:
+        return jsonify({'status': 'error', 'message': auth_error}), 401
+
+    body = request.get_json(silent=True) or {}
+    dry_run = bool(body.get('dryRun', False))
+
+    cohort_label = None
+    raw_cohort = body.get('cohort')
+    if raw_cohort not in (None, ''):
+        digits = re.sub(r'[^0-9]', '', str(raw_cohort))
+        if not digits:
+            return jsonify({'status': 'error', 'message': 'cohort 는 숫자여야 합니다 (예: 12)'}), 400
+        cohort_label = f'ASC {digits}기'
+
+    year = body.get('year')
+    if year not in (None, ''):
+        try:
+            year = int(year)
+        except (TypeError, ValueError):
+            return jsonify({'status': 'error', 'message': 'year 는 숫자여야 합니다 (예: 2026)'}), 400
+    else:
+        year = None
+
+    try:
+        from gcal_sync import subscribe_links, sync_all
+
+        report = sync_all(dry_run=dry_run, cohort_label=cohort_label, year=year)
+    except Exception as exc:  # noqa: BLE001 - 에이전트에 사유를 그대로 전달해야 한다
+        detail = str(exc)
+        # 동의 화면이 '테스트' 상태면 refresh token 이 7일 뒤 죽는다.
+        # 이때 캘린더는 멀쩡하고 동기화만 멈추므로, 재승인하라고 분명히 알려준다.
+        if 'invalid_grant' in detail or 'access token 갱신 실패' in detail:
+            return jsonify({
+                'status': 'error',
+                'reason': 'credentials_expired',
+                'message': '구글 인증이 만료됐습니다. 운영자가 authorize.py 로 재승인해야 합니다. '
+                           '캘린더와 일정은 그대로 남아 있습니다.',
+            }), 503
+        return jsonify({'status': 'error', 'message': detail[:500]}), 500
+
+    return jsonify({
+        'status': 'ok',
+        'report': report,
+        'links': subscribe_links(),
+        'summary': '\n'.join(_gcal_summary_lines(report)),
+    })
+
+
+@app.route('/api/gcal/links', methods=['GET'])
+def get_gcal_links_route():
+    """멤버 배포용 구독 링크. 공개 캘린더 주소라 인증 없이 연다."""
+    from gcal_sync import subscribe_links
+
+    return jsonify({'status': 'ok', 'links': subscribe_links()})
+
+
 if __name__ == '__main__':
     print("[INFO] Admin Server Starting...")
 
