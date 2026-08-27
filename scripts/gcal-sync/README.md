@@ -27,20 +27,30 @@ from gcal_sync import sync_all
 report = sync_all(dry_run=False, share_with="ops@example.com")
 ```
 
-## 서비스 계정 준비 (최초 1회)
+## 권한 승인 (최초 1회)
 
-1. [console.cloud.google.com](https://console.cloud.google.com) → 프로젝트 생성(아무 이름)
-2. **API 및 서비스 → 라이브러리 → Google Calendar API → 사용 설정**
-3. **사용자 인증 정보 → 서비스 계정 만들기** → 역할 없이 완료
-4. 만든 서비스 계정 → **키 → 키 추가 → JSON** → 내려받기
-5. 서버 `.env.test` 에 경로를 넣는다
+브라우저 승인은 계정 주인만 할 수 있으니 딱 한 번은 사람이 눌러야 한다. 대신 거기서 받은
+refresh token 을 `.env.test` 에 넣어두면 **그 뒤로는 무인으로 돈다** — Slack 명령·대시보드
+버튼·크론 전부 사람 개입 없이.
 
 ```bash
-GOOGLE_SERVICE_ACCOUNT_JSON=/home/ubuntu/asc-gcal-service-account.json
+python3 scripts/gcal-sync/authorize.py ~/Downloads/client_secret_....json
 ```
 
-JSON 문자열 자체를 넣어도 된다(파일을 못 두는 환경용). 도메인 전체 위임(DWD)은 필요 없다 —
-캘린더를 **서비스 계정이 직접 소유**하고, `--share-with` 로 운영자에게 소유권을 넘긴다.
+띄워주는 주소를 브라우저에서 승인하면 `.env.test` 에 아래 세 개가 채워진다.
+
+```bash
+GOOGLE_OAUTH_CLIENT_ID=...
+GOOGLE_OAUTH_CLIENT_SECRET=...
+GOOGLE_OAUTH_REFRESH_TOKEN=...
+```
+
+필요한 준비물은 **OAuth 클라이언트(데스크톱 타입) JSON** 하나뿐이다.
+GCP 콘솔 → 사용자 인증 정보 → OAuth 클라이언트 ID 만들기 → 애플리케이션 유형 **데스크톱 앱**.
+그 프로젝트에 **Google Calendar API 가 사용 설정**돼 있어야 한다.
+
+서비스 계정을 안 쓰는 이유: 서비스 계정이 만든 캘린더는 로봇 계정 소유라 운영자 화면에
+안 보이고 소유권을 따로 넘겨야 한다. OAuth 로 하면 **처음부터 사장님 계정 소유**로 생긴다.
 
 ## 동작
 

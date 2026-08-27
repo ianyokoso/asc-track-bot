@@ -18,11 +18,13 @@ import datetime
 import json
 import os
 import pathlib
+import urllib.error
+import urllib.parse
+import urllib.request
 
 from gcal_schedule import build_track_calendars, load_token
 
 API = "https://www.googleapis.com/calendar/v3"
-SCOPES = ["https://www.googleapis.com/auth/calendar"]
 TIMEZONE = "Asia/Seoul"
 COHORT_LABEL = os.environ.get("GCAL_COHORT_LABEL", "ASC 11기")
 
@@ -37,31 +39,77 @@ class CredentialsMissing(RuntimeError):
 
 
 # ─── 자격증명 ────────────────────────────────────────────────
+TOKEN_URL = "https://oauth2.googleapis.com/token"
+
+
+class _OAuthSession:
+    """refresh token 으로 access token 을 받아 쓰는 세션.
+
+    브라우저 승인은 scripts/gcal-sync/authorize.py 로 1회만 하면 되고,
+    그 뒤로는 사람 개입 없이 돈다 — Slack 에서 부르려면 이게 필요하다.
+    """
+
+    def __init__(self, client_id: str, client_secret: str, refresh_token: str):
+        self._auth = (client_id, client_secret, refresh_token)
+        self._token: str | None = None
+
+    def _access_token(self) -> str:
+        if self._token:
+            return self._token
+        client_id, client_secret, refresh_token = self._auth
+        body = urllib.parse.urlencode(
+            {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+            }
+        ).encode()
+        try:
+            with urllib.request.urlopen(
+                urllib.request.Request(TOKEN_URL, data=body), timeout=30
+            ) as resp:
+                self._token = json.load(resp)["access_token"]
+        except urllib.error.HTTPError as exc:
+            raise CredentialsMissing(
+                f"access token 갱신 실패 {exc.code}: {exc.read().decode()[:200]}"
+            ) from exc
+        return self._token
+
+    def request(self, method: str, url: str, *, params=None, json_body=None):
+        if params:
+            url = f"{url}?{urllib.parse.urlencode(params)}"
+        data = json.dumps(json_body).encode() if json_body is not None else None
+        req = urllib.request.Request(url, data=data, method=method)
+        req.add_header("Authorization", f"Bearer {self._access_token()}")
+        if data:
+            req.add_header("Content-Type", "application/json")
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                raw = resp.read()
+                return json.loads(raw) if raw else {}
+        except urllib.error.HTTPError as exc:
+            raise RuntimeError(
+                f"{method} {url} → {exc.code} {exc.read().decode()[:300]}"
+            ) from exc
+
+
 def _session():
-    """서비스 계정으로 인증된 세션. 없으면 CredentialsMissing."""
-    raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
-    if not raw:
-        raise CredentialsMissing(
-            "GOOGLE_SERVICE_ACCOUNT_JSON 미설정 — 서비스 계정 JSON 파일 경로나 "
-            "JSON 문자열 자체를 넣을 것"
-        )
-    info = json.loads(pathlib.Path(raw).read_text()) if raw.lstrip()[:1] != "{" else json.loads(raw)
+    """refresh token 으로 인증된 세션. 없으면 CredentialsMissing."""
+    client_id = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET")
+    refresh_token = os.environ.get("GOOGLE_OAUTH_REFRESH_TOKEN")
+    if client_id and client_secret and refresh_token:
+        return _OAuthSession(client_id, client_secret, refresh_token)
 
-    try:
-        from google.auth.transport.requests import AuthorizedSession
-        from google.oauth2 import service_account
-    except ImportError as exc:  # pragma: no cover - 설치 안내용
-        raise CredentialsMissing("google-auth 미설치 — pip install google-auth") from exc
-
-    creds = service_account.Credentials.from_service_account_info(info, scopes=SCOPES)
-    return AuthorizedSession(creds)
+    raise CredentialsMissing(
+        "구글 자격증명 없음 — python3 scripts/gcal-sync/authorize.py <client_secret.json> 로 "
+        "1회 승인할 것"
+    )
 
 
 def _call(session, method: str, path: str, **kwargs):
-    resp = session.request(method, f"{API}{path}", **kwargs)
-    if resp.status_code >= 400:
-        raise RuntimeError(f"{method} {path} → {resp.status_code} {resp.text[:300]}")
-    return resp.json() if resp.content else {}
+    return session.request(method, f"{API}{path}", **kwargs)
 
 
 # ─── 캘린더 id 보관 ──────────────────────────────────────────
@@ -95,7 +143,7 @@ def ensure_calendar(session, key: str, label: str, share_with: str | None) -> st
         session,
         "POST",
         "/calendars",
-        json={
+        json_body={
             "summary": f"{COHORT_LABEL} · {label}",
             "description": (
                 f"{COHORT_LABEL} {label} 일정입니다. "
@@ -112,7 +160,7 @@ def ensure_calendar(session, key: str, label: str, share_with: str | None) -> st
         session,
         "POST",
         f"/calendars/{calendar_id}/acl",
-        json={"role": "reader", "scope": {"type": "default"}},
+        json_body={"role": "reader", "scope": {"type": "default"}},
     )
     # 서비스 계정이 소유자라 그대로 두면 운영자 화면에서 안 보인다. 사람에게도 넘겨준다.
     if share_with:
@@ -120,7 +168,7 @@ def ensure_calendar(session, key: str, label: str, share_with: str | None) -> st
             session,
             "POST",
             f"/calendars/{calendar_id}/acl",
-            json={"role": "owner", "scope": {"type": "user", "value": share_with}},
+            json_body={"role": "owner", "scope": {"type": "user", "value": share_with}},
         )
 
     ids[key] = calendar_id
