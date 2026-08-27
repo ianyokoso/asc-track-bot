@@ -6433,16 +6433,12 @@
 
     /** 트랙 탭 정의 (정규 7개 + 라이트 2개 그룹) */
     const GP_TABS = [
-      { id: 'creator',          label: '크리에이터',        kind: 'weekday' },
-      { id: 'builder',          label: '빌더',              kind: 'weekday' },
-      { id: 'builder_basic',    label: '빌더 기초',         kind: 'weekday' },
-      { id: 'builder_advanced', label: '빌더 심화',         kind: 'weekday' },
       { id: 'sales_real',       label: '세일즈 실전',       kind: 'weekday' },
-      { id: 'ai_agent',         label: 'AI 에이전트',       kind: 'weekday' },
-      { id: 'app_dev',          label: '앱 개발',           kind: 'weekday' },
       { id: 'self_inquiry',     label: '나 탐구',           kind: 'weekday' },
+      { id: 'ai_agent',         label: 'AI 에이전트',       kind: 'weekday' },
+      { id: 'builder',          label: '빌더',              kind: 'weekday' },
+      { id: 'design',           label: '디자인',            kind: 'weekday' },
       { id: 'creator_light',    label: '크리에이터 라이트', kind: 'light_group' },
-      { id: 'builder_light',    label: '빌더 라이트',       kind: 'light_group' },
     ];
 
     let _gpActiveTrack = null;
@@ -6876,6 +6872,7 @@
       ai_agent: 'AI 에이전트 트랙',
       creator: '크리에이터 트랙',
       app_dev: '앱 개발 트랙',
+      design: '디자인 트랙',
       creator_light: '크리에이터 라이트 트랙',
       builder_light: '빌더 라이트 트랙',
     };
