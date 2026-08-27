@@ -4,7 +4,10 @@
 대신 여기서 받은 refresh token 을 `.env.test` 에 넣어두면 그 뒤로는 무인으로 돈다
 (Slack 명령·대시보드 버튼·크론 전부 사람 개입 없이).
 
-    python3 scripts/gcal-sync/authorize.py ~/Downloads/client_secret_....json
+    python3 scripts/gcal-sync/authorize.py ~/Downloads/client_secret_....json [계정이메일]
+
+두 번째 인자로 계정을 주면 승인 화면에서 그 계정이 미리 선택된다.
+**어느 계정으로 승인하느냐가 캘린더 소유자를 결정한다** — 반드시 확인하고 넘길 것.
 """
 from __future__ import annotations
 
@@ -60,24 +63,28 @@ def _upsert_env(key: str, value: str) -> None:
 
 def main() -> None:
     if len(sys.argv) < 2:
-        sys.exit("사용법: authorize.py <client_secret_....json>")
+        sys.exit("사용법: authorize.py <client_secret_....json> [계정이메일]")
+    login_hint = sys.argv[2] if len(sys.argv) > 2 else None
 
     raw = json.loads(pathlib.Path(sys.argv[1]).expanduser().read_text())
     client = raw.get("installed") or raw.get("web")
     if not client:
         sys.exit("OAuth 클라이언트 JSON 이 아닙니다 (installed/web 키 없음)")
 
-    params = urllib.parse.urlencode(
-        {
-            "client_id": client["client_id"],
-            "redirect_uri": REDIRECT_URI,
-            "response_type": "code",
-            "scope": SCOPE,
-            "access_type": "offline",   # refresh token 을 받기 위해 필수
-            "prompt": "consent",        # 재승인 때도 refresh token 을 다시 준다
-        }
-    )
+    query = {
+        "client_id": client["client_id"],
+        "redirect_uri": REDIRECT_URI,
+        "response_type": "code",
+        "scope": SCOPE,
+        "access_type": "offline",   # refresh token 을 받기 위해 필수
+        "prompt": "consent",        # 재승인 때도 refresh token 을 다시 준다
+    }
+    if login_hint:
+        # 캘린더 소유자가 되는 계정. 지정 안 하면 브라우저에 로그인된 아무 계정이 잡힌다.
+        query["login_hint"] = login_hint
+    params = urllib.parse.urlencode(query)
     print(f"프로젝트: {client.get('project_id')}")
+    print(f"승인 계정: {login_hint or '(지정 안 함 — 브라우저에서 직접 선택)'}")
     print("\n아래 주소를 브라우저에서 열고 승인하세요:\n")
     print(f"{AUTH_URL}?{params}\n")
 

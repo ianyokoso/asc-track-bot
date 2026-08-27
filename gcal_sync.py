@@ -26,7 +26,9 @@ from gcal_schedule import build_track_calendars, load_token
 
 API = "https://www.googleapis.com/calendar/v3"
 TIMEZONE = "Asia/Seoul"
-COHORT_LABEL = os.environ.get("GCAL_COHORT_LABEL", "ASC 11기")
+# 노션 '구글 캘린더용 DB' 는 9~10월 = 12기 일정이다.
+# .env 의 CURRENT_COHORT 는 진행 중인 기수라 여기와 어긋날 수 있어 따로 둔다.
+DEFAULT_COHORT_LABEL = os.environ.get("GCAL_COHORT_LABEL", "ASC 12기")
 
 # 이 스크립트가 만든 일정에만 붙는 표식. 손으로 넣은 일정은 건드리지 않는다.
 SYNC_TAG = "asc-track-cal"
@@ -133,28 +135,8 @@ def _save_calendar_ids(ids: dict[str, str]) -> None:
 
 
 # ─── 캘린더 생성 ─────────────────────────────────────────────
-def ensure_calendar(session, key: str, label: str, share_with: str | None) -> str:
-    """트랙 캘린더를 확보한다. 이미 만들어 뒀으면 그 id 를 쓴다(중복 생성 방지)."""
-    ids = load_calendar_ids()
-    if key in ids:
-        return ids[key]
-
-    created = _call(
-        session,
-        "POST",
-        "/calendars",
-        json_body={
-            "summary": f"{COHORT_LABEL} · {label}",
-            "description": (
-                f"{COHORT_LABEL} {label} 일정입니다. "
-                "공통 일정(OT·네트워킹·특강)도 함께 들어 있습니다.\n"
-                "원본: 노션 '구글 캘린더용 DB'"
-            ),
-            "timeZone": TIMEZONE,
-        },
-    )
-    calendar_id = created["id"]
-
+def _ensure_acl(session, calendar_id: str, share_with: str | None) -> None:
+    """접근 권한을 맞춘다. 같은 규칙을 다시 넣어도 덮어쓰기라 여러 번 돌려도 안전하다."""
     # 링크를 아는 사람은 누구나 읽기 — 멤버 구독용
     _call(
         session,
@@ -162,7 +144,6 @@ def ensure_calendar(session, key: str, label: str, share_with: str | None) -> st
         f"/calendars/{calendar_id}/acl",
         json_body={"role": "reader", "scope": {"type": "default"}},
     )
-    # 서비스 계정이 소유자라 그대로 두면 운영자 화면에서 안 보인다. 사람에게도 넘겨준다.
     if share_with:
         _call(
             session,
@@ -171,8 +152,35 @@ def ensure_calendar(session, key: str, label: str, share_with: str | None) -> st
             json_body={"role": "owner", "scope": {"type": "user", "value": share_with}},
         )
 
-    ids[key] = calendar_id
-    _save_calendar_ids(ids)
+
+def ensure_calendar(
+    session, key: str, label: str, share_with: str | None, cohort_label: str
+) -> str:
+    """트랙 캘린더를 확보한다. 이미 만들어 뒀으면 그 id 를 쓴다(중복 생성 방지)."""
+    ids = load_calendar_ids()
+    calendar_id = ids.get(key)
+
+    if calendar_id is None:
+        created = _call(
+            session,
+            "POST",
+            "/calendars",
+            json_body={
+                "summary": f"{cohort_label} · {label}",
+                "description": (
+                    f"{cohort_label} {label} 일정입니다. "
+                    "공통 일정(OT·네트워킹·특강)도 함께 들어 있습니다.\n"
+                    "원본: 노션 '구글 캘린더용 DB'"
+                ),
+                "timeZone": TIMEZONE,
+            },
+        )
+        calendar_id = created["id"]
+        ids[key] = calendar_id
+        _save_calendar_ids(ids)
+
+    # 이미 있던 캘린더에도 매번 걸어준다 — 나중에 공유 대상이 바뀌어도 따라잡을 수 있게.
+    _ensure_acl(session, calendar_id, share_with)
     return calendar_id
 
 
@@ -265,10 +273,15 @@ def sync_calendar(session, calendar_id: str, events: list[dict], dry_run: bool) 
 
 # ─── 진입점 ──────────────────────────────────────────────────
 def sync_all(
-    *, dry_run: bool = True, share_with: str | None = None, year: int | None = None
+    *,
+    dry_run: bool = True,
+    share_with: str | None = None,
+    year: int | None = None,
+    cohort_label: str | None = None,
 ) -> dict:
     """전 트랙 동기화. 리포트 dict 를 돌려주므로 Slack 메시지로 그대로 옮길 수 있다."""
     year = year or int(os.environ.get("GCAL_SCHEDULE_YEAR", datetime.date.today().year))
+    cohort_label = cohort_label or DEFAULT_COHORT_LABEL
     tracks = build_track_calendars(load_token(), year)
 
     try:
@@ -280,14 +293,22 @@ def sync_all(
         # 자격증명 없이도 무엇이 들어갈지는 보여준다.
         session, offline = None, str(exc)
 
-    report = {"year": year, "dry_run": dry_run, "offline": offline, "tracks": {}}
+    report = {
+        "year": year,
+        "cohort": cohort_label,
+        "dry_run": dry_run,
+        "offline": offline,
+        "tracks": {},
+    }
     for key, track in tracks.items():
         calendar_id = None
         if session:
             calendar_id = (
                 load_calendar_ids().get(key)
                 if dry_run
-                else ensure_calendar(session, key, track["label"], share_with)
+                else ensure_calendar(
+                    session, key, track["label"], share_with, cohort_label
+                )
             )
         stats = (
             sync_calendar(session, calendar_id, track["events"], dry_run)
@@ -351,6 +372,7 @@ def main() -> None:
     group.add_argument("--links", action="store_true", help="구독 링크 출력")
     parser.add_argument("--share-with", help="캘린더 소유권을 넘길 구글 계정")
     parser.add_argument("--year", type=int, help="일정 연도 (기본: 올해)")
+    parser.add_argument("--cohort", type=int, help="기수 숫자 (예: 12)")
     args = parser.parse_args()
 
     if args.links:
@@ -358,8 +380,16 @@ def main() -> None:
             print(f"\n■ {key}\n  추가: {link['add']}\n  ICS : {link['ics']}")
         return
 
-    report = sync_all(dry_run=not args.apply, share_with=args.share_with, year=args.year)
-    print(f"기준 연도 {report['year']}년 · {'미리보기' if report['dry_run'] else '반영'}")
+    report = sync_all(
+        dry_run=not args.apply,
+        share_with=args.share_with,
+        year=args.year,
+        cohort_label=f"ASC {args.cohort}기" if args.cohort else None,
+    )
+    print(
+        f"{report['cohort']} · 기준 연도 {report['year']}년 · "
+        f"{'미리보기' if report['dry_run'] else '반영'}"
+    )
     if report["offline"]:
         print(f"⚠️  구글 미연결 — {report['offline']}\n   아래는 캘린더가 비었다고 가정한 계획입니다.\n")
     for track in report["tracks"].values():
