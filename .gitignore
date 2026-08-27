@@ -42,3 +42,7 @@ track_applications_admin_mock_cache_*.json
 scripts/deploy-oracle.sh
 scripts/push-and-deploy.sh
 .claude/settings.local.json
+
+# 구글 캘린더 동기화
+gcal_calendars.*.json
+*service-account*.json

@@ -11,26 +11,16 @@ import datetime
 import pathlib
 import sys
 
-from asc_schedule import COMMON_KEY, SOURCES, build_events, load_token
+from gcal_schedule import (
+    COMMON_KEY,
+    SOURCES,
+    build_events,
+    load_token,
+    merge_with_common,
+)
 
 COHORT_LABEL = "ASC 11기"
 UID_DOMAIN = "asc-track-bot"
-
-
-def merge_with_common(track: list[dict], common: list[dict]) -> list[dict]:
-    """공통 일정을 트랙 일정에 합친다.
-
-    오리엔테이션은 트랙 DB 와 공통 DB 양쪽에 적혀 있어 그대로 합치면 두 번 뜬다.
-    시작·종료가 똑같을 때만 같은 일정으로 보고 공통 쪽을 버린다.
-    단순히 시간이 겹친다고 버리면 안 된다 — 9/30 외부연사특강(19–21시)과
-    빌더 4주차 강의(20–22시)처럼 겹치기만 하는 별개 일정이 실제로 있다.
-    """
-    extras = [
-        dict(c, summary=f"[공통] {c['summary']}")
-        for c in common
-        if not any(t["start"] == c["start"] and t["end"] == c["end"] for t in track)
-    ]
-    return sorted(track + extras, key=lambda e: e["start"])
 
 
 def _escape(text: str) -> str:
