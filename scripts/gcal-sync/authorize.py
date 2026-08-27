@@ -13,15 +13,18 @@ from __future__ import annotations
 
 import http.server
 import json
+import os
 import pathlib
 import sys
-import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
 SCOPE = "https://www.googleapis.com/auth/calendar"
 PORT = 8765
+# 사람이 브라우저에서 계정 고르고 경고 화면 넘기는 시간. 짧으면 그냥 끊긴다.
+WAIT_SECONDS = int(os.environ.get("GCAL_AUTH_TIMEOUT", 1800))
 REDIRECT_URI = f"http://localhost:{PORT}"
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -88,10 +91,13 @@ def main() -> None:
     print("\n아래 주소를 브라우저에서 열고 승인하세요:\n")
     print(f"{AUTH_URL}?{params}\n")
 
+    # 브라우저가 favicon 같은 걸 먼저 찔러도 끊기지 않도록, 결과가 올 때까지 계속 받는다.
     server = http.server.HTTPServer(("localhost", PORT), _Handler)
-    thread = threading.Thread(target=server.handle_request, daemon=True)
-    thread.start()
-    thread.join(timeout=300)
+    server.timeout = 5
+    deadline = time.monotonic() + WAIT_SECONDS
+    print(f"승인 대기 중… (최대 {WAIT_SECONDS // 60}분)")
+    while time.monotonic() < deadline and not {"code", "error"} & _received.keys():
+        server.handle_request()
     server.server_close()
 
     if "code" not in _received:
