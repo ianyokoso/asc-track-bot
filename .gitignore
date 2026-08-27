@@ -46,3 +46,4 @@ scripts/push-and-deploy.sh
 # 구글 캘린더 동기화
 gcal_calendars.*.json
 *service-account*.json
+client_secret_*.json
