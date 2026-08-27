@@ -240,7 +240,7 @@ def sync_calendar(session, calendar_id: str, events: list[dict], dry_run: bool) 
         prev = existing.get(page_id)
         if prev is None:
             if not dry_run:
-                _call(session, "POST", f"/calendars/{calendar_id}/events", json=body)
+                _call(session, "POST", f"/calendars/{calendar_id}/events", json_body=body)
             stats["created"] += 1
         elif _needs_update(prev, body):
             if not dry_run:
@@ -248,7 +248,7 @@ def sync_calendar(session, calendar_id: str, events: list[dict], dry_run: bool) 
                     session,
                     "PUT",
                     f"/calendars/{calendar_id}/events/{prev['id']}",
-                    json=body,
+                    json_body=body,
                 )
             stats["updated"] += 1
         else:
@@ -314,7 +314,36 @@ def subscribe_links() -> dict[str, dict[str, str]]:
     return links
 
 
+def _load_env() -> None:
+    """서버·로컬 모두에서 .env 계열을 읽는다.
+
+    서버에는 python-dotenv 가 깔려 있으니 repo 표준 로더(env_utils)를 그대로 쓴다.
+    로컬엔 없을 수 있어서, 그때만 같은 우선순위(.env → .env.prod → .env.test)로
+    직접 읽는다. 이미 셸에 있는 값은 건드리지 않는다.
+    """
+    try:
+        from env_utils import load_backend_env
+
+        load_backend_env(str(BASE_DIR))
+        return
+    except ImportError:
+        pass
+
+    for name in (".env", ".env.prod", ".env.test"):
+        path = BASE_DIR / name
+        if not path.exists():
+            continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            os.environ[key.strip()] = value.strip().strip("\"'")
+
+
 def main() -> None:
+    _load_env()
+
     parser = argparse.ArgumentParser(description="노션 트랙 일정 → 구글 캘린더")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--dry-run", action="store_true", help="바뀔 내용만 출력 (기본)")
