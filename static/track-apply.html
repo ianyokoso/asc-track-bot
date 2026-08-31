@@ -1563,7 +1563,6 @@
           </div>
           <p class="text-[12px] text-ink-muted leading-relaxed mb-3">
             ※ 크리에이터 <strong class="text-ink">정규 트랙은 리뉴얼 중</strong>이라 12기에는 개설되지 않습니다.
-            라이트 트랙은 <strong class="text-ink">기존 정규 트랙 이수자</strong>만 신청할 수 있습니다.
           </p>
           <div class="light-tracks-grid"
                data-light-group-container
@@ -1596,7 +1595,6 @@
           </div>
           <p class="text-[12px] text-ink-muted leading-relaxed mb-3">
             ※ 앱 개발 <strong class="text-ink">정규 트랙은 리뉴얼 중</strong>이라 12기에는 개설되지 않습니다.
-            라이트 트랙은 <strong class="text-ink">기존 정규 트랙 이수자</strong>만 신청할 수 있습니다.
           </p>
           <div class="light-tracks-grid"
                data-light-group-container
@@ -6160,6 +6158,7 @@
     const PREOPEN_LIGHT_TRACKS = [
       { parent: '크리에이터', label: '크리에이터 라이트 (숏폼)', note: '숏폼 글쓰기에 집중한 가벼운 코스' },
       { parent: '크리에이터', label: '크리에이터 라이트 (롱폼)', note: '롱폼 글쓰기 중심의 라이트 코스' },
+      { parent: '앱 개발', label: '앱 개발 라이트 트랙', note: '앱 개발 핵심만 담은 가벼운 코스' },
       // 빌더 라이트 트랙은 계속 신청 불가 (UI 노출 제거). 11기에 정규 빌더 트랙은
       // 재오픈했지만 라이트 코스는 별도 결정 전까지 보류. JS 식별자/legacy 데이터는 보존.
     ];
@@ -6283,11 +6282,11 @@
             <div class="flex items-center gap-4 mb-6">
               <span class="text-eyebrow text-navy">Light Tracks</span>
               <span class="h-px flex-1 bg-border-strong max-w-[80px]"></span>
-              <span class="text-[12px] text-ink-muted">재참여자 전용</span>
+              <span class="text-[12px] text-ink-muted">정규 리뉴얼 중</span>
             </div>
             <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-ink leading-[1.1]">가볍게 추가하는 라이트 트랙</h2>
             <p class="mt-5 text-lg text-ink-muted leading-relaxed max-w-3xl">
-              재참여자만 선택 가능. 정규 트랙과 <strong class="text-ink">동시 수강 가능</strong>하고, 라이트끼리도 복수 선택할 수 있습니다.
+              정규 트랙과 <strong class="text-ink">동시 수강 가능</strong>하고, 라이트끼리도 복수 선택할 수 있습니다.
             </p>
             <div class="mt-10 grid grid-cols-1 md:grid-cols-2 gap-3">
               ${PREOPEN_LIGHT_TRACKS.map(lt => `
