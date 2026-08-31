@@ -1551,7 +1551,7 @@
           <h2 class="track-category-title">라이트 트랙</h2>
           <p class="track-category-desc">
             정규 트랙의 축약 커리큘럼. 정규 트랙과 <strong class="text-ink">동시 수강 가능</strong>.
-            <strong class="text-ink">최대 1개</strong>까지 선택할 수 있습니다.
+            아래 그룹에서 <strong class="text-ink">각각 1개씩</strong> 선택할 수 있습니다.
           </p>
         </div>
 
@@ -1583,6 +1583,30 @@
                      data-light-group-label="크리에이터 라이트">
               <div class="light-track-body">
                 <div class="light-track-title">롱폼</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- 앱 개발 라이트 그룹 — 12기에 정규→라이트 전환. 하위 옵션 없는 단일 선택 -->
+        <div class="mt-7">
+          <div class="flex items-baseline justify-between mb-2">
+            <p class="text-eyebrow">앱 개발 라이트</p>
+          </div>
+          <p class="text-[12px] text-ink-muted leading-relaxed mb-3">
+            ※ <strong class="text-ink">앱 개발 정규 트랙을 이수한 분만</strong> 신청할 수 있습니다.
+          </p>
+          <div class="light-tracks-grid"
+               data-light-group-container
+               data-light-group="app_dev">
+            <label class="light-track-card">
+              <input type="checkbox"
+                     data-light-track
+                     data-light-single
+                     data-light-group="app_dev"
+                     data-light-group-label="앱 개발 라이트 트랙">
+              <div class="light-track-body">
+                <div class="light-track-title">앱 개발 라이트 트랙</div>
               </div>
             </label>
           </div>
@@ -3820,6 +3844,7 @@
         else if (group === 'creator' && title === '롱폼') trackId = 'creator_light_long';
         else if (group === 'builder' && title === '기초') trackId = 'builder_light_basic';
         else if (group === 'builder' && title === '심화') trackId = 'builder_light_adv';
+        else if (group === 'app_dev') trackId = 'app_dev_light';
 
         if (trackId) {
           tracks.push({ type: 'light', id: trackId });
@@ -4690,7 +4715,8 @@
         const card = cb.closest('.light-track-card');
         const title = card?.querySelector('.light-track-title')?.textContent.trim() || '';
         const groupLabel = cb.dataset.lightGroupLabel || '라이트';
-        items.push(`${groupLabel} (${title})`);
+        // 하위 옵션이 없는 그룹(앱 개발)은 '그룹명 (그룹명)' 이 되지 않도록 괄호를 생략
+        items.push(cb.hasAttribute('data-light-single') ? groupLabel : `${groupLabel} (${title})`);
       });
       return items;
     }
@@ -5095,6 +5121,7 @@
       creator_light_long: '크리에이터 라이트 (롱폼)',
       builder_light_basic:'빌더 라이트 (기초)',
       builder_light_adv:  '빌더 라이트 (심화)',
+      app_dev_light:      '앱 개발 라이트 트랙',
     };
 
     // 탭 그룹 매핑: 라이트 탭은 여러 세부 옵션 전부 포함

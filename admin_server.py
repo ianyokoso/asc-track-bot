@@ -1882,6 +1882,8 @@ TRACK_APPLICATION_LIGHT_TRACK_MAP = {
     'creator_light_long': '크리에이터 라이트 트랙 (롱폼)',
     'builder_light_basic': '빌더 라이트 트랙 (기초)',
     'builder_light_adv': '빌더 라이트 트랙 (심화)',
+    # 12기: 앱 개발이 정규 → 라이트로 전환. 하위 옵션 없는 단일 트랙.
+    'app_dev_light': '앱 개발 라이트 트랙',
 }
 
 TRACK_APPLICATION_LEADER_LABELS = {
