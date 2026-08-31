@@ -30,8 +30,10 @@ _TRACK_DISCORD_PREFIX = {
     "세일즈 실전 트랙":              "세일즈-실전",
     "AI 에이전트 트랙":              "AI에이전트",
     "앱 개발 트랙":                  "앱개발",
-    # 12기: 앱 개발 정규가 리뉴얼로 미개설 → 라이트만 운영.
-    "앱 개발 라이트 트랙":           "앱개발",
+    # 12기: 앱 개발은 정규 없이 라이트만 운영 → 부모 트랙이 없다.
+    # 접두사에 '라이트' 를 포함시켜야 역할이 '앱개발-라이트-12기' 가 되고,
+    # !역할삭제 의 '{접두사}-{기수}기' 매칭도 그대로 먹는다.
+    "앱 개발 라이트 트랙":           "앱개발-라이트",
     "나 탐구 트랙":                  "나탐구",
     # 12기 신설 트랙
     "디자인 트랙":                   "디자인",
@@ -59,7 +61,8 @@ _LIGHT_TRACK_PARENT_TRACKS = {
     "크리에이터 라이트 트랙 (롱폼)": "크리에이터 트랙",
     "빌더 라이트 트랙 (기초)": "빌더 기초 트랙",
     "빌더 라이트 트랙 (심화)": "빌더 심화 트랙",
-    "앱 개발 라이트 트랙": "앱 개발 트랙",
+    # 정규 과정이 없으므로 자기 자신이 기준 — 채널·카테고리를 스스로 만든다.
+    "앱 개발 라이트 트랙": "앱 개발 라이트 트랙",
 }
 _LIGHT_TRACK_ROLE_PREFIX = {
     "크리에이터 라이트 트랙": "크리에이터",
@@ -67,7 +70,7 @@ _LIGHT_TRACK_ROLE_PREFIX = {
     "크리에이터 라이트 트랙 (롱폼)": "크리에이터",
     "빌더 라이트 트랙 (기초)": "빌더-기초",
     "빌더 라이트 트랙 (심화)": "빌더-심화",
-    "앱 개발 라이트 트랙": "앱개발",
+    "앱 개발 라이트 트랙": "앱개발-라이트",
 }
 
 # 크리에이터 라이트는 sub-form (숏폼/롱폼) 별로 독립 역할 + 채널 분리.
@@ -1060,12 +1063,15 @@ class AdminCog(commands.Cog):
                 reason = f"{reason_label} ({cohort_display})"
                 # sub_form: 크리에이터 라이트일 때만 '숏폼'/'롱폼' (빌더 라이트는 None).
                 sub_form = _LIGHT_TRACK_SUB_FORM.get(effective_track_name)
+                # 접두사가 이미 '-라이트' 로 끝나면(앱개발-라이트) 뒤에 또 붙이지 않는다.
+                # 그래야 역할이 '앱개발-라이트-12기' 가 되고 !역할삭제 매칭도 유지된다.
+                light_suffix = "" if role_prefix.endswith("-라이트") else "-라이트"
                 if sub_form:
-                    track_short = f"{role_prefix}-라이트-{sub_form}"
-                    light_role_name = f"{role_prefix}-{clean_cohort}기-라이트-{sub_form}"
+                    track_short = f"{role_prefix}-라이트-{sub_form}" if light_suffix else f"{role_prefix}-{sub_form}"
+                    light_role_name = f"{role_prefix}-{clean_cohort}기{light_suffix}-{sub_form}"
                 else:
-                    track_short = f"{role_prefix}-라이트"
-                    light_role_name = f"{role_prefix}-{clean_cohort}기-라이트"
+                    track_short = f"{role_prefix}-라이트" if light_suffix else role_prefix
+                    light_role_name = f"{role_prefix}-{clean_cohort}기{light_suffix}"
 
                 light_role, created = await self._ensure_role(guild, light_role_name, reason)
                 if created:
