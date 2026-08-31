@@ -5126,6 +5126,7 @@
     const LIGHT_TAB_MAP = {
       creator_light: ['creator_light_short', 'creator_light_long'],
       builder_light: ['builder_light_basic', 'builder_light_adv'],
+      app_dev_light: ['app_dev_light'],
     };
 
     // 멤버의 트랙은 배열 — 한 사람이 여러 요일 + 여러 라이트 그룹 동시에 가질 수 있음.
@@ -6463,6 +6464,7 @@
       { id: 'builder',          label: '빌더',              kind: 'weekday' },
       { id: 'design',           label: '디자인',            kind: 'weekday' },
       { id: 'creator_light',    label: '크리에이터 라이트', kind: 'light_group' },
+      { id: 'app_dev_light',    label: '앱 개발 라이트',    kind: 'light_group' },
     ];
 
     let _gpActiveTrack = null;
@@ -6898,6 +6900,7 @@
       app_dev: '앱 개발 트랙',
       design: '디자인 트랙',
       creator_light: '크리에이터 라이트 트랙',
+      app_dev_light: '앱 개발 라이트 트랙',
       builder_light: '빌더 라이트 트랙',
     };
 
@@ -6938,6 +6941,7 @@
         if (track.id === 'creator_light_long') names.push('크리에이터 라이트 트랙 (롱폼)');
         if (track.id === 'builder_light_basic') names.push('빌더 라이트 트랙 (기초)');
         if (track.id === 'builder_light_adv') names.push('빌더 라이트 트랙 (심화)');
+        if (track.id === 'app_dev_light') names.push('앱 개발 라이트 트랙');
       });
       return gpUnique(names);
     }
@@ -6958,6 +6962,8 @@
         if (lightTrack?.id === 'builder_light_basic') return '빌더 라이트 트랙 (기초)';
         if (lightTrack?.id === 'builder_light_adv') return '빌더 라이트 트랙 (심화)';
       }
+      // 앱 개발 라이트는 하위 옵션이 없어 분기 없이 트랙명 하나로 끝난다
+      if (tab.id === 'app_dev_light') return '앱 개발 라이트 트랙';
       return GP_GROUP_DB_NAME_MAP[tab.id] || tab.label;
     }
 

@@ -30,6 +30,8 @@ _TRACK_DISCORD_PREFIX = {
     "세일즈 실전 트랙":              "세일즈-실전",
     "AI 에이전트 트랙":              "AI에이전트",
     "앱 개발 트랙":                  "앱개발",
+    # 12기: 앱 개발 정규가 리뉴얼로 미개설 → 라이트만 운영.
+    "앱 개발 라이트 트랙":           "앱개발",
     "나 탐구 트랙":                  "나탐구",
     # 12기 신설 트랙
     "디자인 트랙":                   "디자인",
@@ -45,17 +47,19 @@ _TRACK_ASSIGNMENT_CHANNEL_KEYS = {
     "\uc138\uc77c\uc988 \uc2e4\uc804 \ud2b8\ub799": ["SALES_PRACTICAL_ID"],
     "AI \uc5d0\uc774\uc804\ud2b8 \ud2b8\ub799": ["AI_AGENT_ID"],
     "\uc571 \uac1c\ubc1c \ud2b8\ub799": ["APP_DEV_ID"],
+    "\uc571 \uac1c\ubc1c \ub77c\uc774\ud2b8 \ud2b8\ub799": ["APP_DEV_ID"],
     "\ub098 \ud0d0\uad6c \ud2b8\ub799": ["SELF_INQUIRY_ID"],
 }
 
-_LIGHT_TRACK_TAB_IDS = {"creator_light", "builder_light"}
-_LIGHT_TRACK_NAMES = {"크리에이터 라이트 트랙", "빌더 라이트 트랙"}
+_LIGHT_TRACK_TAB_IDS = {"creator_light", "builder_light", "app_dev_light"}
+_LIGHT_TRACK_NAMES = {"크리에이터 라이트 트랙", "빌더 라이트 트랙", "앱 개발 라이트 트랙"}
 _LIGHT_TRACK_PARENT_TRACKS = {
     "크리에이터 라이트 트랙": "크리에이터 트랙",
     "크리에이터 라이트 트랙 (숏폼)": "크리에이터 트랙",
     "크리에이터 라이트 트랙 (롱폼)": "크리에이터 트랙",
     "빌더 라이트 트랙 (기초)": "빌더 기초 트랙",
     "빌더 라이트 트랙 (심화)": "빌더 심화 트랙",
+    "앱 개발 라이트 트랙": "앱 개발 트랙",
 }
 _LIGHT_TRACK_ROLE_PREFIX = {
     "크리에이터 라이트 트랙": "크리에이터",
@@ -63,6 +67,7 @@ _LIGHT_TRACK_ROLE_PREFIX = {
     "크리에이터 라이트 트랙 (롱폼)": "크리에이터",
     "빌더 라이트 트랙 (기초)": "빌더-기초",
     "빌더 라이트 트랙 (심화)": "빌더-심화",
+    "앱 개발 라이트 트랙": "앱개발",
 }
 
 # 크리에이터 라이트는 sub-form (숏폼/롱폼) 별로 독립 역할 + 채널 분리.
