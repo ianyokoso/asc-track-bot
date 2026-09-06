@@ -5520,38 +5520,43 @@
     }
 
     // 요일 ↔ 트랙 매핑 (편집 모달에서 '이 멤버가 해당 요일에 이미 트랙이 있는가' 판정용)
-    // 11기 개편 (2026-07-28):
-    //   - self_inquiry 수→월 이동, builder(단일 빌더 트랙) 월요일 신설
-    //   - 월 = 세일즈 / 나 탐구 / 빌더, 화 = AI 에이전트, 수 = 크리에이터, 목 = 앱 개발
-    //   - 구 빌더 심화/기초 (advanced/basic) 는 legacy 데이터 조회 호환용으로만 화요일 유지.
+    // 12기 개편 (2026-09-06):
+    //   - builder 월→수 이동, design(디자인 트랙) 목요일 신설 (앱 개발 정규 대체)
+    //   - 월 = 세일즈 / 나 탐구, 화 = AI 에이전트, 수 = 빌더, 목 = 디자인
+    //   - 구 트랙 (빌더 심화/기초 · 크리에이터 · 앱 개발 정규) 은 legacy 데이터
+    //     조회 호환용으로만 유지 — 편집 선택지(WEEKDAY_TRACK_CHOICES) 에는 없음.
     const WEEKDAY_OF_TRACK = {
       sales_real: 'monday',
       self_inquiry: 'monday',
-      builder: 'monday',
+      ai_agent: 'tuesday',
+      builder: 'wednesday',
+      design: 'thursday',
+      // legacy (11기 이전 데이터 표시용)
       builder_advanced: 'tuesday', builder_basic: 'tuesday',
-      ai_agent: 'tuesday', creator: 'wednesday',
-      app_dev: 'thursday',
+      creator: 'wednesday', app_dev: 'thursday',
     };
     const LIGHT_GROUP_OF_TRACK = {
       creator_light_short: 'creator_light',
       creator_light_long: 'creator_light',
+      app_dev_light: 'app_dev_light',
+      // legacy — 빌더 라이트는 12기 미운영
       builder_light_basic: 'builder_light',
       builder_light_adv: 'builder_light',
     };
 
     // 탭 정의 (정규 · 라이트 · 미신청 · 전체 순서)
+    // 12기 개편 (2026-09-06): 빌더 기초/심화 · 크리에이터 · 앱 개발 정규 탭 제거,
+    //   디자인 트랙 신설, 라이트는 크리에이터 + 앱 개발 2그룹 — GP_TABS 와 동일 세트.
+    //   구 트랙 신청 데이터는 '전체' 탭에서 계속 보인다 (TRACK_LABELS 유지).
     const ADMIN_TABS = [
       { id: 'sales_real',       label: '세일즈 실전' },
       { id: 'self_inquiry',     label: '나 탐구' },
-      { id: 'builder',          label: '빌더' },
-      { id: 'builder_advanced', label: '빌더 심화' },
-      { id: 'builder_basic',    label: '빌더 기초' },
       { id: 'ai_agent',         label: 'AI 에이전트' },
-      { id: 'creator',          label: '크리에이터' },
-      { id: 'app_dev',          label: '앱 개발' },
+      { id: 'builder',          label: '빌더' },
+      { id: 'design',           label: '디자인' },
       { type: 'divider' },
       { id: 'creator_light',    label: '크리에이터 라이트', isLight: true },
-      { id: 'builder_light',    label: '빌더 라이트',       isLight: true },
+      { id: 'app_dev_light',    label: '앱 개발 라이트',    isLight: true },
       { type: 'divider' },
       { id: 'unapplied',        label: '미신청' },
       { id: 'all',              label: '전체' },
@@ -5857,9 +5862,9 @@
     let editingMemberId = null;
     let editingTracks = [];
 
-    // admin edit modal 트랙 선택지. 11기 개편 (2026-07-28) 반영:
-    //   self_inquiry 수→월, builder(단일 빌더 트랙) 월요일 신설.
-    // 구 빌더 심화/기초는 11기 미운영 → 운영자 직접 편집 선택지에서도 계속 제외.
+    // admin edit modal 트랙 선택지. 12기 개편 (2026-09-06) 반영:
+    //   builder 수요일, design(디자인 트랙) 목요일 신설.
+    // 구 빌더 심화/기초 · 크리에이터 · 앱 개발 정규는 12기 미운영 → 편집 선택지에서 제외.
     const WEEKDAY_TRACK_CHOICES = [
       { id: 'sales_real',       label: '세일즈 실전 트랙',    weekday: 'monday' },
       { id: 'self_inquiry',     label: '나 탐구 트랙',        weekday: 'monday' },
@@ -5870,6 +5875,7 @@
     const LIGHT_TRACK_CHOICES = [
       { id: 'creator_light_short', label: '크리에이터 라이트 (숏폼)', group: 'creator_light' },
       { id: 'creator_light_long',  label: '크리에이터 라이트 (롱폼)', group: 'creator_light' },
+      { id: 'app_dev_light',       label: '앱 개발 라이트',           group: 'app_dev_light' },
     ];
 
     function openEditModal(memberId) {
