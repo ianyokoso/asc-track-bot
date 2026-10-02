@@ -6149,6 +6149,7 @@
       const out = [];
       for (const w of weeks) {
         if (!w.week || w.optional) continue;
+        if (w.week === 'OT') continue;  // 4주 커리큘럼엔 1~4주차만 (OT 는 '전체 일정' 표에 남음)
         if (seen.has(w.week)) continue;
         seen.add(w.week);
         out.push(w);
