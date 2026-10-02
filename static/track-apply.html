@@ -5885,11 +5885,8 @@
           const weekdayKr = WEEKDAY_OF_TRACK[t.id] === 'monday' ? '월'
             : WEEKDAY_OF_TRACK[t.id] === 'tuesday' ? '화'
             : WEEKDAY_OF_TRACK[t.id] === 'wednesday' ? '수' : '목';
-          const creatorSubSelect = (t.id === 'creator')
-            ? `<select class="admin-edit-creator-sub" data-creator-sub-idx="${idx}">
-                 <option value="short_only"  ${t.creatorSub === 'short_only'  ? 'selected' : ''}>숏폼만</option>
-                 <option value="short_long"  ${t.creatorSub === 'short_long'  ? 'selected' : ''}>숏폼 + 롱폼</option>
-               </select>` : '';
+          // 13기: 크리에이터 롱폼 미운영 → 숏폼/롱폼 선택 UI 제거 (legacy creatorSub 값은 보존만).
+          const creatorSubSelect = '';
           return `
             <div class="admin-edit-track-row">
               <div class="admin-edit-track-info">
