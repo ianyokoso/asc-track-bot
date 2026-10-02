@@ -843,9 +843,17 @@ class AdminCog(commands.Cog):
                 short_role, created = await self._ensure_role(guild, f"{track_short}-{clean_cohort}기-숏폼", reason)
                 if created:
                     summary["roles_created"] += 1
-                long_role, created = await self._ensure_role(guild, f"{track_short}-{clean_cohort}기-롱폼", reason)
-                if created:
-                    summary["roles_created"] += 1
+                # 13기부터 크리에이터는 숏폼/롱폼 구분이 없다 — 롱폼 신청자가 한 명도 없으면
+                # 빈 롱폼 역할·롱폼-과제-인증 채널을 만들지 않는다 (숏폼 역할/채널만 사용).
+                has_long_member = any(
+                    _creator_member_subform(m) == "롱폼"
+                    for g in groups for m in (g.get("members") or [])
+                )
+                long_role = None
+                if has_long_member:
+                    long_role, created = await self._ensure_role(guild, f"{track_short}-{clean_cohort}기-롱폼", reason)
+                    if created:
+                        summary["roles_created"] += 1
                 _persist_role_resource(runtime_updates, track_name, track_short, "short", short_role)
                 _persist_role_resource(runtime_updates, track_name, track_short, "long", long_role)
                 creator_roles = (short_role, long_role)
@@ -943,8 +951,11 @@ class AdminCog(commands.Cog):
             if track_short == "크리에이터":
                 assignment_specs = [
                     (f"{track_short}-{clean_cohort}기-숏폼-과제-인증", "숏폼 과제 인증", allowed_roles),
-                    (f"{track_short}-{clean_cohort}기-롱폼-과제-인증", "롱폼 과제 인증", creator_long_roles),
                 ]
+                if creator_long_roles:
+                    assignment_specs.append(
+                        (f"{track_short}-{clean_cohort}기-롱폼-과제-인증", "롱폼 과제 인증", creator_long_roles)
+                    )
             else:
                 assignment_specs = [
                     (f"{track_short}-{clean_cohort}기-과제-인증", "과제 인증", allowed_roles),
