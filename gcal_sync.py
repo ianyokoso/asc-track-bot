@@ -28,7 +28,7 @@ API = "https://www.googleapis.com/calendar/v3"
 TIMEZONE = "Asia/Seoul"
 # 노션 '구글 캘린더용 DB' 는 9~10월 = 12기 일정이다.
 # .env 의 CURRENT_COHORT 는 진행 중인 기수라 여기와 어긋날 수 있어 따로 둔다.
-DEFAULT_COHORT_LABEL = os.environ.get("GCAL_COHORT_LABEL", "ASC 12기")
+DEFAULT_COHORT_LABEL = os.environ.get("GCAL_COHORT_LABEL", "ASC 13기")
 
 # 이 스크립트가 만든 일정에만 붙는 표식. 손으로 넣은 일정은 건드리지 않는다.
 SYNC_TAG = "asc-track-cal"

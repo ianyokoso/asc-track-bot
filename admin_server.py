@@ -743,7 +743,7 @@ def _fetch_guild_nickname(user_id):
 # prefix 목록은 cogs/admin.py _TRACK_DISCORD_PREFIX 의 값들과 일치해야 한다.
 # ⚠️ '빌더' 는 '빌더-기초'/'빌더-심화' 의 접두사이기도 하므로 반드시 더 긴 것들 뒤에 둔다
 #    (정규식 alternation 이 앞에서부터 매칭 시도).
-_TRACK_ROLE_PREFIXES = ['크리에이터', '빌더-기초', '빌더-심화', '빌더', '세일즈-실전', 'AI에이전트', '앱개발', '나탐구']
+_TRACK_ROLE_PREFIXES = ['크리에이터', '빌더-기초', '빌더-심화', '빌더', '세일즈-실전', 'AI에이전트', '앱개발', '나탐구', '디자인']
 _TRACK_ROLE_RE = re.compile(
     r'^(?P<prefix>' + '|'.join(re.escape(p) for p in _TRACK_ROLE_PREFIXES) +
     r')-(?P<cohort>\d+)기(?:-(?P<suffix>.+))?$'
@@ -1868,8 +1868,11 @@ TRACK_APPLICATION_WEEKDAY_TRACK_MAP = {
     'builder': ('wednesday', '빌더 트랙'),
     'ai_agent': ('tuesday', 'AI 에이전트 트랙'),
     'design': ('thursday', '디자인 트랙'),
-    # 구 크리에이터/앱 개발 — 12기 폼 미개설. legacy 데이터(이전 기수) 호환 매핑 유지.
-    'creator': ('wednesday', '크리에이터 트랙'),
+    # 13기 개편 (2026-10): 크리에이터 수→월 (리뉴얼, 숏폼/롱폼 하위 선택 없음),
+    #   앱 개발 목요일 정규 복귀 (리뉴얼). 세일즈·나 탐구는 별도 챌린지로 분리 —
+    #   legacy 데이터 호환용 매핑만 유지.
+    #   월 = 크리에이터, 화 = AI 에이전트, 수 = 빌더, 목 = 앱 개발 / 디자인.
+    'creator': ('monday', '크리에이터 트랙'),
     'app_dev': ('thursday', '앱 개발 트랙'),
     # 구 빌더 심화/기초 — 11기 폼에선 선택 불가. legacy 데이터 (이전 기수 신청자) 호환을
     # 위해 매핑은 유지 (화요일 슬롯).
@@ -1898,6 +1901,7 @@ TRACK_APPLICATION_LEADER_LABELS = {
     '크리에이터 롱폼 트랙',
     'AI 에이전트 트랙',
     '앱 개발 트랙',
+    '디자인 트랙',
 }
 
 TRACK_APPLICATION_CREATOR_SUB_MAP = {
@@ -5773,6 +5777,7 @@ _DISCORD_PREFIX_TO_TRACK = {
     'AI에이전트-실전': 'AI 에이전트 트랙',   # 구 prefix — 옛 채널/역할 역추적 호환
     '앱개발': '앱 개발 트랙',
     '나탐구': '나 탐구 트랙',
+    '디자인': '디자인 트랙',
 }
 
 

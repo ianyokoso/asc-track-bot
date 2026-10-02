@@ -22,8 +22,10 @@ COMMON_KEY = "common"
 SOURCES: list[tuple[str, str, str]] = [
     # (key, 표시 이름, notion db id)
     ("builder",     "빌더 트랙",        "2f76400e92688085ae02c6b3165f6947"),
-    ("sales",       "세일즈 실전 트랙",  "2f76400e9268805c881ee9d772eef5ea"),
+    # 13기: 이 노션 DB 는 '세일즈 실전 트랙' → '크리에이터 트랙' 으로 재사용됨.
+    ("creator",     "크리에이터 트랙",   "2f76400e9268805c881ee9d772eef5ea"),
     ("ai_agent",    "AI 에이전트 트랙",  "2f76400e926880868000c05be3250a45"),
+    ("app_dev",     "앱 개발 트랙",      "3eb6400e9268806fa36defd594ee6d9b"),
     ("design",      "디자인 트랙",       "31a6400e926880668c52c0c2a720c245"),
     ("self_inquiry", "나 탐구 트랙",      "3376400e926881e9a6b6f47ebe0b6c73"),
     (COMMON_KEY,    "공통 일정",         "3ba6400e926880349370fd63ef70e35d"),

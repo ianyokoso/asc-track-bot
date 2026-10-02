@@ -13,6 +13,7 @@ CANONICAL_TRACK_NAMES = {
     'ai_agent': 'AI 에이전트 트랙',
     'creator': '크리에이터 트랙',
     'app_dev': '앱 개발 트랙',
+    'design': '디자인 트랙',
     'builder_advanced': '빌더 심화 트랙',
     'builder_basic': '빌더 기초 트랙',
 }
