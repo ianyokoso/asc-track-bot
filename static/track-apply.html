@@ -1257,6 +1257,9 @@
                   </label>
                 </div>
                 <div class="track-schedule" data-track="creator">
+                  <!-- ⚠️ 이 블록은 scripts/sync_schedule_from_notion.py 가 노션에서 생성한다. 손으로 고치지 말 것.
+                       같은 일정이 트랙 상세보기(PREOPEN_TRACKS)·하단 공통 일정에도 있어 한 곳만 고치면 어긋난다.
+                       고치는 곳은 노션 '구글 캘린더용 DB' → 스크립트 실행 → 배포. 자세한 건 docs/schedule-sync.md -->
                   <!-- NOTION_SCHEDULE:creator -->
 <details class="schedule-details"><summary class="schedule-summary">일정 확인하기</summary><div class="schedule-body"><table><thead><tr><th class="col-week">주차</th><th class="col-date">날짜</th><th class="col-time">시간</th><th class="col-session">세션</th></tr></thead><tbody>
 <tr class="sched-row"><td class="col-week"><span class="sched-week">OT</span></td><td class="col-date">10/11 (일)</td><td class="col-time">8:00-10:00PM</td><td class="col-session"><div class="sched-title">오리엔테이션 라이브 (온라인)</div><div class="sched-detail">ASC 13기 4주간 일정 및 활동 안내</div></td></tr>
@@ -1395,6 +1398,9 @@
       <!-- 공통 일정 (전체 트랙 공통 주요 행사 — 정적 일정, OT shift 대상 아님) -->
       <div class="mt-2 mb-3 rounded-md border border-border-hair bg-surface px-4 py-3 text-[12px] text-ink-muted leading-relaxed">
         <div class="text-eyebrow mb-2" style="letter-spacing:0.1em;">공통 일정</div>
+        <!-- ⚠️ 이 목록은 서버 설정(cohort-config.commonSchedule)이 있으면 JS 가 통째로 덮어쓴다.
+             여기를 고쳐도 화면은 안 바뀐다. 대시보드 "기수·기간 설정" 또는
+             서버에서 scripts/sync_schedule_from_notion.py --apply 로 고칠 것 -->
         <ul class="space-y-1.5 js-common-schedule">
           <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <span class="text-ink font-medium tabular-nums shrink-0">10/11 (일)</span>
@@ -6057,6 +6063,9 @@
     // 오픈 전 (view-upcoming) — 트랙 미리보기 렌더
     // ============================================================
     // 13기 (2026-10) — 노션 '구글 캘린더용 DB' 기준.
+    /* ⚠️ weeks 배열은 scripts/sync_schedule_from_notion.py 가 노션에서 생성한다. 손으로 고치지 말 것.
+       tagline·target 은 노션에 없어 사람이 관리하는 값이라 스크립트가 보존한다.
+       일정이 바뀌면 노션을 고치고 스크립트를 돌릴 것 — docs/schedule-sync.md */
     const PREOPEN_TRACKS = [
       {
         id: 'creator', label: '크리에이터 트랙', weekday: '월요일',

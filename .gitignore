@@ -47,3 +47,8 @@ scripts/push-and-deploy.sh
 gcal_calendars.*.json
 *service-account*.json
 client_secret_*.json
+# 서비스 계정 키는 파일명이 제각각이라 패턴으로 막는다
+*credentials*.json
+
+# 기수 설정 — 서버 런타임 상태다. 커밋하면 다른 운영자의 서버 값을 덮어써 사고가 난다
+cohort_config_*.json
