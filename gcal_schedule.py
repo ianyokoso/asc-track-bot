@@ -27,7 +27,9 @@ SOURCES: list[tuple[str, str, str]] = [
     ("ai_agent",    "AI 에이전트 트랙",  "2f76400e926880868000c05be3250a45"),
     ("app_dev",     "앱 개발 트랙",      "3eb6400e9268806fa36defd594ee6d9b"),
     ("design",      "디자인 트랙",       "31a6400e926880668c52c0c2a720c245"),
-    ("self_inquiry", "나 탐구 트랙",      "3376400e926881e9a6b6f47ebe0b6c73"),
+    # 13기: 나 탐구는 정규 트랙에서 소모임으로 전환됐고, 노션 DB 도 통합에서 접근 불가
+    # (query 404 object_not_found). 한 소스가 404 면 build_events 가 통째로 멈추므로 제외한다.
+    # 소모임 일정을 캘린더에 넣게 되면 DB 를 통합에 다시 공유하고 이 줄을 되살릴 것.
     (COMMON_KEY,    "공통 일정",         "3ba6400e926880349370fd63ef70e35d"),
 ]
 
