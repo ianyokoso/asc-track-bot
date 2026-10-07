@@ -180,12 +180,28 @@ def exclude_common(track: list[dict], common: list[dict]) -> list[dict]:
 
     시간이 겹친다고 빼면 안 된다 — 9/30 외부연사특강(19–21시)과
     빌더 4주차 강의(20–22시)처럼 겹치기만 하는 별개 일정이 실제로 있다.
+
+    시작·종료가 '완전히 같아도' 제목이 다르면 다른 일정이다. 13기 10/14(수)
+    세일즈 고민상담소(공통)와 빌더 1주차 강의가 둘 다 20–22시였는데, 시간만 보고
+    지우는 바람에 빌더 1주차 강의가 캘린더에서 통째로 사라진 적이 있다.
     """
+    def _base(summary: str) -> str:
+        """비교용 제목 — '[N주차] ' 접두사와 괄호 설명을 떼어낸 핵심만 남긴다.
+
+        같은 일정이 트랙·공통 DB 에 적힐 때 괄호 안이 다르기 때문이다:
+        '오리엔테이션 라이브 (4주간 일정 및 내용 리뷰)' vs '오리엔테이션 라이브 (온라인)'.
+        """
+        text = re.sub(r"^\s*\[\d주차\]\s*", "", summary)
+        return re.sub(r"\s*\(.*?\)\s*$", "", text).strip()
+
     return [
         event
         for event in track
         if not any(
-            c["start"] == event["start"] and c["end"] == event["end"] for c in common
+            c["start"] == event["start"]
+            and c["end"] == event["end"]
+            and _base(c["summary"]) == _base(event["summary"])
+            for c in common
         )
     ]
 
