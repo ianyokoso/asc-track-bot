@@ -7,7 +7,8 @@
   ① 신청 폼의 '일정 확인하기' 표   static/track-apply.html 의 NOTION_SCHEDULE 블록
   ② '트랙 상세보기'               같은 파일의 PREOPEN_TRACKS[].weeks
   ③ 하단 '공통 일정' 목록          cohort_config_{env}.json 의 commonSchedule
-                                 (HTML 에도 폴백 목록이 있지만 설정이 있으면 JS 가 덮어쓴다)
+  ④ 그 목록의 HTML 폴백            track-apply.html 의 ul.js-common-schedule (뷰마다 하나씩)
+                                 평소엔 ③ 이 덮어쓰지만, 설정이 비거나 API 가 죽으면 이 값이 보인다
 
 사용:
   python3 scripts/sync_schedule_from_notion.py              # 무엇이 바뀌는지만 출력
@@ -235,6 +236,41 @@ def build_common_schedule(common: list[dict]) -> list[dict]:
             for ev in common]
 
 
+def render_common_fallback(common: list[dict]) -> str:
+    """HTML 폴백 목록(ul.js-common-schedule)의 내용.
+
+    평소엔 JS 가 서버 설정으로 통째로 덮어쓰지만, 설정이 비었거나 API 가 실패하면
+    이 값이 그대로 보인다. 낡은 날짜가 남아 있으면 그때 사용자에게 틀린 일정이 나간다.
+    """
+    out = []
+    for ev in common:
+        out.append(
+            '          <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">\n'
+            f'            <span class="text-ink font-medium tabular-nums shrink-0">{_esc_html(ev["date"])}</span>\n'
+            f'            <span class="text-ink-soft shrink-0">{_esc_html(_kor_time(ev))}</span>\n'
+            '            <span class="text-ink-soft">·</span>\n'
+            f'            <span class="text-ink">{_esc_html(_label(ev))}</span>\n'
+            '          </li>'
+        )
+    return "\n".join(out)
+
+
+def update_common_fallback(page: str, common: list[dict]) -> tuple[str, int]:
+    """페이지 안의 모든 ul.js-common-schedule 을 갱신한다 (뷰마다 하나씩 있다)."""
+    body = render_common_fallback(common)
+    pattern = re.compile(r'(<ul class="space-y-1\.5 js-common-schedule">\n)([\s\S]*?)(\n        </ul>)')
+    changed = 0
+    out, pos = [], 0
+    for m in pattern.finditer(page):
+        out.append(page[pos:m.start(2)])
+        if m.group(2).strip() != body.strip():
+            changed += 1
+        out.append(body)
+        pos = m.end(2)
+    out.append(page[pos:])
+    return "".join(out), changed
+
+
 def cohort_config_path() -> pathlib.Path:
     env = os.environ.get("ASC_ENV", "test")
     return BASE_DIR / f"cohort_config_{env}.json"
@@ -272,6 +308,7 @@ def main() -> int:
     page = PAGE_PATH.read_text(encoding="utf-8")
     page, t_changed = update_tables(page, merged)
     page, p_changed = update_preopen(page, merged)
+    page, f_changed = update_common_fallback(page, common)
     schedule = build_common_schedule(common)
     cfg_path = cohort_config_path()
     cfg_state = update_cohort_config(cfg_path, schedule, args.apply)
@@ -282,6 +319,7 @@ def main() -> int:
     cfg_msg = {"missing": f"⚠️ {cfg_path.name} 이 없음 — 이 파일은 서버에 있다. 서버에서 실행할 것",
                "same": "변경 없음", "changed": "갱신"}[cfg_state]
     print(f"  ③ 공통 일정           : {cfg_msg}")
+    print(f"  ④ 공통 일정 HTML 폴백 : {f_changed}곳 갱신" if f_changed else "  ④ 공통 일정 HTML 폴백 : 변경 없음")
     if cfg_state == "missing":
         print("     (수동 반영용 JSON)")
         print(json.dumps(schedule, ensure_ascii=False, indent=2))
@@ -290,7 +328,7 @@ def main() -> int:
         print("\n[미리보기] 파일은 건드리지 않았습니다. 반영: --apply")
         return 0
 
-    if t_changed or p_changed:
+    if t_changed or p_changed or f_changed:
         PAGE_PATH.write_text(page, encoding="utf-8")
     print("\n✅ 반영 완료 — 배포: bash scripts/push-and-deploy.sh --light")
     return 0

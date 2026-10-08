@@ -10,9 +10,11 @@ HTML·설정을 직접 고치면 네 곳 중 일부만 바뀌어 사용자에게
 | ① | 신청 폼 `일정 확인하기` 표 | `static/track-apply.html` 의 `NOTION_SCHEDULE` 블록 | 아래 스크립트 |
 | ② | `트랙 상세보기` | 같은 파일 `PREOPEN_TRACKS[].weeks` | 아래 스크립트 |
 | ③ | 신청 폼 하단 `공통 일정` | **서버** `cohort_config_test.json` 의 `commonSchedule` | 아래 스크립트(서버에서) |
-| ④ | 구글 캘린더 | 구글 캘린더 6개 | `gcal_sync.py` |
+| ④ | ③ 목록의 HTML 폴백 | `track-apply.html` 의 `ul.js-common-schedule` (뷰마다 하나) | 아래 스크립트 |
+| ⑤ | 구글 캘린더 | 구글 캘린더 6개 | `gcal_sync.py` |
 
-①②③ 은 `scripts/sync_schedule_from_notion.py`, ④ 는 `gcal_sync.py` 가 담당한다.
+①②③④ 는 `scripts/sync_schedule_from_notion.py`, ⑤ 는 `gcal_sync.py` 가 담당한다.
+④ 는 평소 ③ 이 덮어쓰지만 설정이 비거나 API 가 죽으면 그대로 보이므로 같이 맞춘다.
 둘 다 트랙 목록·노션 DB id 를 `gcal_schedule.SOURCES` 에서 가져오므로 원본은 하나다.
 
 ## 일정을 바꿀 때
