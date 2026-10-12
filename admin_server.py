@@ -4343,10 +4343,14 @@ def _commit_group_preview_to_notion(payload, progress_callback=None):
 
     # 마스터 DB 스키마 한 번만 조회 — 모든 트랙 lookup 에서 재사용.
     # (이전엔 트랙별로 '트랙명' 쿼리 → 400 노이즈 + 트랙당 1회 fetch 낭비)
-    try:
-        master_db_schema = _resolve_master_db_schema(notion_api, group_db_id)
-    except Exception as e:
-        raise RuntimeError(f"마스터 DB 스키마 조회 실패: {group_db_id}: {e}")
+    # no_groups 모드는 아래 조 루프를 통째로 건너뛰어 트랙/조 마스터 DB 를 안 쓴다 →
+    # 조회도 생략. (이 DB 의 integration 연결이 빠지면 일괄 반영 전체가 막히던 문제)
+    master_db_schema = None
+    if not no_groups:
+        try:
+            master_db_schema = _resolve_master_db_schema(notion_api, group_db_id)
+        except Exception as e:
+            raise RuntimeError(f"마스터 DB 스키마 조회 실패: {group_db_id}: {e}")
 
     # 라이트 트랙은 조 배정 없이 부모 트랙의 공지 / 과제-인증 채널만 접근 → Notion 조 inline DB 생성 X.
     LIGHT_TRACK_NAME_KEYWORDS = ('라이트 트랙', '라이트트랙')
