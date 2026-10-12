@@ -26,7 +26,8 @@ ASC 트랙 신청 → 멤버 마스터 DB 확정 → Discord 트랙별 역할/�
   - `track-bot` — `track_bot.py` (Discord 봇). 채널/역할 실제 생성 담당.
   - (그 외 `asc-bot`, `asc-lounge`, `dashboard-api/ui` 는 **다른 프로젝트** — 건드리지 말 것)
 - **Vercel**: `https://asc-track-bot.vercel.app` 이 `/api/*`, `/apply`, `/static/*` 를 Oracle `:8001` 로 rewrite ([vercel.json](vercel.json)). 사용자는 Vercel URL 로 접속.
-- **SSH 접속**: `ssh -i ~/Downloads/env.test/ssh-key-2026-01-25.key ubuntu@168.107.16.76`
+- **SSH 접속**: `ssh asc-oracle` (`~/.ssh/config` 별칭 → 키 `~/.ssh/asc-oracle.key`). 별칭 없는 맥이면 `ssh -i <ssh-key-2026-01-25.key 경로> ubuntu@168.107.16.76`
+  - 새 맥 세팅: 키(`asc-discord-bot/ssh-key-2026-01-25.key` 에 사본 있음)를 `~/.ssh/asc-oracle.key`(600)로 복사 + `~/.ssh/config` 에 `Host asc-oracle` 추가. GitHub 은 HTTPS remote + `gh auth setup-git`.
 
 ## Discord 길드 (서버)
 | 용도 | 길드 ID | 이름 | 비고 |
@@ -50,12 +51,12 @@ ASC 트랙 신청 → 멤버 마스터 DB 확정 → Discord 트랙별 역할/�
 > commit/push 만으로는 라이브 반영 안 됨 — 서버 pull 필수.
 
 ```bash
-cd /Users/tuemarz/Downloads/ASC/asc-track-bot
+# repo 루트에서
 bash scripts/push-and-deploy.sh --light   # git push + 서버 git pull + track-bot-api(admin)만 재시작
 bash scripts/push-and-deploy.sh           # full: deploy-oracle.sh (pip 설치 + ecosystem 재생성 + 봇까지 재시작)
 ```
 - ⚠️ `push-and-deploy.sh --light` 는 auto-mode classifier 가 "production deploy" 로 **차단**한 이력 있음.
-  → 대신 **raw ssh** 로 배포: `ssh -i ~/Downloads/env.test/ssh-key-2026-01-25.key ubuntu@168.107.16.76 "cd ~/asc-track-bot && git pull origin main && pm2 restart track-bot-api"` (봇 코드 바꿨으면 `pm2 restart track-bot` 도).
+  → 대신 **raw ssh** 로 배포: `ssh asc-oracle "cd ~/asc-track-bot && git pull origin main && pm2 restart track-bot-api"` (봇 코드 바꿨으면 `pm2 restart track-bot` 도).
 - 배포 후 `curl -s https://asc-track-bot.vercel.app/apply | grep …` 로 실제 반영 검증.
 - **프론트(`track-apply.html`)만 바꿨으면 `--light` 로 충분.** admin 이 요청마다 파일을 새로 읽어 서빙(no-cache)하므로 사실 git pull 만으로도 적용됨.
 - **봇 코드(`cogs/`, `track_bot.py`) 바꿨으면 봇 재시작 필요** → full 또는 `pm2 restart track-bot`.
@@ -86,7 +87,7 @@ bash scripts/push-and-deploy.sh           # full: deploy-oracle.sh (pip 설치 +
 
 ## 함정 (footguns) 모음
 - **미배포**: 로컬 수정 = 라이브 아님. 항상 배포 후 하드리로드.
-- **잘못된 머신에서 git pull**: `tuemarz@Ian`(맥)에서 pull 하면 "Already up to date" 만 뜨고 서버엔 안 감. 배포는 `push-and-deploy.sh`.
+- **잘못된 머신에서 git pull**: 맥(로컬)에서 pull 하면 "Already up to date" 만 뜨고 서버엔 안 감. 배포는 `push-and-deploy.sh`.
 - **`pm2 restart … --update-env` 금지**: 셸 env 로 덮어써서 `ASC_ENV=test` 가 날아가 봇이 legacy/prod 모드로 뜰 수 있음. 평범하게 `pm2 restart <name>` 만.
 - **`.env.test` 로컬 vs 서버 혼동**: 시크릿/길드 설정은 **서버 파일**이 진짜. 로컬 건 참고용.
 - **`DISCORD_TARGET_GUILD_ID` 가 테스트 길드로 박히면** prod 대신 테스트에 채널 생성됨. 항상 1383 확인.
