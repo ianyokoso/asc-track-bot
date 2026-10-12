@@ -44,6 +44,8 @@ ASC 트랙 신청 → 멤버 마스터 DB 확정 → Discord 트랙별 역할/�
 - `.env.test` 는 `load_backend_env` 가 **`override=True`** 로 로드 → pm2 ecosystem env 보다 **우선** ([env_utils.py:81](env_utils.py#L81)).
 - **`DISCORD_TARGET_GUILD_ID`** = 채널/역할 생성 대상 길드. **반드시 `1383082575500677142`.** (한때 `1500…`(테스트)로 잘못 박혀 prod 대신 테스트에 생기는 사고 있었음.)
 - 길드 선택 로직 `resolve_active_guild` ([env_utils.py:126](env_utils.py#L126)) 우선순위: ① `DISCORD_TARGET_GUILD_ID`(override, 블랙리스트 무시) → ② test 모드+`TEST_DISCORD_GUILD_ID` → ③ `bot.guilds[0]`.
+- **멤버 마스터 DB** = 노션 `2df6400e9268805abb5efe6a2ad848e6` (운영 봇 `asc-discord-bot` 과 **공유하는 실 DB**). 서버 `.env.test` 의 `TRACK_JO_DB_ID` · `GROUP_PREVIEW_TEST_MEMBER_DB_ID` 둘 다 이 값 (2026-10-12 통일, 이전엔 테스트용 `멤버 마스터 DB_11기` 3566…e809). 일괄 반영 시 비참여자의 `트랙`·`소속 조` 가 비워짐 — 서버 `backups/` 에 실행 전 스냅샷.
+- 트랙/조 마스터 DB(`GROUP_PREVIEW_TEST_GROUP_DB_ID` 3586…6638)는 integration 접근 불가 상태. 조 안 나눔 일괄 반영은 이 DB 를 안 쓴다.
 - `CURRENT_COHORT` = 현재 기수 숫자 (예 `10`). 대시보드 "기수·기간 설정" 에서 변경 → `.env` 에 저장. 프론트 `COHORT_LABEL` 도 여기서 옴.
 
 ## 배포 (맥에서 실행)
