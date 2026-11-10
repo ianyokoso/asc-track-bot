@@ -122,5 +122,77 @@ class DiscordPrefixTest(unittest.TestCase):
         self.assertEqual(got["leaderLabels"], ["크리에이터 트랙"])
 
 
+class TrackSurveyTest(unittest.TestCase):
+    """저장하기 뒤 트랙별 설문 — 저장 모양·병합·노션 텍스트·공개 범위."""
+
+    USER = {"id": "111111111111111111", "username": "tester", "displayName": "테스터"}
+    TRACKS = [{"type": "weekday", "id": "creator"}, {"type": "weekday", "id": "ai_shortform"}]
+    CREATOR = {"level": "가끔 올리지만 꾸준하지 않아요", "link": " https://threads.net/@me ",
+               "focus": ["첫 줄부터 읽히는 글쓰기", "꾸준히 발행하는 루틴 만들기", "세 번째는 버림"],
+               "focusReason": "글감은 많아요", "goal": "4주 12편", "groupTime": "평일 저녁"}
+
+    def test_sanitize_keeps_only_applied_weekday_tracks(self):
+        got = admin_server._sanitize_track_surveys(
+            {"creator": self.CREATOR, "builder": {"level": "처음이에요"}, "ai_shortform": "not-a-dict"},
+            self.TRACKS,
+        )
+        self.assertEqual(list(got), ["creator"])
+        self.assertEqual(got["creator"]["link"], "https://threads.net/@me")
+        self.assertEqual(len(got["creator"]["focus"]), 2)  # 최대 2개
+
+    def test_page_by_page_submit_merges_and_does_not_count_as_edit(self):
+        first = admin_server._build_track_application_record(
+            self.USER, {"tracks": self.TRACKS, "notes": "메모", "surveys": {"creator": self.CREATOR}})
+        self.assertEqual(list(first["surveys"]), ["creator"])
+        second = admin_server._build_track_application_record(
+            self.USER,
+            {"tracks": self.TRACKS, "notes": "메모", "surveys": {"ai_shortform": {"level": "만들어 본 적 없어요"}}},
+            existing=first,
+        )
+        self.assertEqual(sorted(second["surveys"]), ["ai_shortform", "creator"])
+        self.assertEqual(second["edits"], 0)  # 설문만 더한 저장은 수정으로 안 셈
+
+    def test_changing_tracks_counts_as_edit_and_drops_old_survey(self):
+        first = admin_server._build_track_application_record(
+            self.USER, {"tracks": self.TRACKS, "notes": "메모", "surveys": {"creator": self.CREATOR}})
+        changed = admin_server._build_track_application_record(
+            self.USER, {"tracks": [{"type": "weekday", "id": "builder"}], "notes": "메모"}, existing=first)
+        self.assertEqual(changed["edits"], 1)
+        self.assertEqual(changed["surveys"], {})
+
+    def test_admin_edit_keeps_surveys_it_did_not_send(self):
+        existing = admin_server._build_track_application_record(
+            self.USER, {"tracks": self.TRACKS, "notes": "메모", "surveys": {"creator": self.CREATOR}})
+        raw = {k: v for k, v in existing.items() if k != "surveys"}
+        got = admin_server._build_admin_track_application_record(raw, existing=existing)
+        self.assertIn("creator", got["surveys"])
+
+    def test_notion_text(self):
+        record = admin_server._build_track_application_record(
+            self.USER, {"tracks": self.TRACKS, "notes": "", "surveys": {"creator": self.CREATOR}})
+        text = admin_server._format_track_surveys_text(record)
+        self.assertTrue(text.startswith("[크리에이터 트랙]"))
+        self.assertIn("· 기대하는 내용: 첫 줄부터 읽히는 글쓰기, 꾸준히 발행하는 루틴 만들기", text)
+        self.assertIn("· 조별 모임 선호: 평일 저녁", text)
+        chunks = admin_server._notion_rich_text_chunks("가" * 4000)
+        self.assertEqual([len(c["text"]["content"]) for c in chunks], [1900, 1900, 200])
+        fields = admin_server._resolve_track_application_db_fields({"properties": {"트랙 설문": {"type": "rich_text"}}})
+        self.assertEqual(fields["surveys"], "트랙 설문")
+
+    def test_list_hides_surveys_from_non_admin(self):
+        from unittest import mock
+        member = {"id": "1", "userId": "1", "name": "a", "tracks": self.TRACKS, "surveys": {"creator": self.CREATOR}}
+        client = admin_server.app.test_client()
+        with mock.patch.object(admin_server, "_verify_session_guild_membership", lambda *a, **k: None), \
+             mock.patch.object(admin_server, "_build_track_application_member_list", lambda c: [dict(member)]), \
+             mock.patch.object(admin_server, "_find_viewer_track_application_member", lambda c, u: None):
+            with mock.patch.object(admin_server, "_is_admin_session", lambda: False):
+                got = client.get("/api/track-applications").get_json()["members"][0]
+                self.assertNotIn("surveys", got)
+            with mock.patch.object(admin_server, "_is_admin_session", lambda: True):
+                got = client.get("/api/track-applications").get_json()["members"][0]
+                self.assertIn("creator", got["surveys"])
+
+
 if __name__ == "__main__":
     unittest.main()

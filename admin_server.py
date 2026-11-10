@@ -1650,6 +1650,88 @@ def _sanitize_track_application_track(track):
     return sanitized
 
 
+# ── 트랙별 설문 (14기~) ─────────────────────────────────────────────
+# 신청 폼 '저장하기' 뒤 선택한 정규 트랙마다 한 페이지씩 묻는 설문.
+# 질문·선택지 문구는 프론트(static/track-apply.html 의 TRACK_SURVEYS)가 갖고,
+# 서버는 모양·길이만 정리해 신청 캐시(record['surveys'])와 노션 '트랙 설문' 칸에 저장한다.
+#   { 'creator': {'level': str, 'link': str, 'focus': [str, ...≤2], 'focusReason': str,
+#                 'goal': str, 'groupTime': str}, ... }   ← key 는 신청한 weekday 트랙 id
+TRACK_SURVEY_TEXT_LIMITS = {
+    'level': 200,        # Q1 현재 경험/상태 (단일 선택)
+    'link': 300,         # Q1 운영 중인 계정·채널 링크 (선택 입력)
+    'focusReason': 300,  # Q2 고른 이유 한 줄
+    'goal': 2000,        # Q3 신청 이유·목표
+    'groupTime': 50,     # Q4 조별 모임 선호 일정 (나 탐구엔 없음)
+}
+TRACK_SURVEY_FOCUS_MAX = 2   # Q2 최대 2개
+TRACK_SURVEY_NOTION_LABELS = [
+    ('level', '현재 상태'),
+    ('link', '링크'),
+    ('focus', '기대하는 내용'),
+    ('focusReason', '고른 이유'),
+    ('goal', '신청 이유·목표'),
+    ('groupTime', '조별 모임 선호'),
+]
+
+
+def _sanitize_track_surveys(raw_surveys, tracks):
+    """설문 dict 정리 — 지금 신청한 정규(weekday) 트랙 것만 남긴다."""
+    if not isinstance(raw_surveys, dict):
+        return {}
+    weekday_ids = {
+        str(t.get('id') or '') for t in (tracks or [])
+        if isinstance(t, dict) and t.get('type') == 'weekday'
+    }
+    cleaned = {}
+    for track_id, answers in raw_surveys.items():
+        if track_id not in weekday_ids or not isinstance(answers, dict):
+            continue
+        entry = {}
+        for key, limit in TRACK_SURVEY_TEXT_LIMITS.items():
+            value = str(answers.get(key) or '').strip()[:limit]
+            if value:
+                entry[key] = value
+        focus = answers.get('focus')
+        if isinstance(focus, list):
+            picked = []
+            for item in focus:
+                text = str(item or '').strip()[:200]
+                if text and text not in picked:
+                    picked.append(text)
+            if picked:
+                entry['focus'] = picked[:TRACK_SURVEY_FOCUS_MAX]
+        if entry:
+            cleaned[track_id] = entry
+    return cleaned
+
+
+def _format_track_surveys_text(record):
+    """노션 '트랙 설문' 칸에 넣을 사람이 읽는 텍스트."""
+    surveys = record.get('surveys') or {}
+    blocks = []
+    for track in record.get('tracks') or []:
+        track_id = track.get('id') if isinstance(track, dict) else None
+        answers = surveys.get(track_id) if track_id else None
+        if not answers:
+            continue
+        label = (TRACK_APPLICATION_WEEKDAY_TRACK_MAP.get(track_id) or (None, track_id))[1]
+        lines = [f"[{label}]"]
+        for key, title in TRACK_SURVEY_NOTION_LABELS:
+            value = answers.get(key)
+            if isinstance(value, list):
+                value = ', '.join(value)
+            if value:
+                lines.append(f"· {title}: {value}")
+        blocks.append('\n'.join(lines))
+    return '\n\n'.join(blocks)
+
+
+def _notion_rich_text_chunks(text, size=1900):
+    """rich_text 한 덩어리는 2000자 제한 — 나눠서 넣는다."""
+    text = str(text or '')
+    return [{"text": {"content": text[i:i + size]}} for i in range(0, len(text), size)][:100]
+
+
 def _sanitize_track_application_member(raw_member):
     if not isinstance(raw_member, dict):
         return None
@@ -1686,6 +1768,7 @@ def _sanitize_track_application_member(raw_member):
         "submittedAt": raw_member.get('submittedAt'),
         "edits": int(raw_member.get('edits') or 0),
         "notes": str(raw_member.get('notes') or '').strip(),
+        "surveys": _sanitize_track_surveys(raw_member.get('surveys'), sanitized_tracks),
     }
 
 
@@ -1721,8 +1804,20 @@ def _build_track_application_record(discord_user, payload, existing=None):
         seen.add(track_key)
         tracks.append(normalized)
 
+    notes = str(payload.get('notes') or '').strip()
     previous_submitted = bool(existing.get('submitted'))
-    edits = int(existing.get('edits') or 0) + (1 if previous_submitted else 0)
+    # 트랙별 설문은 페이지마다 따로 저장(POST)된다. 설문만 더한 저장은 '수정'으로 세지 않는다.
+    application_changed = (
+        tracks != (existing.get('tracks') or [])
+        or notes != str(existing.get('notes') or '').strip()
+    )
+    edits = int(existing.get('edits') or 0) + (1 if previous_submitted and application_changed else 0)
+
+    # 설문: 이번에 보낸 트랙 설문으로 덮고, 안 보낸 트랙은 기존 답을 유지 → 지금 트랙만 남김.
+    merged_surveys = dict(existing.get('surveys') or {})
+    if isinstance(payload.get('surveys'), dict):
+        merged_surveys.update(payload['surveys'])
+    surveys = _sanitize_track_surveys(merged_surveys, tracks)
 
     return {
         "id": user_id,
@@ -1735,7 +1830,8 @@ def _build_track_application_record(discord_user, payload, existing=None):
         "submitted": _format_track_application_timestamp(submitted_at),
         "submittedAt": submitted_at.isoformat(),
         "edits": edits,
-        "notes": str(payload.get('notes') or '').strip(),
+        "notes": notes,
+        "surveys": surveys,
     }
 
 
@@ -1775,6 +1871,11 @@ def _build_admin_track_application_record(raw_member, existing=None):
         "submittedAt": submitted_at,
         "edits": int(normalized.get('edits') or existing.get('edits') or 0),
         "notes": normalized.get('notes') or existing.get('notes') or '',
+        # 관리자 편집은 설문을 안 보낸다 — 보냈으면 그걸, 아니면 기존 답을 (바뀐 트랙 기준으로) 유지.
+        "surveys": _sanitize_track_surveys(
+            raw_member.get('surveys') if isinstance(raw_member.get('surveys'), dict) else existing.get('surveys'),
+            tracks,
+        ),
     }
 
 
@@ -2029,6 +2130,7 @@ def _resolve_track_application_db_fields(db_obj):
             'multi_select' if _pick_db_property(properties, 'multi_select', ['조장 지원 여부', 'Leader Apply'])
             else ('select' if _pick_db_property(properties, 'select', ['조장 지원 여부', 'Leader Apply']) else None)
         ),
+        'surveys': _pick_db_property(properties, 'rich_text', ['트랙 설문', 'Track Survey']),
         'notes': _pick_db_property(
             properties,
             'rich_text',
@@ -2323,6 +2425,10 @@ def _build_track_application_notion_properties(
             }
         else:
             properties[fields['notes']] = {"rich_text": []}
+    if fields.get('surveys'):
+        properties[fields['surveys']] = {
+            "rich_text": _notion_rich_text_chunks(_format_track_surveys_text(record))
+        }
     if fields.get('member_relation'):
         properties[fields['member_relation']] = {
             "relation": [{"id": member_page_id}] if member_page_id else []
@@ -2708,6 +2814,10 @@ def get_track_applications():
         request.args.get('cohortLabel') or request.args.get('cohort')
     )
     members = _build_track_application_member_list(cohort_label)
+    # 트랙 설문(링크·목표 등)은 운영진에게만 목록으로 내린다. 본인 것은 viewerMember 로 받는다.
+    if not _is_admin_session():
+        for member in members:
+            member.pop('surveys', None)
     discord_user = _get_authenticated_discord_user()
     viewer_member = _find_viewer_track_application_member(cohort_label, discord_user)
     return jsonify({
