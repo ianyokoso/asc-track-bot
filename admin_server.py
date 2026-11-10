@@ -743,7 +743,7 @@ def _fetch_guild_nickname(user_id):
 # prefix 목록은 cogs/admin.py _TRACK_DISCORD_PREFIX 의 값들과 일치해야 한다.
 # ⚠️ '빌더' 는 '빌더-기초'/'빌더-심화' 의 접두사이기도 하므로 반드시 더 긴 것들 뒤에 둔다
 #    (정규식 alternation 이 앞에서부터 매칭 시도).
-_TRACK_ROLE_PREFIXES = ['크리에이터', '빌더-기초', '빌더-심화', '빌더', '세일즈-실전', 'AI에이전트', '앱개발', '나탐구', '디자인']
+_TRACK_ROLE_PREFIXES = ['크리에이터', '빌더-기초', '빌더-심화', '빌더', '세일즈-실전', 'AI에이전트', 'AI숏폼', '앱개발', '나탐구', '디자인']
 _TRACK_ROLE_RE = re.compile(
     r'^(?P<prefix>' + '|'.join(re.escape(p) for p in _TRACK_ROLE_PREFIXES) +
     r')-(?P<cohort>\d+)기(?:-(?P<suffix>.+))?$'
@@ -1865,7 +1865,6 @@ TRACK_APPLICATION_WEEKDAY_TRACK_MAP = {
     #   월 = 세일즈 / 나 탐구, 화 = AI 에이전트, 수 = 빌더, 목 = 디자인.
     'sales_real': ('monday', '세일즈 실전 트랙'),
     'self_inquiry': ('monday', '나 탐구 트랙'),
-    'builder': ('wednesday', '빌더 트랙'),
     'ai_agent': ('tuesday', 'AI 에이전트 트랙'),
     'design': ('thursday', '디자인 트랙'),
     # 13기 개편 (2026-10): 크리에이터 수→월 (리뉴얼, 숏폼/롱폼 하위 선택 없음),
@@ -1874,6 +1873,12 @@ TRACK_APPLICATION_WEEKDAY_TRACK_MAP = {
     #   월 = 크리에이터, 화 = AI 에이전트, 수 = 빌더, 목 = 앱 개발 / 디자인.
     'creator': ('monday', '크리에이터 트랙'),
     'app_dev': ('thursday', '앱 개발 트랙'),
+    # 14기 개편 (2026-11): 정규 6개 — 디자인 폐지(legacy 매핑만 유지), 나 탐구 정규 복귀,
+    #   AI 숏폼 영상 신설, 빌더 수→토(오전).
+    #   월 = 크리에이터 / 나 탐구, 화 = AI 에이전트, 수 = AI 숏폼 영상, 목 = 앱 개발, 토 = 빌더.
+    #   ⚠️ 월요일은 두 트랙이 같은 시간대라 select 1칸 — 폼도 요일 라디오라 하나만 고른다.
+    'ai_shortform': ('wednesday', 'AI 숏폼 영상 트랙'),
+    'builder': ('saturday', '빌더 트랙'),
     # 구 빌더 심화/기초 — 11기 폼에선 선택 불가. legacy 데이터 (이전 기수 신청자) 호환을
     # 위해 매핑은 유지 (화요일 슬롯).
     'builder_advanced': ('tuesday', '빌더 심화 트랙'),
@@ -1900,6 +1905,7 @@ TRACK_APPLICATION_LEADER_LABELS = {
     '크리에이터 숏폼 트랙',
     '크리에이터 롱폼 트랙',
     'AI 에이전트 트랙',
+    'AI 숏폼 영상 트랙',
     '앱 개발 트랙',
     '디자인 트랙',
 }
@@ -1944,6 +1950,7 @@ def _extract_track_application_submission(record):
         'tuesday': None,
         'wednesday': None,
         'thursday': None,
+        'saturday': None,  # 14기~ 빌더 (토 오전)
     }
     light_tracks = []
     leader_labels = []
@@ -2005,6 +2012,7 @@ def _resolve_track_application_db_fields(db_obj):
         'tuesday_track': _pick_db_property(properties, 'select', ['화요일 트랙', 'Tuesday Track']),
         'wednesday_track': _pick_db_property(properties, 'select', ['수요일 트랙', 'Wednesday Track']),
         'thursday_track': _pick_db_property(properties, 'select', ['목요일 트랙', 'Thursday Track']),
+        'saturday_track': _pick_db_property(properties, 'select', ['토요일 트랙', 'Saturday Track']),
         'light_tracks': _pick_db_property(properties, 'multi_select', ['라이트 트랙', 'Light Track']),
         'creator_light_checkbox': _pick_db_property(
             properties,
@@ -2264,6 +2272,10 @@ def _build_track_application_notion_properties(
     if fields.get('thursday_track'):
         properties[fields['thursday_track']] = {
             "select": {"name": submission['weekdays']['thursday']} if submission['weekdays']['thursday'] else None
+        }
+    if fields.get('saturday_track'):
+        properties[fields['saturday_track']] = {
+            "select": {"name": submission['weekdays']['saturday']} if submission['weekdays']['saturday'] else None
         }
     if fields.get('light_tracks'):
         properties[fields['light_tracks']] = {
@@ -5779,6 +5791,7 @@ _DISCORD_PREFIX_TO_TRACK = {
     '세일즈-실전': '세일즈 실전 트랙',
     'AI에이전트': 'AI 에이전트 트랙',
     'AI에이전트-실전': 'AI 에이전트 트랙',   # 구 prefix — 옛 채널/역할 역추적 호환
+    'AI숏폼': 'AI 숏폼 영상 트랙',           # 14기 신설
     '앱개발': '앱 개발 트랙',
     '나탐구': '나 탐구 트랙',
     '디자인': '디자인 트랙',
