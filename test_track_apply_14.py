@@ -179,19 +179,32 @@ class TrackSurveyTest(unittest.TestCase):
         fields = admin_server._resolve_track_application_db_fields({"properties": {"트랙 설문": {"type": "rich_text"}}})
         self.assertEqual(fields["surveys"], "트랙 설문")
 
-    def test_list_hides_surveys_from_non_admin(self):
+    def test_list_is_admin_only_others_get_just_their_own(self):
         from unittest import mock
-        member = {"id": "1", "userId": "1", "name": "a", "tracks": self.TRACKS, "surveys": {"creator": self.CREATOR}}
+        other = {"id": "1", "userId": "1", "name": "다른 사람", "notes": "남의 기대하는 점",
+                 "tracks": self.TRACKS, "surveys": {"creator": self.CREATOR}}
+        mine = {"id": "2", "userId": "2", "name": "나", "notes": "내 기대하는 점",
+                "tracks": self.TRACKS, "surveys": {"creator": self.CREATOR}}
         client = admin_server.app.test_client()
         with mock.patch.object(admin_server, "_verify_session_guild_membership", lambda *a, **k: None), \
-             mock.patch.object(admin_server, "_build_track_application_member_list", lambda c: [dict(member)]), \
-             mock.patch.object(admin_server, "_find_viewer_track_application_member", lambda c, u: None):
-            with mock.patch.object(admin_server, "_is_admin_session", lambda: False):
-                got = client.get("/api/track-applications").get_json()["members"][0]
-                self.assertNotIn("surveys", got)
-            with mock.patch.object(admin_server, "_is_admin_session", lambda: True):
-                got = client.get("/api/track-applications").get_json()["members"][0]
-                self.assertIn("creator", got["surveys"])
+             mock.patch.object(admin_server, "_build_track_application_member_list", lambda c: [dict(other), dict(mine)]):
+            # 비로그인: 아무것도 안 받음
+            with mock.patch.object(admin_server, "_is_admin_session", lambda: False), \
+                 mock.patch.object(admin_server, "_find_viewer_track_application_member", lambda c, u: None):
+                self.assertEqual(client.get("/api/track-applications").get_json()["members"], [])
+                self.assertEqual(client.get("/api/mockups/track-applications").status_code, 403)
+            # 일반 신청자: 본인 것만 (본인 설문 포함)
+            with mock.patch.object(admin_server, "_is_admin_session", lambda: False), \
+                 mock.patch.object(admin_server, "_find_viewer_track_application_member", lambda c, u: dict(mine)):
+                got = client.get("/api/track-applications").get_json()
+                self.assertEqual([m["name"] for m in got["members"]], ["나"])
+                self.assertIn("creator", got["viewerMember"]["surveys"])
+            # 운영진: 전원
+            with mock.patch.object(admin_server, "_is_admin_session", lambda: True), \
+                 mock.patch.object(admin_server, "_find_viewer_track_application_member", lambda c, u: None):
+                got = client.get("/api/track-applications").get_json()["members"]
+                self.assertEqual(len(got), 2)
+                self.assertIn("creator", got[0]["surveys"])
 
 
 if __name__ == "__main__":

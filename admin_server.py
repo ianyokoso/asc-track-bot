@@ -2813,13 +2813,15 @@ def get_track_applications():
     cohort_label = _get_current_cohort_label(
         request.args.get('cohortLabel') or request.args.get('cohort')
     )
-    members = _build_track_application_member_list(cohort_label)
-    # 트랙 설문(링크·목표 등)은 운영진에게만 목록으로 내린다. 본인 것은 viewerMember 로 받는다.
-    if not _is_admin_session():
-        for member in members:
-            member.pop('surveys', None)
     discord_user = _get_authenticated_discord_user()
     viewer_member = _find_viewer_track_application_member(cohort_label, discord_user)
+    # 🔒 신청자 전체 목록(이름·핸들·기대하는 점·트랙 설문)은 운영진에게만.
+    #   일반 사용자·비로그인에겐 본인 신청 1건만 — 신청 페이지는 viewerMember 로 본인을 찾으므로
+    #   화면 동작은 같다. (2026-11-10 전엔 로그인 없이도 전원 목록이 내려갔다)
+    if _is_admin_session():
+        members = _build_track_application_member_list(cohort_label)
+    else:
+        members = [viewer_member] if viewer_member else []
     return jsonify({
         "status": "success",
         "cohortLabel": cohort_label,
@@ -2832,6 +2834,9 @@ def get_track_applications():
 
 @app.route('/api/mockups/track-applications', methods=['GET'])
 def get_track_application_admin_mock_members():
+    # 🔒 관리자 목업 캐시 — 운영진 bulk sync 로 실제 신청자 데이터가 들어갈 수 있어 운영진 전용.
+    if not _is_admin_session():
+        return jsonify({"status": "error", "message": "운영진 권한이 필요합니다."}), 403
     cohort_label = _get_current_cohort_label(
         request.args.get('cohortLabel') or request.args.get('cohort')
     )
