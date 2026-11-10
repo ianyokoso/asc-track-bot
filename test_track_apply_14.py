@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 import admin_server
-from cogs.admin import _TRACK_DISCORD_PREFIX
+from cogs.admin import _TRACK_DISCORD_PREFIX, _uses_creator_subform_roles
 from gcal_schedule import COMMON_KEY, SOURCES
 
 PAGE = (Path(__file__).parent / "static" / "track-apply.html").read_text(encoding="utf-8")
@@ -68,8 +68,8 @@ class SubmissionMappingTest(unittest.TestCase):
             got = admin_server._extract_track_application_submission(
                 {"tracks": [{"type": "weekday", "id": key}]}
             )
-            expected = "크리에이터 숏폼 트랙" if key == "creator" else label
-            self.assertEqual(got["weekdays"][day], expected, key)
+            # 14기~ 크리에이터도 '크리에이터 트랙' 그대로 (숏폼/롱폼 치환 없음)
+            self.assertEqual(got["weekdays"][day], label, key)
             others = {d: v for d, v in got["weekdays"].items() if d != day}
             self.assertFalse(any(others.values()), (key, others))
 
@@ -97,7 +97,7 @@ class SubmissionMappingTest(unittest.TestCase):
 class DiscordPrefixTest(unittest.TestCase):
     def test_new_track_role_prefix_round_trips(self):
         prefix = _TRACK_DISCORD_PREFIX["AI 숏폼 영상 트랙"]
-        self.assertEqual(prefix, "AI숏폼")
+        self.assertEqual(prefix, "AI숏폼영상")
         self.assertEqual(admin_server._DISCORD_PREFIX_TO_TRACK[prefix], "AI 숏폼 영상 트랙")
         m = admin_server._TRACK_ROLE_RE.match(f"{prefix}-14기")
         self.assertIsNotNone(m)
@@ -105,8 +105,21 @@ class DiscordPrefixTest(unittest.TestCase):
 
     def test_every_14th_track_has_a_prefix(self):
         for _, label, _ in TRACKS_14.values():
-            lookup = "크리에이터 숏폼 트랙" if label == "크리에이터 트랙" else label
-            self.assertIn(lookup, _TRACK_DISCORD_PREFIX, label)
+            self.assertIn(label, _TRACK_DISCORD_PREFIX, label)
+
+    def test_creator_is_single_role_from_14th(self):
+        # 14기~: '크리에이터-14기' 역할 + '크리에이터-14기-과제-인증' 채널 (숏폼/롱폼 분리 없음)
+        self.assertFalse(_uses_creator_subform_roles("크리에이터", "14"))
+        self.assertFalse(_uses_creator_subform_roles("크리에이터", "15기"))
+        # 13기 이하를 다시 반영하면 기존 '크리에이터-13기-숏폼' 역할 규칙 유지
+        self.assertTrue(_uses_creator_subform_roles("크리에이터", "13"))
+        self.assertFalse(_uses_creator_subform_roles("AI숏폼영상", "14"))
+
+    def test_creator_leader_label(self):
+        got = admin_server._extract_track_application_submission(
+            {"tracks": [{"type": "weekday", "id": "creator", "leader": True}]}
+        )
+        self.assertEqual(got["leaderLabels"], ["크리에이터 트랙"])
 
 
 if __name__ == "__main__":

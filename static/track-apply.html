@@ -6976,8 +6976,8 @@
       member.tracks.forEach(track => {
         if (track.type === 'weekday') {
           if (track.id === 'creator') {
-            names.push('크리에이터 숏폼 트랙');
-            if (track.creatorSub === 'short_long') names.push('크리에이터 롱폼 트랙');
+            // 14기~ 크리에이터는 '크리에이터 트랙' 하나 (숏폼/롱폼 구분 없음, 운영 봇과 통일).
+            names.push('크리에이터 트랙');
           } else if (track.id === 'sales_real') {
             names.push('세일즈 실전 트랙');
           } else if (track.id === 'self_inquiry') {
@@ -7009,11 +7009,7 @@
     }
 
     function gpBuildGroupRowTrackName(tab, entry) {
-      if (tab.id === 'creator') {
-        return entry.creatorSub === 'short_long'
-          ? '크리에이터 숏폼+롱폼'
-          : '크리에이터 숏폼';
-      }
+      if (tab.id === 'creator') return '크리에이터 트랙';  // 14기~ 숏폼/롱폼 구분 없음
       if (tab.id === 'creator_light') {
         const lightTrack = entry.member.tracks.find(t => t.type === 'light' && LIGHT_TAB_MAP.creator_light.includes(t.id));
         if (lightTrack?.id === 'creator_light_short') return '크리에이터 라이트 트랙 (숏폼)';

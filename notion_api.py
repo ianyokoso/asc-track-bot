@@ -508,7 +508,7 @@ def create_short_form_assignment(cohort_number, due_date_str=None):
     - due_date_str: 'YYYY-MM-DD' (옵션). 없으면 시작일 + 28일 자동 계산
     """
     title = "숏폼 과제"
-    tracks = ['크리에이터 숏폼 트랙']
+    tracks = ['크리에이터 트랙']  # 14기~ 크리에이터 트랙 통합 (구 '크리에이터 숏폼 트랙')
     assignment_type = "과제"
 
     if due_date_str:

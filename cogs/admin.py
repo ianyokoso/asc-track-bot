@@ -37,8 +37,9 @@ _TRACK_DISCORD_PREFIX = {
     "나 탐구 트랙":                  "나탐구",
     # 12기 신설 트랙
     "디자인 트랙":                   "디자인",
-    # 14기 신설 — 역할 'AI숏폼-14기'. 트랙명에 '숏폼' 이 들어가지만 크리에이터와 별개 트랙.
-    "AI 숏폼 영상 트랙":             "AI숏폼",
+    # 14기 신설 — 역할 'AI숏폼영상-14기'. 트랙명에 '숏폼' 이 들어가지만 크리에이터와 별개 트랙.
+    #   운영 봇 dropout_handler._TRACK_DISCORD_PREFIX 와 값이 같아야 탈락 시 역할이 지워진다.
+    "AI 숏폼 영상 트랙":             "AI숏폼영상",
 }
 
 _TRACK_ASSIGNMENT_CHANNEL_KEYS = {
@@ -84,6 +85,20 @@ _LIGHT_TRACK_SUB_FORM = {
 
 def _track_short_name(track_name: str) -> str:
     return _TRACK_DISCORD_PREFIX.get(track_name, track_name.replace(" 트랙", "").replace(" ", "-"))
+
+
+def _uses_creator_subform_roles(track_short: str, clean_cohort: str) -> bool:
+    """크리에이터를 숏폼/롱폼 역할·과제 채널로 나누는 옛 규칙을 쓸지.
+
+    13기까지: '크리에이터-N기-숏폼' / '-롱폼' 역할, '크리에이터-N기-숏폼-과제-인증' 채널.
+    14기부터: '크리에이터 트랙' 하나로 통합 → 일반 트랙처럼 '크리에이터-N기' 역할,
+              '크리에이터-N기-과제-인증' 채널 (운영 봇 channel_watcher 가 이미 인식하는 이름).
+    지난 기수를 다시 반영할 때 기존 역할 이름과 어긋나지 않도록 13기 이하만 옛 규칙.
+    """
+    if track_short != "크리에이터":
+        return False
+    digits = re.sub(r"\D", "", str(clean_cohort or ""))
+    return bool(digits) and int(digits) <= 13
 
 
 def _creator_member_subform(member_data: Dict[str, Any]) -> str:
@@ -841,7 +856,7 @@ class AdminCog(commands.Cog):
             # 크리에이터는 숏폼/롱폼 2개로 분리: 숏폼만→숏폼 역할, 숏폼+롱폼→롱폼 역할.
             # (조장/조별 역할은 만들지 않음)
             creator_roles = None
-            if track_short == "크리에이터":
+            if _uses_creator_subform_roles(track_short, clean_cohort):
                 short_role, created = await self._ensure_role(guild, f"{track_short}-{clean_cohort}기-숏폼", reason)
                 if created:
                     summary["roles_created"] += 1
@@ -950,7 +965,7 @@ class AdminCog(commands.Cog):
             # 크리에이터 트랙만 숏폼/롱폼 두 채널로 분리.
             #   - 숏폼-과제-인증: 숏폼+롱폼 역할 모두 (롱폼도 숏폼 과제 제출)
             #   - 롱폼-과제-인증: 롱폼 역할만 (숏폼만 신청자는 초대 X)
-            if track_short == "크리에이터":
+            if _uses_creator_subform_roles(track_short, clean_cohort):
                 assignment_specs = [
                     (f"{track_short}-{clean_cohort}기-숏폼-과제-인증", "숏폼 과제 인증", allowed_roles),
                 ]

@@ -238,7 +238,8 @@ _DISCORD_CLIENT_ID_CACHE = {
     "value": None,
 }
 DISCORD_CREATOR_TRACKS = {
-    'Shortform': ['크리에이터 숏폼 트랙', '크리에이터 라이트 트랙 (숏폼)'],
+    # 14기~ 크리에이터는 '크리에이터 트랙' 하나 (숏폼/롱폼 구분 없음). 옛 이름은 지난 기수 호환.
+    'Shortform': ['크리에이터 트랙', '크리에이터 숏폼 트랙', '크리에이터 라이트 트랙 (숏폼)'],
     'Longform': ['크리에이터 롱폼 트랙', '크리에이터 라이트 트랙 (롱폼)'],
 }
 
@@ -743,7 +744,7 @@ def _fetch_guild_nickname(user_id):
 # prefix 목록은 cogs/admin.py _TRACK_DISCORD_PREFIX 의 값들과 일치해야 한다.
 # ⚠️ '빌더' 는 '빌더-기초'/'빌더-심화' 의 접두사이기도 하므로 반드시 더 긴 것들 뒤에 둔다
 #    (정규식 alternation 이 앞에서부터 매칭 시도).
-_TRACK_ROLE_PREFIXES = ['크리에이터', '빌더-기초', '빌더-심화', '빌더', '세일즈-실전', 'AI에이전트', 'AI숏폼', '앱개발', '나탐구', '디자인']
+_TRACK_ROLE_PREFIXES = ['크리에이터', '빌더-기초', '빌더-심화', '빌더', '세일즈-실전', 'AI에이전트', 'AI숏폼영상', '앱개발', '나탐구', '디자인']
 _TRACK_ROLE_RE = re.compile(
     r'^(?P<prefix>' + '|'.join(re.escape(p) for p in _TRACK_ROLE_PREFIXES) +
     r')-(?P<cohort>\d+)기(?:-(?P<suffix>.+))?$'
@@ -1900,8 +1901,8 @@ TRACK_APPLICATION_LEADER_LABELS = {
     '빌더 트랙',
     '빌더 심화 트랙',
     '빌더 기초 트랙',
-    # 🔧 '크리에이터 트랙' 은 Notion 트랙 신청서 DB 옵션에서 제거됨 (2026-05-08).
-    #   숏폼/롱폼 sub-form 라벨만 leader 자격 인정.
+    # 14기~ 크리에이터는 '크리에이터 트랙' 하나로 통합. 숏폼/롱폼 라벨은 지난 기수 데이터 호환.
+    '크리에이터 트랙',
     '크리에이터 숏폼 트랙',
     '크리에이터 롱폼 트랙',
     'AI 에이전트 트랙',
@@ -1966,18 +1967,11 @@ def _extract_track_application_submission(record):
             if not weekday_info:
                 continue
             day_key, label = weekday_info
-            # 🔧 크리에이터 트랙 — Notion 수요일 트랙 select 옵션을 '크리에이터 숏폼 트랙' /
-            #   '크리에이터 롱폼 트랙' 둘만 남기는 정책으로 변경 (2026-05-08).
-            #   parent '크리에이터 트랙' 옵션 제거됨 → 어떤 경우에도 둘 중 하나로만 매핑.
-            #   - short_long → '크리에이터 롱폼 트랙' (롱폼까지 하는 케이스를 더 명시적으로 표시)
-            #   - short_only / 미설정 / 기타 → '크리에이터 숏폼 트랙' (shorts 가 baseline)
-            #   creatorSub 자체는 notes 에 계속 백업 ('숏폼만' / '숏폼 + 롱폼').
+            # 14기~ 크리에이터는 숏폼/롱폼 구분 없이 '크리에이터 트랙' 하나로 저장한다 (운영 봇과 통일).
+            #   예전엔 '크리에이터 숏폼 트랙' / '크리에이터 롱폼 트랙' 으로 치환했다 (2026-05-08 ~ 13기).
+            #   creatorSub 는 지난 기수 데이터에만 있어 notes 백업용으로만 남긴다.
             if track.get('id') == 'creator':
                 creator_sub_id = str(track.get('creatorSub') or '').strip()
-                if creator_sub_id == 'short_long':
-                    label = '크리에이터 롱폼 트랙'
-                else:
-                    label = '크리에이터 숏폼 트랙'
                 creator_sub = TRACK_APPLICATION_CREATOR_SUB_MAP.get(creator_sub_id) or creator_sub
             weekdays[day_key] = label
             if track.get('leader') and label in TRACK_APPLICATION_LEADER_LABELS:
@@ -5791,7 +5785,7 @@ _DISCORD_PREFIX_TO_TRACK = {
     '세일즈-실전': '세일즈 실전 트랙',
     'AI에이전트': 'AI 에이전트 트랙',
     'AI에이전트-실전': 'AI 에이전트 트랙',   # 구 prefix — 옛 채널/역할 역추적 호환
-    'AI숏폼': 'AI 숏폼 영상 트랙',           # 14기 신설
+    'AI숏폼영상': 'AI 숏폼 영상 트랙',       # 14기 신설
     '앱개발': '앱 개발 트랙',
     '나탐구': '나 탐구 트랙',
     '디자인': '디자인 트랙',
