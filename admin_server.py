@@ -6743,6 +6743,10 @@ def _gcal_summary_lines(report):
             f"추가 {track['created']} / 수정 {track['updated']} / 삭제 {track['deleted']}"
             if changed else f"변경 없음 ({track['kept']}건 유지)"
         )
+        if track.get('new_calendar'):
+            detail += " · 새 캘린더"
+        elif track.get('renamed_from') is not None:
+            detail += f" · 캘린더 이름 '{track['renamed_from']}' → '{report['cohort']} · {track['label']}'"
         lines.append(f"• {track['label']}: {detail}")
     return lines
 

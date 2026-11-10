@@ -20,17 +20,17 @@ TIMEZONE = "Asia/Seoul"
 PAGE_ID = "2f76400e926880428159d8a651a703d3"
 COMMON_KEY = "common"
 SOURCES: list[tuple[str, str, str]] = [
-    # (key, 표시 이름, notion db id)
-    ("builder",     "빌더 트랙",        "2f76400e92688085ae02c6b3165f6947"),
-    # 13기: 이 노션 DB 는 '세일즈 실전 트랙' → '크리에이터 트랙' 으로 재사용됨.
-    ("creator",     "크리에이터 트랙",   "2f76400e9268805c881ee9d772eef5ea"),
-    ("ai_agent",    "AI 에이전트 트랙",  "2f76400e926880868000c05be3250a45"),
-    ("app_dev",     "앱 개발 트랙",      "3eb6400e9268806fa36defd594ee6d9b"),
-    ("design",      "디자인 트랙",       "31a6400e926880668c52c0c2a720c245"),
-    # 13기: 나 탐구는 정규 트랙에서 소모임으로 전환됐고, 노션 DB 도 통합에서 접근 불가
-    # (query 404 object_not_found). 한 소스가 404 면 build_events 가 통째로 멈추므로 제외한다.
-    # 소모임 일정을 캘린더에 넣게 되면 DB 를 통합에 다시 공유하고 이 줄을 되살릴 것.
-    (COMMON_KEY,    "공통 일정",         "3ba6400e926880349370fd63ef70e35d"),
+    # (key, 표시 이름, notion db id) — 14기 정규 트랙 6개 + 공통 일정.
+    # key 는 gcal_calendars.*.json 의 구글 캘린더와 짝이다. 새 key 는 반영할 때 캘린더가 새로 만들어지고,
+    # 여기서 빠진 key 의 캘린더(13기 '디자인 트랙')는 더 이상 동기화·배포하지 않는다.
+    # 노션 DB 는 기수마다 제목을 바꿔 재사용하므로, 트랙을 바꿀 땐 DB 제목과 이 표를 같이 확인할 것.
+    ("creator",      "크리에이터 트랙",    "2f76400e9268805c881ee9d772eef5ea"),  # 월
+    ("self_inquiry", "나 탐구 트랙",       "31a6400e926880668c52c0c2a720c245"),  # 월 · 13기 '디자인 트랙' DB
+    ("ai_agent",     "AI 에이전트 트랙",   "2f76400e926880868000c05be3250a45"),  # 화
+    ("ai_shortform", "AI 숏폼 영상 트랙",  "2f76400e92688085ae02c6b3165f6947"),  # 수 · 13기 '빌더 트랙' DB
+    ("app_dev",      "앱 개발 트랙",       "3eb6400e9268806fa36defd594ee6d9b"),  # 목
+    ("builder",      "빌더 트랙",          "4146400e92688077a81fd96b83d0708a"),  # 토 · 14기 새 DB
+    (COMMON_KEY,     "공통 일정",          "3ba6400e926880349370fd63ef70e35d"),
 ]
 
 WEEKDAYS = "월화수목금토일"
@@ -81,6 +81,7 @@ def parse_time_range(raw: str) -> tuple[datetime.time, datetime.time]:
     """'8:00-10:00PM' → (20:00, 22:00).
 
     오전/오후 표기가 뒤쪽에만 붙는 게 이 DB 의 관행이라 앞쪽이 뒤쪽 표기를 물려받는다.
+    그래서 오전 강의를 '10:00-12:00AM' 처럼 적는데, 이때 12:00 은 자정이 아니라 정오다.
     """
     text = raw.replace("~", "-").replace("–", "-").replace("—", "-").strip()
     m = re.match(
@@ -95,6 +96,8 @@ def parse_time_range(raw: str) -> tuple[datetime.time, datetime.time]:
     e_mer = e_mer.upper() if e_mer else None
     start = _to_24h(int(sh), int(sm), s_mer or e_mer)
     end = _to_24h(int(eh), int(em), e_mer or s_mer)
+    if end <= start and e_mer == "AM" and not s_mer and int(eh) == 12:
+        end = datetime.time(12, int(em))
     if end <= start:
         raise ParseError(f"종료가 시작보다 빠름: {raw!r} → {start}-{end}")
     return start, end

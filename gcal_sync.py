@@ -22,13 +22,13 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from gcal_schedule import build_track_calendars, load_token
+from gcal_schedule import SOURCES, build_track_calendars, load_token
 
 API = "https://www.googleapis.com/calendar/v3"
 TIMEZONE = "Asia/Seoul"
-# 노션 '구글 캘린더용 DB' 는 9~10월 = 12기 일정이다.
+# 노션 '구글 캘린더용 DB' 는 11~12월 = 14기 일정이다.
 # .env 의 CURRENT_COHORT 는 진행 중인 기수라 여기와 어긋날 수 있어 따로 둔다.
-DEFAULT_COHORT_LABEL = os.environ.get("GCAL_COHORT_LABEL", "ASC 13기")
+DEFAULT_COHORT_LABEL = os.environ.get("GCAL_COHORT_LABEL", "ASC 14기")
 
 # 이 스크립트가 만든 일정에만 붙는 표식. 손으로 넣은 일정은 건드리지 않는다.
 SYNC_TAG = "asc-track-cal"
@@ -165,15 +165,7 @@ def ensure_calendar(
             session,
             "POST",
             "/calendars",
-            json_body={
-                "summary": f"{cohort_label} · {label}",
-                "description": (
-                    f"{cohort_label} {label} 일정입니다. "
-                    "공통 일정(OT·네트워킹·특강)도 함께 들어 있습니다.\n"
-                    "원본: 노션 '구글 캘린더용 DB'"
-                ),
-                "timeZone": TIMEZONE,
-            },
+            json_body={**_calendar_meta(cohort_label, label), "timeZone": TIMEZONE},
         )
         calendar_id = created["id"]
         ids[key] = calendar_id
@@ -182,6 +174,29 @@ def ensure_calendar(
     # 이미 있던 캘린더에도 매번 걸어준다 — 나중에 공유 대상이 바뀌어도 따라잡을 수 있게.
     _ensure_acl(session, calendar_id, share_with)
     return calendar_id
+
+
+def _calendar_meta(cohort_label: str, label: str) -> dict:
+    return {
+        "summary": f"{cohort_label} · {label}",
+        "description": (
+            f"{cohort_label} {label} 일정입니다. "
+            "공통 일정(OT·네트워킹·특강)도 함께 들어 있습니다.\n"
+            "원본: 노션 '구글 캘린더용 DB'"
+        ),
+    }
+
+
+def rename_calendar(session, calendar_id: str, cohort_label: str, label: str, dry_run: bool) -> str | None:
+    """캘린더 이름을 '<기수> · <트랙>' 으로 맞춘다. 캘린더는 기수가 바뀌어도 그대로 쓰므로
+    (멤버 구독 유지) 이름만 지난 기수로 남지 않게 한다. 이름이 달랐으면 예전 이름을 돌려준다."""
+    meta = _calendar_meta(cohort_label, label)
+    current = _call(session, "GET", f"/calendars/{calendar_id}")
+    if current.get("summary") == meta["summary"]:
+        return None
+    if not dry_run:
+        _call(session, "PATCH", f"/calendars/{calendar_id}", json_body=meta)
+    return current.get("summary") or ""
 
 
 # ─── 이벤트 동기화 ───────────────────────────────────────────
@@ -300,11 +315,12 @@ def sync_all(
         "offline": offline,
         "tracks": {},
     }
+    known_ids = load_calendar_ids()
     for key, track in tracks.items():
         calendar_id = None
         if session:
             calendar_id = (
-                load_calendar_ids().get(key)
+                known_ids.get(key)
                 if dry_run
                 else ensure_calendar(
                     session, key, track["label"], share_with, cohort_label
@@ -315,9 +331,16 @@ def sync_all(
             if calendar_id or not session
             else {"created": len(track["events"]), "updated": 0, "deleted": 0, "kept": 0}
         )
+        renamed_from = (
+            rename_calendar(session, calendar_id, cohort_label, track["label"], dry_run)
+            if session and calendar_id
+            else None
+        )
         report["tracks"][key] = {
             "label": track["label"],
             "calendar_id": calendar_id,
+            "new_calendar": bool(session) and key not in known_ids,
+            "renamed_from": renamed_from,
             "events": len(track["events"]),
             **stats,
         }
@@ -325,9 +348,14 @@ def sync_all(
 
 
 def subscribe_links() -> dict[str, dict[str, str]]:
+    """멤버 배포용 구독 링크. 지금 SOURCES 에 있는 트랙만 — 지난 기수 캘린더(13기 디자인)는 빼고."""
+    labels = {key: label for key, label, _ in SOURCES}
     links = {}
     for key, calendar_id in load_calendar_ids().items():
+        if key not in labels:
+            continue
         links[key] = {
+            "label": labels[key],
             "calendar_id": calendar_id,
             "add": f"https://calendar.google.com/calendar/u/0/r?cid={calendar_id}",
             "ics": f"https://calendar.google.com/calendar/ical/{calendar_id}/public/basic.ics",
@@ -377,7 +405,7 @@ def main() -> None:
 
     if args.links:
         for key, link in subscribe_links().items():
-            print(f"\n■ {key}\n  추가: {link['add']}\n  ICS : {link['ics']}")
+            print(f"\n■ {link['label']} ({key})\n  추가: {link['add']}\n  ICS : {link['ics']}")
         return
 
     report = sync_all(
@@ -393,10 +421,15 @@ def main() -> None:
     if report["offline"]:
         print(f"⚠️  구글 미연결 — {report['offline']}\n   아래는 캘린더가 비었다고 가정한 계획입니다.\n")
     for track in report["tracks"].values():
+        note = ""
+        if track.get("new_calendar"):
+            note = "  (새 캘린더)"
+        elif track.get("renamed_from") is not None:
+            note = f"  (이름 '{track['renamed_from']}' → '{report['cohort']} · {track['label']}')"
         print(
             f"  {track['label']:<16} 일정 {track['events']:>2}건 → "
             f"추가 {track['created']:>2} / 수정 {track['updated']:>2} / "
-            f"삭제 {track['deleted']:>2} / 유지 {track['kept']:>2}"
+            f"삭제 {track['deleted']:>2} / 유지 {track['kept']:>2}{note}"
         )
 
 
